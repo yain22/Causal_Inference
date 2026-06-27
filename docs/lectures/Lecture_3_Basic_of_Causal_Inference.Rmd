@@ -1,0 +1,867 @@
+---
+title: "Lecture 3: Outcome Regression Modelling"
+author: "Se Yoon Lee"
+date: "2026-06-27"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    number_sections: true
+    theme: readable
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+```{r picture-helpers, include=FALSE}
+start_picture <- function() {
+  par(mar = c(0, 0, 0, 0), xaxs = "i", yaxs = "i")
+  plot.new()
+  plot.window(xlim = c(0, 1), ylim = c(0, 1))
+}
+
+draw_text <- function(x, y, label, cex = 1, font = 1, col = "#222222") {
+  lines <- strsplit(label, "\n", fixed = TRUE)[[1]]
+  line_height <- 0.055 * cex
+  offsets <- seq((length(lines) - 1) / 2, -(length(lines) - 1) / 2) *
+    line_height
+  text(rep(x, length(lines)), y + offsets, labels = lines,
+       cex = cex, font = font, col = col)
+}
+
+draw_box <- function(x, y, w, h, label, fill = "#FFFFFF",
+                     border = "#333333", lwd = 2, lty = 1,
+                     cex = 1, font = 1) {
+  rect(x - w / 2, y - h / 2, x + w / 2, y + h / 2,
+       col = fill, border = border, lwd = lwd, lty = lty)
+  draw_text(x, y, label, cex = cex, font = font)
+}
+
+draw_circle <- function(x, y, r, label, fill = "#FFFFFF",
+                        border = "#333333", lwd = 2, cex = 1,
+                        font = 1) {
+  symbols(x, y, circles = r, inches = FALSE, add = TRUE,
+          bg = fill, fg = border, lwd = lwd)
+  draw_text(x, y, label, cex = cex, font = font)
+}
+
+draw_arrow <- function(x0, y0, x1, y1, col = "#333333", lwd = 2) {
+  arrows(x0, y0, x1, y1, length = 0.08, lwd = lwd, col = col)
+}
+```
+
+## Today's Question
+
+In Lecture 2, we used inverse probability weighting. IPW modeled the **treatment**:
+
+> Who was likely to be a smoker, based on baseline covariates?
+
+In Lecture 3, we use a different method: **outcome regression modelling**. Outcome regression models the **outcome**:
+
+> Who was likely to have CVD, based on smoking and baseline covariates?
+
+We keep the same causal question:
+
+> Is CVD risk different under smoking versus no smoking after adjusting for baseline covariates?
+
+Our treatment, outcome, and covariates are:
+
+| Symbol | Meaning in this lecture |
+|:--|:--|
+| `T` | Smoking status: 1 = smoker, 0 = non-smoker |
+| `Y` | CVD status: 1 = had CVD, 0 = did not have CVD |
+| `X` | Age, gender, race, education, income-to-poverty ratio, and BMI |
+
+As before, this teaching analysis does **not use survey weights**.
+
+## Where Outcome Regression Fits
+
+There are two ideas to keep separate:
+
+1. The **causal structure**: baseline covariates can affect smoking and CVD.
+2. The **prediction model**: outcome regression uses smoking and covariates to predict CVD risk.
+
+```{r outcome-regression-diagram, echo=FALSE, fig.width=10, fig.height=4.8}
+start_picture()
+
+draw_text(0.24, 0.92, "Causal structure", cex = 1.0, font = 2)
+draw_text(0.74, 0.92, "Outcome regression model", cex = 1.0, font = 2)
+segments(0.50, 0.12, 0.50, 0.88, lty = 2, col = "#999999")
+
+draw_circle(0.16, 0.68, 0.075, "Baseline\ncovariates\nX",
+            fill = "#F1CE63", cex = 0.72, font = 2)
+draw_circle(0.35, 0.68, 0.075, "Treatment\nsmoking\nT",
+            fill = "#F28E2B", cex = 0.72, font = 2)
+draw_circle(0.35, 0.34, 0.075, "Outcome\nCVD\nY",
+            fill = "#E15759", cex = 0.72, font = 2)
+
+draw_arrow(0.235, 0.68, 0.275, 0.68)
+draw_arrow(0.19, 0.62, 0.30, 0.40)
+draw_arrow(0.35, 0.605, 0.35, 0.415, col = "#F28E2B", lwd = 3)
+
+draw_text(
+  0.25,
+  0.15,
+  "X may affect both\nsmoking and CVD.",
+  cex = 0.78,
+  font = 2
+)
+
+draw_text(0.74, 0.82, "Prediction with T = 0", cex = 0.72, font = 2)
+draw_box(0.57, 0.73, 0.11, 0.11, "Set\nT = 0",
+         fill = "#A0CBE8", cex = 0.70, font = 2)
+draw_box(0.57, 0.59, 0.11, 0.11, "Same\nX",
+         fill = "#F1CE63", cex = 0.70, font = 2)
+draw_box(0.75, 0.66, 0.17, 0.15, "Predict\nCVD risk",
+         fill = "#DCEAF7", cex = 0.74, font = 2)
+draw_box(0.93, 0.66, 0.11, 0.15, "Risk\nif T = 0",
+         fill = "#B7D7A8", cex = 0.66, font = 2)
+
+draw_text(0.74, 0.49, "Prediction with T = 1", cex = 0.72, font = 2)
+draw_box(0.57, 0.40, 0.11, 0.11, "Set\nT = 1",
+         fill = "#F28E2B", cex = 0.70, font = 2)
+draw_box(0.57, 0.26, 0.11, 0.11, "Same\nX",
+         fill = "#F1CE63", cex = 0.70, font = 2)
+draw_box(0.75, 0.33, 0.17, 0.15, "Predict\nCVD risk",
+         fill = "#DCEAF7", cex = 0.74, font = 2)
+draw_box(0.93, 0.33, 0.11, 0.15, "Risk\nif T = 1",
+         fill = "#B7D7A8", cex = 0.66, font = 2)
+
+draw_arrow(0.625, 0.73, 0.665, 0.69, col = "#555555")
+draw_arrow(0.625, 0.59, 0.665, 0.63, col = "#555555")
+draw_arrow(0.835, 0.66, 0.875, 0.66, col = "#555555")
+
+draw_arrow(0.625, 0.40, 0.665, 0.36, col = "#555555")
+draw_arrow(0.625, 0.26, 0.665, 0.30, col = "#555555")
+draw_arrow(0.835, 0.33, 0.875, 0.33, col = "#555555")
+
+draw_text(
+  0.74,
+  0.08,
+  "Here arrows mean model inputs,\nnot causal arrows.",
+  cex = 0.78,
+  font = 2
+)
+```
+
+The model learns patterns like:
+
+> People with different ages, BMI values, education levels, and smoking status may have different CVD risks.
+
+The right side also previews the causal use of the model: keep the same covariates `X`, predict once with `T = 0`, predict again with `T = 1`, and compare the two average predicted risks.
+
+## The Big Idea
+
+The key idea is simple:
+
+1. Fit a model that predicts CVD risk from smoking and baseline covariates.
+2. Make two copies of every person.
+3. In one copy, set everyone to non-smoker.
+4. In the other copy, set everyone to smoker.
+5. Predict CVD risk in both copies.
+6. Average the predictions.
+
+This process is often called **standardization** or **g-computation**.
+
+```{r standardization-picture, echo=FALSE, fig.width=8.5, fig.height=4.8}
+start_picture()
+
+draw_box(0.14, 0.56, 0.22, 0.20, "Same people\nsame X",
+         fill = "#E8E8E8", cex = 0.9, font = 2)
+draw_box(0.42, 0.74, 0.24, 0.16, "Set everyone\nT = 0",
+         fill = "#A0CBE8", cex = 0.9, font = 2)
+draw_box(0.42, 0.36, 0.24, 0.16, "Set everyone\nT = 1",
+         fill = "#F28E2B", cex = 0.9, font = 2)
+draw_box(0.70, 0.74, 0.24, 0.16, "Predict\nCVD risk",
+         fill = "#DCEAF7", cex = 0.9, font = 2)
+draw_box(0.70, 0.36, 0.24, 0.16, "Predict\nCVD risk",
+         fill = "#FCE4C6", cex = 0.9, font = 2)
+draw_box(0.90, 0.55, 0.16, 0.20, "Average\npredictions",
+         fill = "#B7D7A8", cex = 0.82, font = 2)
+
+draw_arrow(0.25, 0.60, 0.30, 0.70)
+draw_arrow(0.25, 0.52, 0.30, 0.40)
+draw_arrow(0.54, 0.74, 0.58, 0.74)
+draw_arrow(0.54, 0.36, 0.58, 0.36)
+draw_arrow(0.82, 0.70, 0.84, 0.60)
+draw_arrow(0.82, 0.40, 0.84, 0.50)
+
+draw_text(0.50, 0.12, "The covariates X are kept the same. Only smoking status T changes.",
+          cex = 0.95, font = 2)
+```
+
+This picture is important. Outcome regression does not simply compare the actual smokers with the actual non-smokers. Instead, it asks the fitted model to predict both treatment worlds for the same covariate distribution.
+
+## Load and Prepare the Data
+
+```{r load-data}
+data_path <- file.path("..", "Data", "NHANES_data.csv")
+
+if (!file.exists(data_path)) {
+  data_path <- file.path("Data", "NHANES_data.csv")
+}
+
+nhanes <- read.csv(data_path, stringsAsFactors = FALSE)
+
+baseline_vars <- c(
+  "age_yr",
+  "gender",
+  "race",
+  "educ_lvl",
+  "inc_to_pov_ratio",
+  "bmi"
+)
+
+analysis_vars <- c("smoker_indicator", "cvd_indicator", baseline_vars)
+
+regression_data <- nhanes[complete.cases(nhanes[, analysis_vars]), analysis_vars]
+
+regression_data$smoker_indicator <- as.integer(regression_data$smoker_indicator)
+regression_data$cvd_indicator <- as.integer(regression_data$cvd_indicator)
+
+regression_data$smoking_group <- ifelse(
+  regression_data$smoker_indicator == 1,
+  "Smoker",
+  "Non-smoker"
+)
+
+regression_data$smoking_group <- factor(
+  regression_data$smoking_group,
+  levels = c("Non-smoker", "Smoker")
+)
+
+regression_data$gender_label <- factor(
+  regression_data$gender,
+  levels = c("F", "M"),
+  labels = c("Female", "Male")
+)
+
+regression_data$race_label <- factor(
+  regression_data$race,
+  levels = c(
+    "mex_american",
+    "other_hispanic",
+    "nh_white",
+    "nh_black",
+    "nh_asian"
+  ),
+  labels = c(
+    "Mexican American",
+    "Other Hispanic",
+    "Non-Hispanic White",
+    "Non-Hispanic Black",
+    "Non-Hispanic Asian"
+  )
+)
+
+regression_data$educ_label <- factor(
+  regression_data$educ_lvl,
+  levels = c(
+    "lt_9th_grade",
+    "9_to_12th_grade_no_diploma",
+    "hs_grad_or_ged",
+    "start_college_to_aa",
+    "college_grad_or_above"
+  ),
+  labels = c(
+    "Less than 9th grade",
+    "9th-12th, no diploma",
+    "High school or GED",
+    "Some college or AA",
+    "College graduate or above"
+  )
+)
+
+nrow(regression_data)
+```
+
+We use the same complete-case sample as Lecture 2 so that IPW and outcome regression are easy to compare.
+
+```{r sample-summary}
+sample_summary <- data.frame(
+  Quantity = c(
+    "Number of people",
+    "Number of smokers",
+    "Number of non-smokers",
+    "Number with CVD"
+  ),
+  Value = c(
+    nrow(regression_data),
+    sum(regression_data$smoker_indicator == 1),
+    sum(regression_data$smoker_indicator == 0),
+    sum(regression_data$cvd_indicator == 1)
+  )
+)
+
+knitr::kable(sample_summary)
+```
+
+## Start With the Simple Observed Comparison
+
+```{r observed-comparison}
+smoker_rows <- regression_data$smoking_group == "Smoker"
+non_smoker_rows <- regression_data$smoking_group == "Non-smoker"
+
+observed_risk_smoker <- mean(regression_data$cvd_indicator[smoker_rows])
+observed_risk_non_smoker <- mean(regression_data$cvd_indicator[non_smoker_rows])
+observed_difference <- observed_risk_smoker - observed_risk_non_smoker
+observed_ratio <- observed_risk_smoker / observed_risk_non_smoker
+
+observed_result <- data.frame(
+  Method = "Simple observed comparison",
+  Risk_non_smokers_percent = round(100 * observed_risk_non_smoker, 1),
+  Risk_smokers_percent = round(100 * observed_risk_smoker, 1),
+  Difference_percentage_points = round(100 * observed_difference, 1),
+  Risk_ratio = round(observed_ratio, 2)
+)
+
+knitr::kable(
+  observed_result,
+  col.names = c(
+    "Method",
+    "Non-smoker risk (%)",
+    "Smoker risk (%)",
+    "Difference (percentage points)",
+    "Risk ratio"
+  )
+)
+```
+
+This is the unadjusted comparison. It does not yet use outcome regression.
+
+## Fit the Outcome Regression Model
+
+Because CVD is a yes/no outcome, we use logistic regression. Logistic regression is useful here because it predicts a probability between 0 and 1.
+
+The model is:
+
+```{r outcome-model-formula, echo=FALSE, results='asis'}
+cat("CVD risk = function(smoking, age, gender, race, education, income, BMI)")
+```
+
+```{r outcome-model}
+outcome_model <- glm(
+  cvd_indicator ~ smoker_indicator + age_yr + gender_label +
+    race_label + educ_label + inc_to_pov_ratio + bmi,
+  data = regression_data,
+  family = binomial()
+)
+
+regression_data$predicted_risk_observed <- predict(
+  outcome_model,
+  type = "response"
+)
+
+smoking_odds_ratio <- exp(coef(outcome_model)["smoker_indicator"])
+
+model_takeaway_table <- data.frame(
+  Model_piece = c(
+    "Smoking indicator",
+    "Age, one year older",
+    "BMI, one unit higher",
+    "Income-to-poverty ratio, one unit higher"
+  ),
+  Odds_ratio = round(
+    exp(coef(outcome_model)[
+      c("smoker_indicator", "age_yr", "bmi", "inc_to_pov_ratio")
+    ]),
+    2
+  )
+)
+
+knitr::kable(
+  model_takeaway_table,
+  col.names = c("Model piece", "Odds ratio from the fitted model")
+)
+```
+
+The smoking odds ratio from the model is `r round(smoking_odds_ratio, 2)`. This means that, in the fitted model, smokers have higher odds of CVD than non-smokers after including the baseline covariates.
+
+Be careful: an odds ratio is **not** the same as a risk ratio. For our main causal comparison, we will use predicted risks instead of stopping at the odds ratio.
+
+## Visualize the Logistic Regression Fit by Exposure
+
+The outcome model is a logistic regression model. One way to see the fit is to draw the fitted CVD-risk curve separately for each exposure group:
+
+| Panel | Meaning |
+|:--|:--|
+| `T = 0` | Predicted CVD risk curve if smoking is set to non-smoker |
+| `T = 1` | Predicted CVD risk curve if smoking is set to smoker |
+
+The points below show observed CVD risk in age groups. The smooth lines show fitted logistic-regression predictions for a reference person. This is a visualization of the model, not the final standardized estimate.
+
+```{r logistic-fit-by-exposure-picture, echo=FALSE, fig.width=9, fig.height=4.8}
+age_breaks <- c(20, 30, 40, 50, 60, 70, Inf)
+age_labels <- c("20-29", "30-39", "40-49", "50-59", "60-69", "70+")
+age_midpoints <- c(25, 35, 45, 55, 65, 75)
+
+regression_data$age_group_for_fit <- cut(
+  regression_data$age_yr,
+  breaks = age_breaks,
+  labels = age_labels,
+  right = FALSE,
+  include.lowest = TRUE
+)
+
+make_age_points <- function(group_label) {
+  group_data <- regression_data[regression_data$smoking_group == group_label, ]
+
+  observed_risk <- tapply(
+    group_data$cvd_indicator,
+    group_data$age_group_for_fit,
+    mean
+  )
+
+  group_size <- tapply(
+    group_data$cvd_indicator,
+    group_data$age_group_for_fit,
+    length
+  )
+
+  data.frame(
+    age_midpoint = age_midpoints,
+    observed_risk = as.numeric(observed_risk),
+    group_size = as.integer(group_size)
+  )
+}
+
+age_grid_fit <- seq(20, 80, by = 1)
+
+curve_data <- data.frame(
+  smoker_indicator = rep(c(0, 1), each = length(age_grid_fit)),
+  age_yr = rep(age_grid_fit, 2),
+  gender_label = factor("Female", levels = levels(regression_data$gender_label)),
+  race_label = factor(
+    "Non-Hispanic White",
+    levels = levels(regression_data$race_label)
+  ),
+  educ_label = factor(
+    "High school or GED",
+    levels = levels(regression_data$educ_label)
+  ),
+  inc_to_pov_ratio = median(regression_data$inc_to_pov_ratio),
+  bmi = median(regression_data$bmi)
+)
+
+curve_data$predicted_risk <- predict(
+  outcome_model,
+  newdata = curve_data,
+  type = "response"
+)
+
+points_non_smoker <- make_age_points("Non-smoker")
+points_smoker <- make_age_points("Smoker")
+
+y_max <- max(
+  100 * curve_data$predicted_risk,
+  100 * points_non_smoker$observed_risk,
+  100 * points_smoker$observed_risk,
+  na.rm = TRUE
+) * 1.15
+
+plot_one_exposure <- function(t_value, points_data, title, color) {
+  curve_subset <- curve_data[curve_data$smoker_indicator == t_value, ]
+
+  plot(
+    curve_subset$age_yr,
+    100 * curve_subset$predicted_risk,
+    type = "l",
+    lwd = 3,
+    col = color,
+    ylim = c(0, y_max),
+    xlab = "Age",
+    ylab = "CVD risk (%)",
+    main = title
+  )
+
+  points(
+    points_data$age_midpoint,
+    100 * points_data$observed_risk,
+    pch = 21,
+    bg = "white",
+    col = color,
+    lwd = 2,
+    cex = 1.3
+  )
+
+  legend(
+    "topleft",
+    legend = c("Observed age-group risk", "Fitted logistic curve"),
+    pch = c(21, NA),
+    lty = c(NA, 1),
+    pt.bg = c("white", NA),
+    col = color,
+    lwd = c(2, 3),
+    bty = "n",
+    cex = 0.78
+  )
+}
+
+old_par <- par(mfrow = c(1, 2), mar = c(5, 4.5, 4.3, 1))
+
+plot_one_exposure(
+  0,
+  points_non_smoker,
+  "Non-smoker: T = 0",
+  "#4E79A7"
+)
+
+plot_one_exposure(
+  1,
+  points_smoker,
+  "Smoker: T = 1",
+  "#F28E2B"
+)
+
+par(old_par)
+```
+
+The points are not expected to fall perfectly on the lines. Real data are noisy. The purpose of the logistic model is to draw a smooth risk curve that uses smoking and baseline covariates together.
+
+## What Does the Model Predict?
+
+```{r predicted-risk-distribution, echo=FALSE, fig.width=7.5, fig.height=4.5}
+old_par <- par(mar = c(5, 4.5, 4.8, 1))
+
+boxplot(
+  predicted_risk_observed ~ smoking_group,
+  data = regression_data,
+  col = c("#A0CBE8", "#F28E2B"),
+  ylab = "Predicted CVD risk",
+  main = ""
+)
+
+mtext(
+  "Model-Predicted CVD Risk for Observed Groups",
+  side = 3,
+  line = 1.4,
+  font = 2,
+  cex = 1.05
+)
+
+par(old_par)
+```
+
+The boxplot shows the model's predicted CVD risks for people in their observed smoking groups. Some people have higher predicted risks than others because their covariates are different.
+
+```{r age-risk-picture, echo=FALSE, fig.width=7.5, fig.height=4.8}
+age_grid <- seq(20, 80, by = 1)
+
+reference_people <- data.frame(
+  smoker_indicator = rep(c(0, 1), each = length(age_grid)),
+  age_yr = rep(age_grid, 2),
+  gender_label = factor("Female", levels = levels(regression_data$gender_label)),
+  race_label = factor(
+    "Non-Hispanic White",
+    levels = levels(regression_data$race_label)
+  ),
+  educ_label = factor(
+    "High school or GED",
+    levels = levels(regression_data$educ_label)
+  ),
+  inc_to_pov_ratio = median(regression_data$inc_to_pov_ratio),
+  bmi = median(regression_data$bmi)
+)
+
+reference_people$predicted_risk <- predict(
+  outcome_model,
+  newdata = reference_people,
+  type = "response"
+)
+
+old_par <- par(mar = c(5, 4.5, 4.8, 1))
+
+plot(
+  age_grid,
+  100 * reference_people$predicted_risk[
+    reference_people$smoker_indicator == 0
+  ],
+  type = "l",
+  lwd = 3,
+  col = "#A0CBE8",
+  ylim = c(0, max(100 * reference_people$predicted_risk) * 1.10),
+  xlab = "Age",
+  ylab = "Predicted CVD risk (%)",
+  main = ""
+)
+
+mtext(
+  "Model-Predicted CVD Risk by Age",
+  side = 3,
+  line = 1.4,
+  font = 2,
+  cex = 1.05
+)
+
+lines(
+  age_grid,
+  100 * reference_people$predicted_risk[
+    reference_people$smoker_indicator == 1
+  ],
+  lwd = 3,
+  col = "#F28E2B"
+)
+
+legend(
+  "topleft",
+  legend = c("Set to non-smoker", "Set to smoker"),
+  col = c("#A0CBE8", "#F28E2B"),
+  lwd = 3,
+  bty = "n"
+)
+
+par(old_par)
+```
+
+This plot shows a model-based picture for a reference person. We hold gender, race, education, income, and BMI fixed, then let age change. The smoker line is higher than the non-smoker line in this fitted model.
+
+## Standardize the Predictions
+
+Now we make two copies of the full analysis dataset.
+
+```{r standardization}
+data_if_non_smoker <- regression_data
+data_if_smoker <- regression_data
+
+data_if_non_smoker$smoker_indicator <- 0
+data_if_smoker$smoker_indicator <- 1
+
+predicted_risk_if_non_smoker <- predict(
+  outcome_model,
+  newdata = data_if_non_smoker,
+  type = "response"
+)
+
+predicted_risk_if_smoker <- predict(
+  outcome_model,
+  newdata = data_if_smoker,
+  type = "response"
+)
+
+or_risk_non_smoker <- mean(predicted_risk_if_non_smoker)
+or_risk_smoker <- mean(predicted_risk_if_smoker)
+
+or_difference <- or_risk_smoker - or_risk_non_smoker
+or_ratio <- or_risk_smoker / or_risk_non_smoker
+
+outcome_regression_result <- data.frame(
+  Method = "Outcome regression standardization",
+  Risk_non_smokers_percent = round(100 * or_risk_non_smoker, 1),
+  Risk_smokers_percent = round(100 * or_risk_smoker, 1),
+  Difference_percentage_points = round(100 * or_difference, 1),
+  Risk_ratio = round(or_ratio, 2)
+)
+
+knitr::kable(
+  outcome_regression_result,
+  col.names = c(
+    "Method",
+    "Risk if everyone non-smoker (%)",
+    "Risk if everyone smoker (%)",
+    "Difference (percentage points)",
+    "Risk ratio"
+  )
+)
+```
+
+Outcome regression estimates two average predicted risks:
+
+| Quantity | Meaning |
+|:--|:--|
+| `r round(100 * or_risk_non_smoker, 1)`% | Average predicted CVD risk if everyone were set to non-smoker |
+| `r round(100 * or_risk_smoker, 1)`% | Average predicted CVD risk if everyone were set to smoker |
+
+The standardized outcome-regression difference is `r round(100 * or_difference, 1)` percentage points.
+
+## Picture of the Result
+
+```{r outcome-regression-result-picture, echo=FALSE, fig.width=8, fig.height=4.8}
+risk_matrix <- rbind(
+  c(100 * observed_risk_non_smoker, 100 * observed_risk_smoker),
+  c(100 * or_risk_non_smoker, 100 * or_risk_smoker)
+)
+
+colnames(risk_matrix) <- c("Non-smoker", "Smoker")
+rownames(risk_matrix) <- c("Observed", "Outcome regression")
+
+old_par <- par(mar = c(5, 4.5, 4.8, 1))
+
+bar_locations <- barplot(
+  risk_matrix,
+  beside = TRUE,
+  col = c("#A0CBE8", "#59A14F"),
+  ylim = c(0, max(risk_matrix) * 1.25),
+  ylab = "Percent with CVD",
+  main = "",
+  cex.names = 0.95
+)
+
+mtext(
+  "CVD Risk Before and After Outcome Regression Adjustment",
+  side = 3,
+  line = 1.4,
+  font = 2,
+  cex = 1.05
+)
+
+text(
+  x = bar_locations,
+  y = risk_matrix + 1,
+  labels = paste0(round(risk_matrix, 1), "%"),
+  cex = 0.85
+)
+
+legend(
+  "topright",
+  legend = rownames(risk_matrix),
+  fill = c("#A0CBE8", "#59A14F"),
+  bty = "n"
+)
+
+par(old_par)
+```
+
+The blue bars are the simple observed comparison. The green bars are the standardized outcome-regression comparison.
+
+In the observed data, CVD risk is `r round(100 * observed_risk_non_smoker, 1)`% for non-smokers and `r round(100 * observed_risk_smoker, 1)`% for smokers, a difference of `r round(100 * observed_difference, 1)` percentage points.
+
+After outcome-regression adjustment, the estimated risk is `r round(100 * or_risk_non_smoker, 1)`% if everyone were set to non-smoker and `r round(100 * or_risk_smoker, 1)`% if everyone were set to smoker, a difference of `r round(100 * or_difference, 1)` percentage points.
+
+The teaching point is similar to Lecture 2: the adjusted gap is smaller than the raw gap. This suggests that part of the raw smoker versus non-smoker difference was related to baseline covariate differences between the groups.
+
+## Compare the Three Lectures
+
+Lecture 1 used a simple observed comparison. Lecture 2 used IPW. Lecture 3 uses outcome regression standardization.
+
+```{r compare-methods}
+propensity_model <- glm(
+  smoker_indicator ~ age_yr + gender_label + race_label +
+    educ_label + inc_to_pov_ratio + bmi,
+  data = regression_data,
+  family = binomial()
+)
+
+regression_data$propensity_score <- predict(propensity_model, type = "response")
+
+regression_data$ipw_weight <- ifelse(
+  regression_data$smoker_indicator == 1,
+  1 / regression_data$propensity_score,
+  1 / (1 - regression_data$propensity_score)
+)
+
+weighted_risk <- function(outcome, weights) {
+  sum(weights * outcome) / sum(weights)
+}
+
+ipw_risk_smoker <- weighted_risk(
+  regression_data$cvd_indicator[smoker_rows],
+  regression_data$ipw_weight[smoker_rows]
+)
+
+ipw_risk_non_smoker <- weighted_risk(
+  regression_data$cvd_indicator[non_smoker_rows],
+  regression_data$ipw_weight[non_smoker_rows]
+)
+
+ipw_difference <- ipw_risk_smoker - ipw_risk_non_smoker
+ipw_ratio <- ipw_risk_smoker / ipw_risk_non_smoker
+
+comparison_table <- data.frame(
+  Method = c(
+    "Observed comparison",
+    "IPW",
+    "Outcome regression"
+  ),
+  Non_smoker_risk_percent = round(
+    100 * c(
+      observed_risk_non_smoker,
+      ipw_risk_non_smoker,
+      or_risk_non_smoker
+    ),
+    1
+  ),
+  Smoker_risk_percent = round(
+    100 * c(
+      observed_risk_smoker,
+      ipw_risk_smoker,
+      or_risk_smoker
+    ),
+    1
+  ),
+  Difference_percentage_points = round(
+    100 * c(observed_difference, ipw_difference, or_difference),
+    1
+  ),
+  Risk_ratio = round(c(observed_ratio, ipw_ratio, or_ratio), 2)
+)
+
+knitr::kable(
+  comparison_table,
+  col.names = c(
+    "Method",
+    "Non-smoker risk (%)",
+    "Smoker risk (%)",
+    "Difference (percentage points)",
+    "Risk ratio"
+  )
+)
+```
+
+```{r compare-methods-picture, echo=FALSE, fig.width=8, fig.height=4.8}
+method_differences <- comparison_table$Difference_percentage_points
+names(method_differences) <- comparison_table$Method
+
+names(method_differences) <- c("Observed", "IPW", "Outcome\nregression")
+
+old_par <- par(mar = c(6, 7, 5, 1))
+
+bar_locations <- barplot(
+  method_differences,
+  col = c("#A0CBE8", "#F28E2B", "#59A14F"),
+  ylim = c(0, max(method_differences) * 1.35),
+  ylab = "Difference in CVD risk\npercentage points",
+  main = "",
+  cex.names = 0.9
+)
+
+mtext(
+  "Estimated Smoker Minus Non-Smoker Risk Difference",
+  side = 3,
+  line = 1.6,
+  font = 2,
+  cex = 1.05
+)
+
+text(
+  x = bar_locations,
+  y = method_differences + 0.55,
+  labels = paste0(method_differences, " pp"),
+  cex = 0.9
+)
+
+par(old_par)
+```
+
+The IPW and outcome-regression estimates are close in this example. That is reassuring, but not guaranteed. Different methods rely on different models and assumptions.
+
+## What Can We Conclude?
+
+In this teaching analysis:
+
+1. We fitted a model for CVD risk using smoking and baseline covariates.
+2. We predicted each person's CVD risk twice: once as a non-smoker and once as a smoker.
+3. We averaged those predictions to estimate adjusted risks.
+4. The outcome-regression adjusted difference was smaller than the simple observed difference.
+
+We should still be careful. Outcome regression adjusts only for covariates included in the model. It also depends on the model being reasonable. If the model is badly wrong, the adjusted estimate can be misleading.
+
+## Key Takeaways
+
+1. IPW models treatment; outcome regression models the outcome.
+2. Outcome regression predicts CVD risk using smoking and baseline covariates.
+3. Standardization predicts both treatment worlds for the same people.
+4. The adjusted risk difference is based on average predicted risks.
+5. Outcome regression needs measured confounders and a reasonable outcome model.
