@@ -1,0 +1,685 @@
+---
+title: "Lecture 4: Doubly Robust Estimation"
+author: "Se Yoon Lee"
+date: "2026-06-27"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    number_sections: true
+    theme: readable
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+```{r picture-helpers, include=FALSE}
+start_picture <- function() {
+  par(mar = c(0, 0, 0, 0), xaxs = "i", yaxs = "i")
+  plot.new()
+  plot.window(xlim = c(0, 1), ylim = c(0, 1))
+}
+
+draw_text <- function(x, y, label, cex = 1, font = 1, col = "#222222") {
+  lines <- strsplit(label, "\n", fixed = TRUE)[[1]]
+  line_height <- 0.055 * cex
+  offsets <- seq((length(lines) - 1) / 2, -(length(lines) - 1) / 2) *
+    line_height
+  text(rep(x, length(lines)), y + offsets, labels = lines,
+       cex = cex, font = font, col = col)
+}
+
+draw_box <- function(x, y, w, h, label, fill = "#FFFFFF",
+                     border = "#333333", lwd = 2, lty = 1,
+                     cex = 1, font = 1) {
+  rect(x - w / 2, y - h / 2, x + w / 2, y + h / 2,
+       col = fill, border = border, lwd = lwd, lty = lty)
+  draw_text(x, y, label, cex = cex, font = font)
+}
+
+draw_circle <- function(x, y, r, label, fill = "#FFFFFF",
+                        border = "#333333", lwd = 2, cex = 1,
+                        font = 1) {
+  symbols(x, y, circles = r, inches = FALSE, add = TRUE,
+          bg = fill, fg = border, lwd = lwd)
+  draw_text(x, y, label, cex = cex, font = font)
+}
+
+draw_arrow <- function(x0, y0, x1, y1, col = "#333333", lwd = 2) {
+  arrows(x0, y0, x1, y1, length = 0.08, lwd = lwd, col = col)
+}
+```
+
+## Today's Question
+
+Lecture 2 used **inverse probability weighting**:
+
+> Model the treatment: who is likely to be a smoker, based on baseline covariates?
+
+Lecture 3 used **outcome regression**:
+
+> Model the outcome: who is likely to have CVD, based on smoking and baseline covariates?
+
+Lecture 4 combines both ideas:
+
+> Can we use both the treatment model and the outcome model together?
+
+This is called **doubly robust estimation**.
+
+Our treatment, outcome, and covariates are the same as before:
+
+| Symbol | Meaning in this lecture |
+|:--|:--|
+| `T` | Smoking status: 1 = smoker, 0 = non-smoker |
+| `Y` | CVD status: 1 = had CVD, 0 = did not have CVD |
+| `X` | Age, gender, race, education, income-to-poverty ratio, and BMI |
+
+As before, this teaching analysis does **not use survey weights**.
+
+## The Big Picture
+
+Doubly robust estimation uses two helpers.
+
+```{r two-models-picture, echo=FALSE, fig.width=8.8, fig.height=4.8}
+start_picture()
+
+draw_box(0.11, 0.68, 0.18, 0.18, "Baseline\ncovariates\nX",
+         fill = "#F1CE63", cex = 0.85, font = 2)
+draw_box(0.34, 0.80, 0.22, 0.15, "Treatment model\nP(T = 1 | X)",
+         fill = "#A0CBE8", cex = 0.78, font = 2)
+draw_box(0.34, 0.48, 0.22, 0.15, "Outcome model\nE(Y | T, X)",
+         fill = "#FCE4C6", cex = 0.78, font = 2)
+draw_box(0.61, 0.64, 0.20, 0.20, "Doubly robust\nestimate",
+         fill = "#B7D7A8", cex = 0.9, font = 2)
+draw_box(0.86, 0.64, 0.14, 0.18, "Adjusted\nCVD risk\ndifference",
+         fill = "#E8E8E8", cex = 0.72, font = 2)
+
+draw_arrow(0.20, 0.72, 0.23, 0.79)
+draw_arrow(0.20, 0.64, 0.23, 0.50)
+draw_arrow(0.45, 0.78, 0.51, 0.69, col = "#4E79A7", lwd = 3)
+draw_arrow(0.45, 0.50, 0.51, 0.59, col = "#F28E2B", lwd = 3)
+draw_arrow(0.71, 0.64, 0.79, 0.64)
+
+draw_text(0.50, 0.18, "Treatment model + outcome model + correction from observed data",
+          cex = 0.95, font = 2)
+```
+
+The name "doubly robust" comes from a powerful idea:
+
+> If either the treatment model is good enough or the outcome model is good enough, the estimator can still work well.
+
+But it is not magic. If both models are badly wrong, the estimate can still be wrong.
+
+## Why Add a Correction?
+
+Outcome regression predicts risk under `T = 0` and under `T = 1`. Doubly robust estimation starts there, then adds a correction using the observed outcomes.
+
+```{r correction-picture, echo=FALSE, fig.width=8.8, fig.height=4.5}
+start_picture()
+
+draw_box(0.18, 0.62, 0.24, 0.20, "Model prediction\nunder T = 1\nor T = 0",
+         fill = "#FCE4C6", cex = 0.82, font = 2)
+draw_box(0.48, 0.62, 0.24, 0.20, "Correction from\nobserved data",
+         fill = "#A0CBE8", cex = 0.82, font = 2)
+draw_box(0.78, 0.62, 0.24, 0.20, "Doubly robust\nrisk estimate",
+         fill = "#B7D7A8", cex = 0.82, font = 2)
+
+draw_text(0.33, 0.62, "+", cex = 2.0, font = 2)
+draw_text(0.63, 0.62, "=", cex = 2.0, font = 2)
+
+draw_text(
+  0.50,
+  0.24,
+  "The correction checks whether the model prediction\nmatches what we actually observed.",
+  cex = 0.92,
+  font = 2
+)
+```
+
+If the outcome model predicts very well, the correction is small. If the outcome model misses something but the treatment model is good, the correction can help repair the estimate.
+
+## Load and Prepare the Data
+
+```{r load-data}
+data_path <- file.path("..", "Data", "NHANES_data.csv")
+
+if (!file.exists(data_path)) {
+  data_path <- file.path("Data", "NHANES_data.csv")
+}
+
+nhanes <- read.csv(data_path, stringsAsFactors = FALSE)
+
+baseline_vars <- c(
+  "age_yr",
+  "gender",
+  "race",
+  "educ_lvl",
+  "inc_to_pov_ratio",
+  "bmi"
+)
+
+analysis_vars <- c("smoker_indicator", "cvd_indicator", baseline_vars)
+
+dr_data <- nhanes[complete.cases(nhanes[, analysis_vars]), analysis_vars]
+
+dr_data$smoker_indicator <- as.integer(dr_data$smoker_indicator)
+dr_data$cvd_indicator <- as.integer(dr_data$cvd_indicator)
+
+dr_data$smoking_group <- ifelse(
+  dr_data$smoker_indicator == 1,
+  "Smoker",
+  "Non-smoker"
+)
+
+dr_data$smoking_group <- factor(
+  dr_data$smoking_group,
+  levels = c("Non-smoker", "Smoker")
+)
+
+dr_data$gender_label <- factor(
+  dr_data$gender,
+  levels = c("F", "M"),
+  labels = c("Female", "Male")
+)
+
+dr_data$race_label <- factor(
+  dr_data$race,
+  levels = c(
+    "mex_american",
+    "other_hispanic",
+    "nh_white",
+    "nh_black",
+    "nh_asian"
+  ),
+  labels = c(
+    "Mexican American",
+    "Other Hispanic",
+    "Non-Hispanic White",
+    "Non-Hispanic Black",
+    "Non-Hispanic Asian"
+  )
+)
+
+dr_data$educ_label <- factor(
+  dr_data$educ_lvl,
+  levels = c(
+    "lt_9th_grade",
+    "9_to_12th_grade_no_diploma",
+    "hs_grad_or_ged",
+    "start_college_to_aa",
+    "college_grad_or_above"
+  ),
+  labels = c(
+    "Less than 9th grade",
+    "9th-12th, no diploma",
+    "High school or GED",
+    "Some college or AA",
+    "College graduate or above"
+  )
+)
+
+nrow(dr_data)
+```
+
+We use the same complete-case sample as Lectures 2 and 3.
+
+```{r sample-summary}
+sample_summary <- data.frame(
+  Quantity = c(
+    "Number of people",
+    "Number of smokers",
+    "Number of non-smokers",
+    "Number with CVD"
+  ),
+  Value = c(
+    nrow(dr_data),
+    sum(dr_data$smoker_indicator == 1),
+    sum(dr_data$smoker_indicator == 0),
+    sum(dr_data$cvd_indicator == 1)
+  )
+)
+
+knitr::kable(sample_summary)
+```
+
+## Step 1: Fit the Treatment Model
+
+The treatment model estimates the propensity score:
+
+```{r propensity-formula, echo=FALSE, results='asis'}
+cat("Propensity score = P(smoker | age, gender, race, education, income, BMI)")
+```
+
+```{r treatment-model}
+treatment_model <- glm(
+  smoker_indicator ~ age_yr + gender_label + race_label +
+    educ_label + inc_to_pov_ratio + bmi,
+  data = dr_data,
+  family = binomial()
+)
+
+dr_data$propensity_score <- predict(treatment_model, type = "response")
+
+summary(dr_data$propensity_score)
+```
+
+```{r propensity-picture, echo=FALSE, fig.width=7.5, fig.height=4.3}
+old_par <- par(mar = c(5, 4.5, 4.5, 1))
+
+boxplot(
+  propensity_score ~ smoking_group,
+  data = dr_data,
+  col = c("#A0CBE8", "#F28E2B"),
+  ylab = "Estimated probability of being a smoker",
+  main = ""
+)
+
+mtext(
+  "Treatment Model: Propensity Scores",
+  side = 3,
+  line = 1.3,
+  font = 2,
+  cex = 1.1
+)
+
+par(old_par)
+```
+
+## Step 2: Fit the Outcome Model
+
+The outcome model estimates CVD risk:
+
+```{r outcome-formula, echo=FALSE, results='asis'}
+cat("Outcome model = E(CVD | smoking, age, gender, race, education, income, BMI)")
+```
+
+```{r outcome-model}
+outcome_model <- glm(
+  cvd_indicator ~ smoker_indicator + age_yr + gender_label +
+    race_label + educ_label + inc_to_pov_ratio + bmi,
+  data = dr_data,
+  family = binomial()
+)
+
+dr_data$predicted_risk_observed <- predict(outcome_model, type = "response")
+
+data_if_non_smoker <- dr_data
+data_if_smoker <- dr_data
+
+data_if_non_smoker$smoker_indicator <- 0
+data_if_smoker$smoker_indicator <- 1
+
+dr_data$predicted_risk_if_non_smoker <- predict(
+  outcome_model,
+  newdata = data_if_non_smoker,
+  type = "response"
+)
+
+dr_data$predicted_risk_if_smoker <- predict(
+  outcome_model,
+  newdata = data_if_smoker,
+  type = "response"
+)
+
+outcome_model_summary <- data.frame(
+  Quantity = c(
+    "Average predicted risk if everyone non-smoker",
+    "Average predicted risk if everyone smoker"
+  ),
+  Percent = round(
+    100 * c(
+      mean(dr_data$predicted_risk_if_non_smoker),
+      mean(dr_data$predicted_risk_if_smoker)
+    ),
+    1
+  )
+)
+
+knitr::kable(outcome_model_summary)
+```
+
+```{r outcome-model-picture, echo=FALSE, fig.width=7.5, fig.height=4.3}
+old_par <- par(mar = c(5, 4.5, 4.5, 1))
+
+boxplot(
+  predicted_risk_observed ~ smoking_group,
+  data = dr_data,
+  col = c("#A0CBE8", "#F28E2B"),
+  ylab = "Predicted CVD risk",
+  main = ""
+)
+
+mtext(
+  "Outcome Model: Predicted CVD Risk",
+  side = 3,
+  line = 1.3,
+  font = 2,
+  cex = 1.1
+)
+
+par(old_par)
+```
+
+## Step 3: Build the Doubly Robust Estimate
+
+The doubly robust estimator starts with the outcome-regression prediction and adds a correction.
+
+For the smoker world, `T = 1`:
+
+```{r dr-formula-smoker, echo=FALSE, results='asis'}
+cat("DR risk under T = 1 = average(predicted risk if T = 1 + smoker correction)")
+```
+
+For the non-smoker world, `T = 0`:
+
+```{r dr-formula-nonsmoker, echo=FALSE, results='asis'}
+cat("DR risk under T = 0 = average(predicted risk if T = 0 + non-smoker correction)")
+```
+
+The correction uses the observed outcome minus the model prediction. That difference is called a **residual**.
+
+```{r doubly-robust-estimator}
+T_obs <- dr_data$smoker_indicator
+Y_obs <- dr_data$cvd_indicator
+e_hat <- dr_data$propensity_score
+m1_hat <- dr_data$predicted_risk_if_smoker
+m0_hat <- dr_data$predicted_risk_if_non_smoker
+
+dr_data$correction_if_smoker <- T_obs / e_hat * (Y_obs - m1_hat)
+dr_data$correction_if_non_smoker <- (1 - T_obs) / (1 - e_hat) *
+  (Y_obs - m0_hat)
+
+dr_risk_smoker <- mean(m1_hat + dr_data$correction_if_smoker)
+dr_risk_non_smoker <- mean(m0_hat + dr_data$correction_if_non_smoker)
+
+dr_difference <- dr_risk_smoker - dr_risk_non_smoker
+dr_ratio <- dr_risk_smoker / dr_risk_non_smoker
+
+dr_components <- data.frame(
+  Quantity = c(
+    "Outcome-model risk if everyone non-smoker",
+    "Average correction for non-smoker world",
+    "Doubly robust risk if everyone non-smoker",
+    "Outcome-model risk if everyone smoker",
+    "Average correction for smoker world",
+    "Doubly robust risk if everyone smoker"
+  ),
+  Percent = round(
+    100 * c(
+      mean(m0_hat),
+      mean(dr_data$correction_if_non_smoker),
+      dr_risk_non_smoker,
+      mean(m1_hat),
+      mean(dr_data$correction_if_smoker),
+      dr_risk_smoker
+    ),
+    2
+  )
+)
+
+knitr::kable(dr_components)
+```
+
+In this dataset, the correction is small. That means the IPW and outcome-regression pieces are giving fairly similar answers.
+
+## Picture of the Doubly Robust Calculation
+
+```{r dr-components-picture, echo=FALSE, fig.width=8.5, fig.height=4.8}
+component_matrix <- rbind(
+  c(100 * mean(m0_hat), 100 * mean(m1_hat)),
+  c(100 * mean(dr_data$correction_if_non_smoker),
+    100 * mean(dr_data$correction_if_smoker)),
+  c(100 * dr_risk_non_smoker, 100 * dr_risk_smoker)
+)
+
+colnames(component_matrix) <- c("T = 0", "T = 1")
+rownames(component_matrix) <- c("Outcome model", "Correction", "DR estimate")
+
+old_par <- par(mar = c(5, 4.5, 4.8, 1))
+
+bar_locations <- barplot(
+  component_matrix,
+  beside = TRUE,
+  col = c("#FCE4C6", "#A0CBE8", "#B7D7A8"),
+  ylim = c(
+    min(0, min(component_matrix) * 1.4),
+    max(component_matrix) * 1.25
+  ),
+  ylab = "Percent with CVD",
+  main = "",
+  cex.names = 0.95
+)
+
+mtext(
+  "Doubly Robust Risk = Prediction + Correction",
+  side = 3,
+  line = 1.4,
+  font = 2,
+  cex = 1.05
+)
+
+text(
+  x = bar_locations,
+  y = component_matrix + ifelse(component_matrix >= 0, 0.45, -0.45),
+  labels = paste0(round(component_matrix, 2), "%"),
+  cex = 0.75
+)
+
+legend(
+  "topright",
+  legend = rownames(component_matrix),
+  fill = c("#FCE4C6", "#A0CBE8", "#B7D7A8"),
+  bty = "n"
+)
+
+par(old_par)
+```
+
+## Compare All Four Methods
+
+Now we compare:
+
+1. Simple observed comparison
+2. IPW
+3. Outcome regression
+4. Doubly robust estimation
+
+```{r compare-methods}
+smoker_rows <- dr_data$smoking_group == "Smoker"
+non_smoker_rows <- dr_data$smoking_group == "Non-smoker"
+
+observed_risk_smoker <- mean(dr_data$cvd_indicator[smoker_rows])
+observed_risk_non_smoker <- mean(dr_data$cvd_indicator[non_smoker_rows])
+observed_difference <- observed_risk_smoker - observed_risk_non_smoker
+observed_ratio <- observed_risk_smoker / observed_risk_non_smoker
+
+ipw_weight <- ifelse(
+  dr_data$smoker_indicator == 1,
+  1 / dr_data$propensity_score,
+  1 / (1 - dr_data$propensity_score)
+)
+
+weighted_risk <- function(outcome, weights) {
+  sum(weights * outcome) / sum(weights)
+}
+
+ipw_risk_smoker <- weighted_risk(
+  dr_data$cvd_indicator[smoker_rows],
+  ipw_weight[smoker_rows]
+)
+
+ipw_risk_non_smoker <- weighted_risk(
+  dr_data$cvd_indicator[non_smoker_rows],
+  ipw_weight[non_smoker_rows]
+)
+
+ipw_difference <- ipw_risk_smoker - ipw_risk_non_smoker
+ipw_ratio <- ipw_risk_smoker / ipw_risk_non_smoker
+
+or_risk_smoker <- mean(dr_data$predicted_risk_if_smoker)
+or_risk_non_smoker <- mean(dr_data$predicted_risk_if_non_smoker)
+or_difference <- or_risk_smoker - or_risk_non_smoker
+or_ratio <- or_risk_smoker / or_risk_non_smoker
+
+comparison_table <- data.frame(
+  Method = c(
+    "Observed comparison",
+    "IPW",
+    "Outcome regression",
+    "Doubly robust"
+  ),
+  Non_smoker_risk_percent = round(
+    100 * c(
+      observed_risk_non_smoker,
+      ipw_risk_non_smoker,
+      or_risk_non_smoker,
+      dr_risk_non_smoker
+    ),
+    1
+  ),
+  Smoker_risk_percent = round(
+    100 * c(
+      observed_risk_smoker,
+      ipw_risk_smoker,
+      or_risk_smoker,
+      dr_risk_smoker
+    ),
+    1
+  ),
+  Difference_percentage_points = round(
+    100 * c(
+      observed_difference,
+      ipw_difference,
+      or_difference,
+      dr_difference
+    ),
+    1
+  ),
+  Risk_ratio = round(c(observed_ratio, ipw_ratio, or_ratio, dr_ratio), 2)
+)
+
+knitr::kable(
+  comparison_table,
+  col.names = c(
+    "Method",
+    "Non-smoker risk (%)",
+    "Smoker risk (%)",
+    "Difference (percentage points)",
+    "Risk ratio"
+  )
+)
+```
+
+```{r compare-methods-picture, echo=FALSE, fig.width=8.5, fig.height=4.8}
+method_differences <- comparison_table$Difference_percentage_points
+names(method_differences) <- c("Observed", "IPW", "Outcome\nregression", "Doubly\nrobust")
+
+old_par <- par(mar = c(6, 7, 5, 1))
+
+bar_locations <- barplot(
+  method_differences,
+  col = c("#A0CBE8", "#F28E2B", "#59A14F", "#B7D7A8"),
+  ylim = c(0, max(method_differences) * 1.35),
+  ylab = "Difference in CVD risk\npercentage points",
+  main = "",
+  cex.names = 0.9
+)
+
+mtext(
+  "Estimated Smoker Minus Non-Smoker Risk Difference",
+  side = 3,
+  line = 1.6,
+  font = 2,
+  cex = 1.05
+)
+
+text(
+  x = bar_locations,
+  y = method_differences + 0.55,
+  labels = paste0(method_differences, " pp"),
+  cex = 0.9
+)
+
+par(old_par)
+```
+
+The doubly robust estimate is close to the IPW and outcome-regression estimates in this example. That is reassuring because two different adjustment strategies tell a similar story.
+
+## Interpretation
+
+The simple observed comparison estimates a CVD risk difference of `r round(100 * observed_difference, 1)` percentage points.
+
+After adjustment:
+
+| Method | Adjusted risk difference |
+|:--|:--|
+| IPW | `r round(100 * ipw_difference, 1)` percentage points |
+| Outcome regression | `r round(100 * or_difference, 1)` percentage points |
+| Doubly robust | `r round(100 * dr_difference, 1)` percentage points |
+
+The doubly robust estimate says:
+
+> In this complete-case classroom sample, the adjusted predicted CVD risk is `r round(100 * dr_risk_non_smoker, 1)`% if everyone were set to non-smoker and `r round(100 * dr_risk_smoker, 1)`% if everyone were set to smoker.
+
+The adjusted difference is `r round(100 * dr_difference, 1)` percentage points.
+
+This is smaller than the raw observed difference. That suggests that some of the raw smoker versus non-smoker gap was related to baseline covariate differences between the groups.
+
+## What Can Go Wrong?
+
+Doubly robust does not mean "always correct."
+
+```{r double-robustness-picture, echo=FALSE, fig.width=8.8, fig.height=5.2}
+start_picture()
+
+draw_box(0.18, 0.76, 0.26, 0.14, "Treatment model\ngood enough",
+         fill = "#A0CBE8", cex = 0.85, font = 2)
+draw_box(0.50, 0.76, 0.26, 0.14, "Outcome model\nmay be wrong",
+         fill = "#F5F5F5", cex = 0.85, font = 2)
+draw_box(0.82, 0.76, 0.22, 0.14, "DR estimate\ncan work well",
+         fill = "#B7D7A8", cex = 0.82, font = 2)
+
+draw_arrow(0.31, 0.76, 0.37, 0.76)
+draw_arrow(0.63, 0.76, 0.71, 0.76)
+
+draw_box(0.18, 0.50, 0.26, 0.14, "Treatment model\nmay be wrong",
+         fill = "#F5F5F5", cex = 0.85, font = 2)
+draw_box(0.50, 0.50, 0.26, 0.14, "Outcome model\ngood enough",
+         fill = "#FCE4C6", cex = 0.85, font = 2)
+draw_box(0.82, 0.50, 0.22, 0.14, "DR estimate\ncan work well",
+         fill = "#B7D7A8", cex = 0.82, font = 2)
+
+draw_arrow(0.31, 0.50, 0.37, 0.50)
+draw_arrow(0.63, 0.50, 0.71, 0.50)
+
+draw_box(0.18, 0.24, 0.26, 0.14, "Treatment model\nbad",
+         fill = "#F5F5F5", cex = 0.85, font = 2)
+draw_box(0.50, 0.24, 0.26, 0.14, "Outcome model\nbad",
+         fill = "#F5F5F5", cex = 0.85, font = 2)
+draw_box(0.82, 0.24, 0.22, 0.14, "Estimate may\nbe biased",
+         fill = "#E15759", cex = 0.82, font = 2)
+
+draw_arrow(0.31, 0.24, 0.37, 0.24)
+draw_arrow(0.63, 0.24, 0.71, 0.24)
+
+draw_text(0.50, 0.08, "At least one model must be reasonable. Both bad is trouble.",
+          cex = 0.95, font = 2)
+```
+
+We still need important causal assumptions:
+
+1. No important unmeasured confounders.
+2. Good overlap: people with similar `X` values could plausibly be smokers or non-smokers.
+3. At least one of the two models is reasonable.
+4. The data variables are measured well enough for the teaching question.
+
+## Key Takeaways
+
+1. IPW uses a treatment model.
+2. Outcome regression uses an outcome model.
+3. Doubly robust estimation uses both models.
+4. It starts with model-predicted risks and adds a correction from observed outcomes.
+5. It can work well if at least one of the two models is reasonable, but it is not magic.

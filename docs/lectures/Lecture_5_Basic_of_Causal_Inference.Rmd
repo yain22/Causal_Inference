@@ -1,0 +1,759 @@
+---
+title: "Lecture 5: Bootstrap Confidence Intervals and Hypothesis Testing"
+author: "Se Yoon Lee"
+date: "2026-06-27"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    number_sections: true
+    theme: readable
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+```{r picture-helpers, include=FALSE}
+start_picture <- function() {
+  par(mar = c(0, 0, 0, 0), xaxs = "i", yaxs = "i")
+  plot.new()
+  plot.window(xlim = c(0, 1), ylim = c(0, 1))
+}
+
+draw_text <- function(x, y, label, cex = 1, font = 1, col = "#222222") {
+  lines <- strsplit(label, "\n", fixed = TRUE)[[1]]
+  line_height <- 0.055 * cex
+  offsets <- seq((length(lines) - 1) / 2, -(length(lines) - 1) / 2) *
+    line_height
+  text(rep(x, length(lines)), y + offsets, labels = lines,
+       cex = cex, font = font, col = col)
+}
+
+draw_box <- function(x, y, w, h, label, fill = "#FFFFFF",
+                     border = "#333333", lwd = 2, lty = 1,
+                     cex = 1, font = 1) {
+  rect(x - w / 2, y - h / 2, x + w / 2, y + h / 2,
+       col = fill, border = border, lwd = lwd, lty = lty)
+  draw_text(x, y, label, cex = cex, font = font)
+}
+
+draw_circle <- function(x, y, r, label, fill = "#FFFFFF",
+                        border = "#333333", lwd = 2, cex = 1,
+                        font = 1) {
+  symbols(x, y, circles = r, inches = FALSE, add = TRUE,
+          bg = fill, fg = border, lwd = lwd)
+  draw_text(x, y, label, cex = cex, font = font)
+}
+
+draw_arrow <- function(x0, y0, x1, y1, col = "#333333", lwd = 2) {
+  arrows(x0, y0, x1, y1, length = 0.08, lwd = lwd, col = col)
+}
+```
+
+## Today's Question
+
+In Lectures 2, 3, and 4, we estimated the adjusted difference in CVD risk between smokers and non-smokers.
+
+Those lectures gave us **point estimates**:
+
+> one best guess from one dataset.
+
+Lecture 5 asks a new question:
+
+> How uncertain are those estimates?
+
+We will use the **bootstrap** to build 95% confidence intervals and do hypothesis testing for:
+
+1. IPW
+2. Outcome regression
+3. Doubly robust estimation
+
+Our teaching analysis still uses the same variables and does **not use survey weights**.
+
+| Symbol | Meaning in this lecture |
+|:--|:--|
+| `T` | Smoking status: 1 = smoker, 0 = non-smoker |
+| `Y` | CVD status: 1 = had CVD, 0 = did not have CVD |
+| `X` | Age, gender, race, education, income-to-poverty ratio, and BMI |
+
+## Why Bootstrap?
+
+A point estimate is like taking one photo.
+
+A confidence interval asks:
+
+> If we could repeat the study many times, how much might the estimate move around?
+
+But we usually have only one dataset. The bootstrap uses that one dataset to create many "pretend new datasets."
+
+```{r bootstrap-big-picture, echo=FALSE, fig.width=8.8, fig.height=4.8}
+start_picture()
+
+draw_box(0.13, 0.64, 0.18, 0.18, "Original\ndata",
+         fill = "#F1CE63", cex = 0.9, font = 2)
+draw_box(0.36, 0.78, 0.20, 0.16, "Bootstrap\nsample 1",
+         fill = "#D9EAF7", cex = 0.82, font = 2)
+draw_box(0.36, 0.58, 0.20, 0.16, "Bootstrap\nsample 2",
+         fill = "#D9EAF7", cex = 0.82, font = 2)
+draw_box(0.36, 0.38, 0.20, 0.16, "Bootstrap\nsample 3",
+         fill = "#D9EAF7", cex = 0.82, font = 2)
+draw_box(0.60, 0.64, 0.20, 0.20, "Repeat\nIPW, OR,\nand DR",
+         fill = "#FCE4C6", cex = 0.82, font = 2)
+draw_box(0.84, 0.64, 0.20, 0.20, "Many\nestimates",
+         fill = "#B7D7A8", cex = 0.86, font = 2)
+
+draw_arrow(0.22, 0.66, 0.26, 0.76)
+draw_arrow(0.22, 0.64, 0.26, 0.58)
+draw_arrow(0.22, 0.62, 0.26, 0.40)
+draw_arrow(0.46, 0.78, 0.50, 0.70)
+draw_arrow(0.46, 0.58, 0.50, 0.62)
+draw_arrow(0.46, 0.38, 0.50, 0.55)
+draw_arrow(0.70, 0.64, 0.74, 0.64)
+
+draw_text(0.50, 0.14,
+          "Bootstrap idea: resample people with replacement,\nthen redo the whole analysis many times.",
+          cex = 0.9, font = 2)
+```
+
+## Bootstrap Sampling
+
+In one bootstrap sample:
+
+1. We randomly draw the same number of people as the original dataset.
+2. We draw **with replacement**, so one person can appear more than once.
+3. Some people from the original dataset may not appear in that bootstrap sample.
+4. We refit the models and recalculate the adjusted risk difference.
+
+```{r bootstrap-resampling-picture, echo=FALSE, fig.width=8.8, fig.height=4.5}
+start_picture()
+
+original_x <- seq(0.08, 0.38, length.out = 6)
+boot_x <- seq(0.62, 0.92, length.out = 6)
+person_radius <- 0.027
+person_cols <- c("#4E79A7", "#F28E2B", "#59A14F", "#E15759", "#B07AA1", "#EDC948")
+
+for (i in seq_along(original_x)) {
+  draw_circle(original_x[i], 0.65, person_radius, paste0(i),
+              fill = person_cols[i], cex = 0.72, font = 2)
+}
+
+bootstrap_ids <- c(2, 2, 5, 1, 6, 3)
+
+for (i in seq_along(boot_x)) {
+  draw_circle(boot_x[i], 0.65, person_radius, paste0(bootstrap_ids[i]),
+              fill = person_cols[bootstrap_ids[i]], cex = 0.72, font = 2)
+}
+
+draw_box(0.23, 0.42, 0.30, 0.12, "Original dataset",
+         fill = "#FFFFFF", cex = 0.85, font = 2)
+draw_box(0.77, 0.42, 0.34, 0.12, "One bootstrap sample",
+         fill = "#FFFFFF", cex = 0.85, font = 2)
+draw_arrow(0.43, 0.65, 0.56, 0.65, col = "#333333", lwd = 2)
+
+draw_text(0.50, 0.20,
+          "Person 2 appears twice. Person 4 is missing.\nThat is normal because we sampled with replacement.",
+          cex = 0.9, font = 2)
+```
+
+## Load and Prepare the Data
+
+```{r load-data}
+data_path <- file.path("..", "Data", "NHANES_data.csv")
+
+if (!file.exists(data_path)) {
+  data_path <- file.path("Data", "NHANES_data.csv")
+}
+
+nhanes <- read.csv(data_path, stringsAsFactors = FALSE)
+
+baseline_vars <- c(
+  "age_yr",
+  "gender",
+  "race",
+  "educ_lvl",
+  "inc_to_pov_ratio",
+  "bmi"
+)
+
+analysis_vars <- c("smoker_indicator", "cvd_indicator", baseline_vars)
+
+analysis_data <- nhanes[complete.cases(nhanes[, analysis_vars]), analysis_vars]
+
+analysis_data$smoker_indicator <- as.integer(analysis_data$smoker_indicator)
+analysis_data$cvd_indicator <- as.integer(analysis_data$cvd_indicator)
+
+analysis_data$smoking_group <- ifelse(
+  analysis_data$smoker_indicator == 1,
+  "Smoker",
+  "Non-smoker"
+)
+
+analysis_data$smoking_group <- factor(
+  analysis_data$smoking_group,
+  levels = c("Non-smoker", "Smoker")
+)
+
+analysis_data$gender_label <- factor(
+  analysis_data$gender,
+  levels = c("F", "M"),
+  labels = c("Female", "Male")
+)
+
+analysis_data$race_label <- factor(
+  analysis_data$race,
+  levels = c(
+    "mex_american",
+    "other_hispanic",
+    "nh_white",
+    "nh_black",
+    "nh_asian"
+  ),
+  labels = c(
+    "Mexican American",
+    "Other Hispanic",
+    "Non-Hispanic White",
+    "Non-Hispanic Black",
+    "Non-Hispanic Asian"
+  )
+)
+
+analysis_data$educ_label <- factor(
+  analysis_data$educ_lvl,
+  levels = c(
+    "lt_9th_grade",
+    "9_to_12th_grade_no_diploma",
+    "hs_grad_or_ged",
+    "start_college_to_aa",
+    "college_grad_or_above"
+  ),
+  labels = c(
+    "Less than 9th grade",
+    "9th-12th, no diploma",
+    "High school or GED",
+    "Some college or AA",
+    "College graduate or above"
+  )
+)
+
+nrow(analysis_data)
+```
+
+```{r sample-summary}
+sample_summary <- data.frame(
+  Quantity = c(
+    "Number of people",
+    "Number of smokers",
+    "Number of non-smokers",
+    "Number with CVD"
+  ),
+  Value = c(
+    nrow(analysis_data),
+    sum(analysis_data$smoker_indicator == 1),
+    sum(analysis_data$smoker_indicator == 0),
+    sum(analysis_data$cvd_indicator == 1)
+  )
+)
+
+knitr::kable(sample_summary)
+```
+
+## The Estimators We Will Bootstrap
+
+Each bootstrap sample repeats the same three adjusted analyses.
+
+```{r estimator-function}
+weighted_mean <- function(outcome, weights) {
+  sum(weights * outcome) / sum(weights)
+}
+
+fit_three_methods <- function(input_data) {
+  treatment_model <- glm(
+    smoker_indicator ~ age_yr + gender_label + race_label +
+      educ_label + inc_to_pov_ratio + bmi,
+    data = input_data,
+    family = binomial()
+  )
+
+  e_hat <- predict(treatment_model, type = "response")
+
+  outcome_model <- glm(
+    cvd_indicator ~ smoker_indicator + age_yr + gender_label +
+      race_label + educ_label + inc_to_pov_ratio + bmi,
+    data = input_data,
+    family = binomial()
+  )
+
+  data_if_non_smoker <- input_data
+  data_if_smoker <- input_data
+
+  data_if_non_smoker$smoker_indicator <- 0
+  data_if_smoker$smoker_indicator <- 1
+
+  m0_hat <- predict(
+    outcome_model,
+    newdata = data_if_non_smoker,
+    type = "response"
+  )
+
+  m1_hat <- predict(
+    outcome_model,
+    newdata = data_if_smoker,
+    type = "response"
+  )
+
+  smoker_rows <- input_data$smoker_indicator == 1
+  non_smoker_rows <- input_data$smoker_indicator == 0
+
+  ipw_risk_smoker <- weighted_mean(
+    input_data$cvd_indicator[smoker_rows],
+    1 / e_hat[smoker_rows]
+  )
+
+  ipw_risk_non_smoker <- weighted_mean(
+    input_data$cvd_indicator[non_smoker_rows],
+    1 / (1 - e_hat[non_smoker_rows])
+  )
+
+  ipw_difference <- ipw_risk_smoker - ipw_risk_non_smoker
+
+  or_risk_smoker <- mean(m1_hat)
+  or_risk_non_smoker <- mean(m0_hat)
+  or_difference <- or_risk_smoker - or_risk_non_smoker
+
+  T_obs <- input_data$smoker_indicator
+  Y_obs <- input_data$cvd_indicator
+
+  dr_risk_smoker <- mean(m1_hat + T_obs / e_hat * (Y_obs - m1_hat))
+  dr_risk_non_smoker <- mean(
+    m0_hat + (1 - T_obs) / (1 - e_hat) * (Y_obs - m0_hat)
+  )
+
+  dr_difference <- dr_risk_smoker - dr_risk_non_smoker
+
+  c(
+    IPW = ipw_difference,
+    Outcome_regression = or_difference,
+    Doubly_robust = dr_difference
+  )
+}
+
+safe_fit_three_methods <- function(input_data) {
+  tryCatch(
+    fit_three_methods(input_data),
+    error = function(e) {
+      c(IPW = NA_real_,
+        Outcome_regression = NA_real_,
+        Doubly_robust = NA_real_)
+    }
+  )
+}
+```
+
+## Point Estimates From the Original Dataset
+
+```{r original-estimates}
+original_estimates <- fit_three_methods(analysis_data)
+
+original_table <- data.frame(
+  Method = c("IPW", "Outcome regression", "Doubly robust"),
+  Risk_difference_percentage_points = round(100 * original_estimates, 2)
+)
+
+knitr::kable(
+  original_table,
+  col.names = c("Method", "Risk difference: smoker minus non-smoker")
+)
+```
+
+These are the point estimates. Now we will use bootstrapping to estimate their uncertainty.
+
+## Run the Bootstrap
+
+For this lecture note, we use `B = 300` bootstrap samples so the file can knit quickly. In a research project, it is common to use more, such as 1000 or 2000.
+
+```{r bootstrap}
+set.seed(20260627)
+
+B <- 300
+n <- nrow(analysis_data)
+
+bootstrap_estimates <- matrix(
+  NA_real_,
+  nrow = B,
+  ncol = length(original_estimates)
+)
+
+colnames(bootstrap_estimates) <- names(original_estimates)
+
+for (b in seq_len(B)) {
+  bootstrap_rows <- sample.int(n, size = n, replace = TRUE)
+  bootstrap_data <- analysis_data[bootstrap_rows, ]
+  bootstrap_estimates[b, ] <- safe_fit_three_methods(bootstrap_data)
+}
+
+bootstrap_estimates <- bootstrap_estimates[complete.cases(bootstrap_estimates), ]
+
+number_of_successful_bootstraps <- nrow(bootstrap_estimates)
+number_of_successful_bootstraps
+```
+
+## Build 95% Confidence Intervals
+
+We use a simple **percentile bootstrap interval**.
+
+For each method:
+
+1. Sort the bootstrap estimates.
+2. Take the 2.5th percentile.
+3. Take the 97.5th percentile.
+4. The middle 95% is the confidence interval.
+
+```{r confidence-intervals}
+bootstrap_se <- apply(bootstrap_estimates, 2, sd)
+
+bootstrap_ci <- t(apply(
+  bootstrap_estimates,
+  2,
+  quantile,
+  probs = c(0.025, 0.975),
+  na.rm = TRUE
+))
+
+colnames(bootstrap_ci) <- c("Lower", "Upper")
+
+inference_table <- data.frame(
+  Method = c("IPW", "Outcome regression", "Doubly robust"),
+  Estimate_pp = round(100 * original_estimates, 2),
+  Bootstrap_SE_pp = round(100 * bootstrap_se, 2),
+  CI_lower_pp = round(100 * bootstrap_ci[, "Lower"], 2),
+  CI_upper_pp = round(100 * bootstrap_ci[, "Upper"], 2)
+)
+
+knitr::kable(
+  inference_table,
+  col.names = c(
+    "Method",
+    "Estimate (pp)",
+    "Bootstrap SE (pp)",
+    "95% CI lower (pp)",
+    "95% CI upper (pp)"
+  )
+)
+```
+
+Here, `pp` means **percentage points**.
+
+For example, a risk difference of 3.0 percentage points means:
+
+> CVD risk is estimated to be 3.0 percentage points higher under smoking than under non-smoking.
+
+## Picture of the Bootstrap Distributions
+
+Each histogram shows the bootstrap estimates from many pretend datasets.
+
+```{r bootstrap-distributions-picture, echo=FALSE, fig.width=8.8, fig.height=6.2}
+method_labels <- c("IPW", "Outcome regression", "Doubly robust")
+method_cols <- c("#F28E2B", "#59A14F", "#B7D7A8")
+
+old_par <- par(mfrow = c(3, 1), mar = c(4, 4.5, 3.2, 1))
+
+for (j in seq_along(method_labels)) {
+  method_name <- colnames(bootstrap_estimates)[j]
+  boot_pp <- 100 * bootstrap_estimates[, method_name]
+  estimate_pp <- 100 * original_estimates[method_name]
+  ci_pp <- 100 * bootstrap_ci[method_name, ]
+
+  hist(
+    boot_pp,
+    breaks = 22,
+    col = method_cols[j],
+    border = "white",
+    main = paste(method_labels[j], "bootstrap distribution"),
+    xlab = "Risk difference: smoker minus non-smoker (percentage points)"
+  )
+
+  abline(v = estimate_pp, lwd = 3, col = "#333333")
+  abline(v = ci_pp, lwd = 2, col = "#E15759", lty = 2)
+  abline(v = 0, lwd = 2, col = "#555555", lty = 3)
+
+  legend(
+    "topright",
+    legend = c("Original estimate", "95% CI", "No difference"),
+    lwd = c(3, 2, 2),
+    lty = c(1, 2, 3),
+    col = c("#333333", "#E15759", "#555555"),
+    bty = "n",
+    cex = 0.82
+  )
+}
+
+par(old_par)
+```
+
+If the bootstrap estimates are tightly packed, the method has a smaller standard error. If they are more spread out, the estimate is more uncertain.
+
+## Picture of the 95% Confidence Intervals
+
+```{r ci-comparison-picture, echo=FALSE, fig.width=8.8, fig.height=4.8}
+estimate_pp <- 100 * original_estimates
+lower_pp <- 100 * bootstrap_ci[, "Lower"]
+upper_pp <- 100 * bootstrap_ci[, "Upper"]
+
+plot_order <- c("Doubly_robust", "Outcome_regression", "IPW")
+plot_y <- seq_along(plot_order)
+
+old_par <- par(mar = c(5, 9, 4.5, 1))
+
+plot(
+  estimate_pp[plot_order],
+  plot_y,
+  xlim = range(c(lower_pp, upper_pp, 0)) + c(-0.6, 0.6),
+  ylim = c(0.5, length(plot_order) + 0.5),
+  yaxt = "n",
+  xlab = "Risk difference: smoker minus non-smoker (percentage points)",
+  ylab = "",
+  pch = 19,
+  cex = 1.5,
+  col = c("#B7D7A8", "#59A14F", "#F28E2B"),
+  main = ""
+)
+
+segments(
+  x0 = lower_pp[plot_order],
+  y0 = plot_y,
+  x1 = upper_pp[plot_order],
+  y1 = plot_y,
+  lwd = 3,
+  col = c("#B7D7A8", "#59A14F", "#F28E2B")
+)
+
+segments(
+  x0 = lower_pp[plot_order],
+  y0 = plot_y - 0.10,
+  x1 = lower_pp[plot_order],
+  y1 = plot_y + 0.10,
+  lwd = 3,
+  col = c("#B7D7A8", "#59A14F", "#F28E2B")
+)
+
+segments(
+  x0 = upper_pp[plot_order],
+  y0 = plot_y - 0.10,
+  x1 = upper_pp[plot_order],
+  y1 = plot_y + 0.10,
+  lwd = 3,
+  col = c("#B7D7A8", "#59A14F", "#F28E2B")
+)
+
+abline(v = 0, lwd = 2, lty = 2, col = "#555555")
+
+axis(
+  2,
+  at = plot_y,
+  labels = c("Doubly robust", "Outcome regression", "IPW"),
+  las = 1
+)
+
+mtext(
+  "Bootstrap 95% Confidence Intervals",
+  side = 3,
+  line = 1.3,
+  font = 2,
+  cex = 1.05
+)
+
+text(
+  estimate_pp[plot_order],
+  plot_y + 0.22,
+  labels = paste0(round(estimate_pp[plot_order], 1), " pp"),
+  cex = 0.85
+)
+
+par(old_par)
+```
+
+The dashed vertical line means **zero difference**.
+
+If a confidence interval does not cross zero, that suggests the adjusted difference is unlikely to be exactly zero.
+
+## Hypothesis Testing
+
+Now we formally ask:
+
+> Is there evidence that the adjusted CVD risk is different for smokers and non-smokers?
+
+For each method, our hypotheses are:
+
+```{r hypotheses-text, echo=FALSE, results='asis'}
+cat("H0: adjusted risk difference = 0\n\n")
+cat("H1: adjusted risk difference is not 0")
+```
+
+The null hypothesis `H0` means:
+
+> After adjustment, smoking and non-smoking have the same CVD risk.
+
+The alternative hypothesis `H1` means:
+
+> After adjustment, smoking and non-smoking have different CVD risk.
+
+## Bootstrap Standard Error Test
+
+We estimate the standard error using the bootstrap:
+
+```{r hypothesis-testing}
+z_statistic <- original_estimates / bootstrap_se
+p_value <- 2 * (1 - pnorm(abs(z_statistic)))
+
+hypothesis_table <- data.frame(
+  Method = c("IPW", "Outcome regression", "Doubly robust"),
+  Estimate_pp = round(100 * original_estimates, 2),
+  Bootstrap_SE_pp = round(100 * bootstrap_se, 2),
+  Z_statistic = round(z_statistic, 2),
+  P_value = signif(p_value, 3),
+  Conclusion_at_0_05 = ifelse(
+    p_value < 0.05,
+    "Reject H0",
+    "Do not reject H0"
+  )
+)
+
+knitr::kable(
+  hypothesis_table,
+  col.names = c(
+    "Method",
+    "Estimate (pp)",
+    "Bootstrap SE (pp)",
+    "z",
+    "p-value",
+    "Conclusion at 0.05"
+  )
+)
+```
+
+The p-value is a way to measure how surprising our estimate would be if the true adjusted risk difference were really zero.
+
+Small p-values give evidence against `H0`.
+
+```{r hypothesis-conclusion-box, echo=FALSE, fig.width=8.8, fig.height=3.8}
+start_picture()
+
+estimate_range <- range(round(100 * original_estimates, 1))
+
+draw_box(
+  0.50, 0.70, 0.72, 0.22,
+  "Hypothesis testing conclusion\nAll three methods reject H0 at alpha = 0.05",
+  fill = "#B7D7A8",
+  cex = 0.92,
+  font = 2
+)
+
+draw_box(
+  0.50, 0.40, 0.72, 0.24,
+  paste0(
+    "Our finding\nAfter adjusting for measured baseline covariates,\n",
+    "smokers have higher estimated CVD risk by about ",
+    estimate_range[1],
+    " to ",
+    estimate_range[2],
+    " percentage points."
+  ),
+  fill = "#FCE4C6",
+  cex = 0.78,
+  font = 2
+)
+
+draw_text(
+  0.50, 0.14,
+  "Important: this is statistical evidence under our model assumptions,\nnot automatic proof by itself.",
+  cex = 0.78,
+  font = 2
+)
+```
+
+## Hypothesis Test Picture
+
+```{r hypothesis-picture, echo=FALSE, fig.width=8.8, fig.height=4.8}
+start_picture()
+
+draw_box(0.18, 0.62, 0.24, 0.20, "Point\nestimate",
+         fill = "#F1CE63", cex = 0.9, font = 2)
+draw_box(0.50, 0.62, 0.26, 0.20, "Bootstrap\nstandard error",
+         fill = "#A0CBE8", cex = 0.86, font = 2)
+draw_box(0.82, 0.62, 0.24, 0.20, "p-value\nand 95% CI",
+         fill = "#B7D7A8", cex = 0.86, font = 2)
+
+draw_arrow(0.30, 0.62, 0.37, 0.62)
+draw_arrow(0.63, 0.62, 0.70, 0.62)
+
+draw_text(0.50, 0.28,
+          "If 0 is far from the estimate compared with the bootstrap spread,\nwe get stronger evidence against no difference.",
+          cex = 0.88, font = 2)
+```
+
+## Interpretation
+
+For this complete-case classroom sample:
+
+```{r interpretation-table}
+interpretation_table <- data.frame(
+  Method = c("IPW", "Outcome regression", "Doubly robust"),
+  Estimate = paste0(round(100 * original_estimates, 1), " pp"),
+  CI_95 = paste0(
+    "(",
+    round(100 * bootstrap_ci[, "Lower"], 1),
+    ", ",
+    round(100 * bootstrap_ci[, "Upper"], 1),
+    ") pp"
+  ),
+  P_value = signif(p_value, 3)
+)
+
+knitr::kable(
+  interpretation_table,
+  col.names = c("Method", "Estimate", "95% CI", "p-value")
+)
+```
+
+The IPW, outcome-regression, and doubly robust estimates all compare the predicted CVD risk if everyone were a smoker with the predicted CVD risk if everyone were a non-smoker, after adjusting for measured baseline covariates.
+
+If a method's 95% confidence interval is entirely above zero, the bootstrap analysis suggests evidence that the adjusted smoker risk is higher than the adjusted non-smoker risk.
+
+But this still depends on causal assumptions:
+
+1. We adjusted for the important confounders.
+2. Smokers and non-smokers have enough overlap in covariates.
+3. The models used by each method are reasonable enough.
+4. The data were measured well enough for this teaching question.
+
+## What the Bootstrap Does Not Fix
+
+Bootstrap helps with **random sampling uncertainty**.
+
+It does not automatically fix:
+
+1. Unmeasured confounding
+2. Bad measurement
+3. Poor model choices
+4. Lack of overlap
+5. Survey-design issues that we intentionally skipped for this high-school-level lesson
+
+So the bootstrap tells us:
+
+> How much our estimate moves around because the sample could have been different.
+
+It does not prove:
+
+> Smoking caused the exact difference we estimated.
+
+## Key Takeaways
+
+1. A point estimate gives one best guess.
+2. A bootstrap confidence interval shows uncertainty around that guess.
+3. Bootstrapping repeats the whole analysis on many resampled datasets.
+4. We used bootstrapping for IPW, outcome regression, and doubly robust estimation.
+5. Hypothesis testing asks whether zero difference is plausible.
+6. Statistical evidence is not the same as causal proof; causal assumptions still matter.
