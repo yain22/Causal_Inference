@@ -1,0 +1,925 @@
+---
+title: "Lecture 2: Inverse Probability Weighting"
+author: "Se Yoon Lee"
+date: "2026-06-27"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    number_sections: true
+    theme: readable
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+```{r picture-helpers, include=FALSE}
+start_picture <- function() {
+  par(mar = c(0, 0, 0, 0), xaxs = "i", yaxs = "i")
+  plot.new()
+  plot.window(xlim = c(0, 1), ylim = c(0, 1))
+}
+
+draw_text <- function(x, y, label, cex = 1, font = 1, col = "#222222") {
+  lines <- strsplit(label, "\n", fixed = TRUE)[[1]]
+  line_height <- 0.055 * cex
+  offsets <- seq((length(lines) - 1) / 2, -(length(lines) - 1) / 2) *
+    line_height
+  text(rep(x, length(lines)), y + offsets, labels = lines,
+       cex = cex, font = font, col = col)
+}
+
+draw_box <- function(x, y, w, h, label, fill = "#FFFFFF",
+                     border = "#333333", lwd = 2, lty = 1,
+                     cex = 1, font = 1) {
+  rect(x - w / 2, y - h / 2, x + w / 2, y + h / 2,
+       col = fill, border = border, lwd = lwd, lty = lty)
+  draw_text(x, y, label, cex = cex, font = font)
+}
+
+draw_circle <- function(x, y, r, label, fill = "#FFFFFF",
+                        border = "#333333", lwd = 2, cex = 1,
+                        font = 1) {
+  symbols(x, y, circles = r, inches = FALSE, add = TRUE,
+          bg = fill, fg = border, lwd = lwd)
+  draw_text(x, y, label, cex = cex, font = font)
+}
+
+draw_arrow <- function(x0, y0, x1, y1, col = "#333333", lwd = 2) {
+  arrows(x0, y0, x1, y1, length = 0.08, lwd = lwd, col = col)
+}
+
+weighted_mean <- function(x, w) {
+  sum(w * x) / sum(w)
+}
+
+weighted_var <- function(x, w) {
+  m <- weighted_mean(x, w)
+  sum(w * (x - m)^2) / sum(w)
+}
+```
+
+## Today's Question
+
+In Lecture 1, we compared CVD risk for smokers and non-smokers using a simple difference in observed risks.
+
+In Lecture 2, we ask a more careful question:
+
+> Can we compare smokers and non-smokers after adjusting for baseline covariates?
+
+Our treatment is:
+
+| Symbol | Meaning in this lecture |
+|:--|:--|
+| `T = 1` | Smoker |
+| `T = 0` | Non-smoker |
+
+Our outcome is:
+
+| Symbol | Meaning in this lecture |
+|:--|:--|
+| `Y = 1` | Had CVD before the interview |
+| `Y = 0` | Did not have CVD before the interview |
+
+Our baseline covariates are:
+
+| Symbol | Meaning in this lecture |
+|:--|:--|
+| `X` | Age, gender, race, education, income-to-poverty ratio, and BMI |
+
+We will again keep the lecture simple and **not use survey weights**. The goal is to understand inverse probability weighting, not the full NHANES survey design.
+
+## Why Covariates Matter
+
+Smokers and non-smokers might be different before we even look at CVD. For example, they might have different ages, gender distributions, education levels, or income levels.
+
+Those baseline covariates can be related to both smoking and CVD. When a covariate is related to both the treatment and the outcome, it can act like a confounder.
+
+```{r causal-diagram, echo=FALSE, fig.width=7.5, fig.height=5}
+start_picture()
+
+rect(0.07, 0.08, 0.93, 0.72, border = "#E15759", lwd = 2, lty = 2)
+
+draw_circle(0.50, 0.90, 0.065, "Other\nvariables\nU",
+            fill = "#FFFFFF", cex = 0.85, font = 2)
+draw_circle(0.50, 0.58, 0.095, "Baseline\ncovariates\nX",
+            fill = "#FFFFFF", cex = 0.85, font = 2)
+draw_circle(0.25, 0.30, 0.11, "Treatment\nsmoking\nT",
+            fill = "#FFFFFF", cex = 0.85, font = 2)
+draw_circle(0.75, 0.30, 0.11, "Outcome\nCVD\nY",
+            fill = "#FFFFFF", cex = 0.85, font = 2)
+
+draw_arrow(0.50, 0.835, 0.50, 0.675)
+draw_arrow(0.45, 0.51, 0.31, 0.39)
+draw_arrow(0.55, 0.51, 0.69, 0.39)
+draw_arrow(0.36, 0.30, 0.64, 0.30, col = "#F28E2B", lwd = 3)
+
+draw_text(0.50, 0.13, "IPW tries to compare T = 1 and T = 0\nas if they had similar baseline covariates X.",
+          cex = 0.95, font = 2, col = "#B22222")
+```
+
+The orange arrow is the causal question we care about: smoking to CVD. The two black arrows from `X` remind us that baseline covariates can affect who smokes and who develops CVD.
+
+## The Big Idea of IPW
+
+IPW stands for **inverse probability weighting**.
+
+The idea is to give each person a weight based on how surprising their actual smoking status was, given their baseline covariates.
+
+```{r ipw-intuition-picture, echo=FALSE, fig.width=8, fig.height=4.5}
+start_picture()
+
+draw_box(0.15, 0.62, 0.24, 0.20, "Person's\nbaseline\ncovariates X",
+         fill = "#F1CE63", cex = 0.88, font = 2)
+draw_box(0.47, 0.62, 0.24, 0.20, "Predict chance\nof being a smoker",
+         fill = "#A0CBE8", cex = 0.88, font = 2)
+draw_box(0.80, 0.62, 0.25, 0.20, "Give a larger\nweight if actual\nstatus was rare",
+         fill = "#B7D7A8", cex = 0.82, font = 2)
+
+draw_arrow(0.27, 0.62, 0.35, 0.62)
+draw_arrow(0.59, 0.62, 0.67, 0.62)
+
+draw_text(0.50, 0.27, "IPW creates a weighted pseudo-population\nwhere smokers and non-smokers look more comparable.",
+          cex = 1, font = 2)
+```
+
+If a person was unlikely to be a smoker but actually was a smoker, that person gets a larger weight in the smoker group. If a person was unlikely to be a non-smoker but actually was a non-smoker, that person gets a larger weight in the non-smoker group.
+
+```{r why-ipw-necessary-picture, echo=FALSE, fig.width=8.5, fig.height=4.8}
+start_picture()
+
+draw_box(0.25, 0.88, 0.42, 0.10, "Original data",
+         fill = "#E8E8E8", cex = 0.95, font = 2)
+draw_box(0.75, 0.88, 0.42, 0.10, "Weighted pseudo-population",
+         fill = "#E8E8E8", cex = 0.95, font = 2)
+
+draw_text(0.25, 0.75, "Different covariate mix", cex = 0.9, font = 2)
+draw_text(0.75, 0.75, "More similar covariate mix", cex = 0.9, font = 2)
+
+draw_text(0.12, 0.62, "Non-smokers", cex = 0.75, font = 2)
+draw_text(0.12, 0.42, "Smokers", cex = 0.75, font = 2)
+draw_text(0.62, 0.62, "Non-smokers", cex = 0.75, font = 2)
+draw_text(0.62, 0.42, "Smokers", cex = 0.75, font = 2)
+
+draw_dot_row <- function(x_start, y, colors) {
+  x <- x_start + seq_along(colors) * 0.028
+  points(x, rep(y, length(colors)), pch = 21, bg = colors,
+         col = "white", cex = 2.1)
+}
+
+pattern_a <- "#59A14F"
+pattern_b <- "#B07AA1"
+
+draw_dot_row(0.18, 0.62, c(rep(pattern_a, 7), rep(pattern_b, 3)))
+draw_dot_row(0.18, 0.42, c(rep(pattern_a, 3), rep(pattern_b, 7)))
+
+draw_dot_row(0.68, 0.62, c(rep(pattern_a, 5), rep(pattern_b, 5)))
+draw_dot_row(0.68, 0.42, c(rep(pattern_a, 5), rep(pattern_b, 5)))
+
+draw_arrow(0.43, 0.52, 0.56, 0.52, col = "#F28E2B", lwd = 3)
+draw_text(0.50, 0.60, "IPW", cex = 1.0, font = 2, col = "#F28E2B")
+
+points(0.30, 0.18, pch = 21, bg = pattern_a, col = "white", cex = 2.1)
+draw_text(0.42, 0.18, "Covariate pattern A", cex = 0.75)
+points(0.60, 0.18, pch = 21, bg = pattern_b, col = "white", cex = 2.1)
+draw_text(0.72, 0.18, "Covariate pattern B", cex = 0.75)
+
+draw_text(
+  0.50,
+  0.08,
+  "IPW helps us avoid comparing groups that differ for reasons besides smoking.",
+  cex = 0.85,
+  font = 2
+)
+```
+
+This is why IPW is necessary: if the smoker and non-smoker groups have different baseline covariate mixes, then a simple CVD comparison can mix together the effect of smoking and the effect of those covariates.
+
+## Load and Prepare the Data
+
+```{r load-data}
+data_path <- file.path("..", "Data", "NHANES_data.csv")
+
+if (!file.exists(data_path)) {
+  data_path <- file.path("Data", "NHANES_data.csv")
+}
+
+nhanes <- read.csv(data_path, stringsAsFactors = FALSE)
+
+baseline_vars <- c(
+  "age_yr",
+  "gender",
+  "race",
+  "educ_lvl",
+  "inc_to_pov_ratio",
+  "bmi"
+)
+
+analysis_vars <- c("smoker_indicator", "cvd_indicator", baseline_vars)
+
+ipw_data <- nhanes[complete.cases(nhanes[, analysis_vars]), analysis_vars]
+
+ipw_data$smoker_indicator <- as.integer(ipw_data$smoker_indicator)
+ipw_data$cvd_indicator <- as.integer(ipw_data$cvd_indicator)
+
+ipw_data$smoking_group <- ifelse(
+  ipw_data$smoker_indicator == 1,
+  "Smoker",
+  "Non-smoker"
+)
+
+ipw_data$smoking_group <- factor(
+  ipw_data$smoking_group,
+  levels = c("Non-smoker", "Smoker")
+)
+
+ipw_data$gender_label <- factor(
+  ipw_data$gender,
+  levels = c("F", "M"),
+  labels = c("Female", "Male")
+)
+
+ipw_data$race_label <- factor(
+  ipw_data$race,
+  levels = c(
+    "mex_american",
+    "other_hispanic",
+    "nh_white",
+    "nh_black",
+    "nh_asian"
+  ),
+  labels = c(
+    "Mexican American",
+    "Other Hispanic",
+    "Non-Hispanic White",
+    "Non-Hispanic Black",
+    "Non-Hispanic Asian"
+  )
+)
+
+ipw_data$educ_label <- factor(
+  ipw_data$educ_lvl,
+  levels = c(
+    "lt_9th_grade",
+    "9_to_12th_grade_no_diploma",
+    "hs_grad_or_ged",
+    "start_college_to_aa",
+    "college_grad_or_above"
+  ),
+  labels = c(
+    "Less than 9th grade",
+    "9th-12th, no diploma",
+    "High school or GED",
+    "Some college or AA",
+    "College graduate or above"
+  )
+)
+
+nrow(ipw_data)
+```
+
+We use complete cases for this first IPW lesson. That means each person in this analysis has smoking, CVD, and all baseline covariates available.
+
+## What Are the Baseline Covariates?
+
+```{r covariate-definition-table}
+covariate_dictionary <- data.frame(
+  Covariate = c(
+    "Age",
+    "Gender",
+    "Race/ethnicity",
+    "Education",
+    "Income-to-poverty ratio",
+    "BMI"
+  ),
+  Why_it_might_matter = c(
+    "CVD risk changes strongly with age.",
+    "Smoking and CVD patterns can differ by gender.",
+    "Race/ethnicity can reflect social and health differences.",
+    "Education can be related to health behavior and health care access.",
+    "Income can be related to living conditions and health care access.",
+    "BMI can be related to CVD risk."
+  )
+)
+
+knitr::kable(covariate_dictionary)
+```
+
+This is a teaching example. In a real study, choosing covariates requires careful scientific thinking about timing and biology.
+
+## Covariate Distributions Before Weighting
+
+Before using IPW, we first look at whether smokers and non-smokers look different on baseline covariates.
+
+```{r numeric-covariate-table}
+mean_sd <- function(x) {
+  paste0(round(mean(x), 1), " (", round(sd(x), 1), ")")
+}
+
+numeric_covariate_table <- data.frame(
+  Covariate = c("Age", "BMI", "Income-to-poverty ratio"),
+  Non_smokers = c(
+    mean_sd(ipw_data$age_yr[ipw_data$smoking_group == "Non-smoker"]),
+    mean_sd(ipw_data$bmi[ipw_data$smoking_group == "Non-smoker"]),
+    mean_sd(ipw_data$inc_to_pov_ratio[ipw_data$smoking_group == "Non-smoker"])
+  ),
+  Smokers = c(
+    mean_sd(ipw_data$age_yr[ipw_data$smoking_group == "Smoker"]),
+    mean_sd(ipw_data$bmi[ipw_data$smoking_group == "Smoker"]),
+    mean_sd(ipw_data$inc_to_pov_ratio[ipw_data$smoking_group == "Smoker"])
+  )
+)
+
+knitr::kable(
+  numeric_covariate_table,
+  col.names = c("Covariate", "Non-smokers: mean (SD)", "Smokers: mean (SD)")
+)
+```
+
+```{r numeric-covariate-plots, echo=FALSE, fig.width=9, fig.height=4.2}
+old_par <- par(mfrow = c(1, 3), mar = c(5, 4, 3, 1))
+
+boxplot(
+  age_yr ~ smoking_group,
+  data = ipw_data,
+  col = c("#A0CBE8", "#F28E2B"),
+  ylab = "Age in years",
+  main = "Age"
+)
+
+boxplot(
+  bmi ~ smoking_group,
+  data = ipw_data,
+  col = c("#A0CBE8", "#F28E2B"),
+  ylab = "BMI",
+  main = "BMI"
+)
+
+boxplot(
+  inc_to_pov_ratio ~ smoking_group,
+  data = ipw_data,
+  col = c("#A0CBE8", "#F28E2B"),
+  ylab = "Income-to-poverty ratio",
+  main = "Income"
+)
+
+par(old_par)
+```
+
+The boxplots compare the numerical covariates. If the boxes are in different places, the groups differ on that covariate.
+
+```{r categorical-covariate-table}
+format_count_percent <- function(x, group) {
+  tab <- table(x[group])
+  pct <- 100 * prop.table(tab)
+  paste0(as.integer(tab), " (", round(as.numeric(pct), 1), "%)")
+}
+
+make_categorical_table <- function(x, label) {
+  non_smoker <- ipw_data$smoking_group == "Non-smoker"
+  smoker <- ipw_data$smoking_group == "Smoker"
+  levels_x <- levels(x)
+
+  data.frame(
+    Covariate = label,
+    Category = levels_x,
+    Non_smokers = format_count_percent(x, non_smoker)[levels_x],
+    Smokers = format_count_percent(x, smoker)[levels_x],
+    row.names = NULL
+  )
+}
+
+categorical_covariate_table <- rbind(
+  make_categorical_table(ipw_data$gender_label, "Gender"),
+  make_categorical_table(ipw_data$race_label, "Race/ethnicity"),
+  make_categorical_table(ipw_data$educ_label, "Education")
+)
+
+knitr::kable(
+  categorical_covariate_table,
+  col.names = c("Covariate", "Category", "Non-smokers: n (%)", "Smokers: n (%)")
+)
+```
+
+```{r categorical-covariate-plots, echo=FALSE, fig.width=9, fig.height=9}
+plot_grouped_percent <- function(x, main) {
+  tab <- prop.table(table(x, ipw_data$smoking_group), margin = 2) * 100
+  plot_matrix <- t(tab)
+  barplot(
+    plot_matrix,
+    beside = TRUE,
+    horiz = TRUE,
+    col = c("#A0CBE8", "#F28E2B"),
+    xlab = "Percent",
+    main = main,
+    xlim = c(0, max(plot_matrix) * 1.25),
+    las = 1,
+    cex.names = 0.72
+  )
+  legend(
+    "topright",
+    legend = rownames(plot_matrix),
+    fill = c("#A0CBE8", "#F28E2B"),
+    cex = 0.75,
+    bty = "n"
+  )
+}
+
+old_par <- par(mfrow = c(3, 1), mar = c(4, 12, 3, 1))
+
+plot_grouped_percent(
+  ipw_data$gender_label,
+  "Gender Distribution"
+)
+
+plot_grouped_percent(
+  ipw_data$race_label,
+  "Race/Ethnicity Distribution"
+)
+
+plot_grouped_percent(
+  ipw_data$educ_label,
+  "Education Distribution"
+)
+
+par(old_par)
+```
+
+These plots show why we might want adjustment. The two treatment groups are not identical at baseline.
+
+## Step 1: Estimate the Propensity Score
+
+The **propensity score** is the probability of being treated, based on baseline covariates.
+
+In this lecture:
+
+```{r propensity-formula, echo=FALSE, results='asis'}
+cat("Propensity score = P(smoker | age, gender, race, education, income, BMI)")
+```
+
+We estimate this probability using a logistic regression model.
+
+```{r propensity-model}
+propensity_model <- glm(
+  smoker_indicator ~ age_yr + gender_label + race_label +
+    educ_label + inc_to_pov_ratio + bmi,
+  data = ipw_data,
+  family = binomial()
+)
+
+ipw_data$propensity_score <- predict(propensity_model, type = "response")
+
+summary(ipw_data$propensity_score)
+```
+
+```{r propensity-score-picture, echo=FALSE, fig.width=7.5, fig.height=4}
+boxplot(
+  propensity_score ~ smoking_group,
+  data = ipw_data,
+  col = c("#A0CBE8", "#F28E2B"),
+  ylab = "Estimated probability of being a smoker",
+  main = "Propensity Scores by Observed Smoking Group"
+)
+```
+
+The two groups have different propensity score distributions. That means the baseline covariates help predict who was a smoker.
+
+## Step 2: Create IPW Weights
+
+For each person, we use the inverse probability of receiving the treatment status they actually received.
+
+| Person's actual group | IPW weight |
+|:--|:--|
+| Smoker | `1 / propensity score` |
+| Non-smoker | `1 / (1 - propensity score)` |
+
+```{r create-weights}
+ipw_data$ipw_weight <- ifelse(
+  ipw_data$smoker_indicator == 1,
+  1 / ipw_data$propensity_score,
+  1 / (1 - ipw_data$propensity_score)
+)
+
+weight_summary <- data.frame(
+  Group = c("Non-smoker", "Smoker", "Overall"),
+  Minimum = c(
+    min(ipw_data$ipw_weight[ipw_data$smoking_group == "Non-smoker"]),
+    min(ipw_data$ipw_weight[ipw_data$smoking_group == "Smoker"]),
+    min(ipw_data$ipw_weight)
+  ),
+  Median = c(
+    median(ipw_data$ipw_weight[ipw_data$smoking_group == "Non-smoker"]),
+    median(ipw_data$ipw_weight[ipw_data$smoking_group == "Smoker"]),
+    median(ipw_data$ipw_weight)
+  ),
+  Mean = c(
+    mean(ipw_data$ipw_weight[ipw_data$smoking_group == "Non-smoker"]),
+    mean(ipw_data$ipw_weight[ipw_data$smoking_group == "Smoker"]),
+    mean(ipw_data$ipw_weight)
+  ),
+  Maximum = c(
+    max(ipw_data$ipw_weight[ipw_data$smoking_group == "Non-smoker"]),
+    max(ipw_data$ipw_weight[ipw_data$smoking_group == "Smoker"]),
+    max(ipw_data$ipw_weight)
+  )
+)
+
+weight_summary[, -1] <- round(weight_summary[, -1], 2)
+
+knitr::kable(weight_summary)
+```
+
+```{r weight-picture, echo=FALSE, fig.width=7.5, fig.height=4}
+hist(
+  ipw_data$ipw_weight,
+  breaks = 35,
+  col = "#A0CBE8",
+  border = "white",
+  main = "Distribution of IPW Weights",
+  xlab = "IPW weight"
+)
+```
+
+A larger weight means a person represents more people like them in the weighted pseudo-population.
+
+## Step 3: Check Whether Weighting Balanced the Covariates
+
+IPW should make the smoker and non-smoker groups more similar in their baseline covariates.
+
+We will use the **absolute standardized mean difference**, usually called **absolute SMD**.
+
+Think of SMD as a ruler for covariate imbalance:
+
+> SMD close to 0 means the smoker and non-smoker groups look similar on that covariate. Smaller is better.
+
+For a numerical covariate, SMD compares the two group means and divides by a pooled standard deviation. For a categorical covariate, we turn each category into a yes/no variable first. For example, "Male" becomes 1 for male and 0 for not male.
+
+```{r balance-calculation}
+absolute_smd_numeric <- function(x, treatment, weights) {
+  treated <- treatment == 1
+  mean_treated <- weighted_mean(x[treated], weights[treated])
+  mean_control <- weighted_mean(x[!treated], weights[!treated])
+  var_treated <- weighted_var(x[treated], weights[treated])
+  var_control <- weighted_var(x[!treated], weights[!treated])
+
+  pooled_sd <- sqrt((var_treated + var_control) / 2)
+
+  if (pooled_sd == 0) {
+    0
+  } else {
+    abs(mean_treated - mean_control) / pooled_sd
+  }
+}
+
+absolute_smd_binary <- function(x, treatment, weights) {
+  treated <- treatment == 1
+  prop_treated <- weighted_mean(as.numeric(x[treated]), weights[treated])
+  prop_control <- weighted_mean(as.numeric(x[!treated]), weights[!treated])
+  pooled_sd <- sqrt(
+    (
+      prop_treated * (1 - prop_treated) +
+        prop_control * (1 - prop_control)
+    ) / 2
+  )
+
+  if (pooled_sd == 0) {
+    0
+  } else {
+    abs(prop_treated - prop_control) / pooled_sd
+  }
+}
+
+unweighted_weights <- rep(1, nrow(ipw_data))
+
+make_numeric_smd_row <- function(label, x) {
+  data.frame(
+    Covariate = label,
+    Before_weighting = absolute_smd_numeric(
+      x,
+      ipw_data$smoker_indicator,
+      unweighted_weights
+    ),
+    After_IPW = absolute_smd_numeric(
+      x,
+      ipw_data$smoker_indicator,
+      ipw_data$ipw_weight
+    )
+  )
+}
+
+make_factor_smd_rows <- function(label, x, keep_levels = levels(x)) {
+  rows <- lapply(keep_levels, function(current_level) {
+    indicator <- x == current_level
+
+    data.frame(
+      Covariate = paste0(label, ": ", current_level),
+      Before_weighting = absolute_smd_binary(
+        indicator,
+        ipw_data$smoker_indicator,
+        unweighted_weights
+      ),
+      After_IPW = absolute_smd_binary(
+        indicator,
+        ipw_data$smoker_indicator,
+        ipw_data$ipw_weight
+      )
+    )
+  })
+
+  do.call(rbind, rows)
+}
+
+smd_table <- rbind(
+  make_numeric_smd_row("Age", ipw_data$age_yr),
+  make_numeric_smd_row("BMI", ipw_data$bmi),
+  make_numeric_smd_row("Income-to-poverty ratio", ipw_data$inc_to_pov_ratio),
+  make_factor_smd_rows("Gender", ipw_data$gender_label, "Male"),
+  make_factor_smd_rows("Race/ethnicity", ipw_data$race_label),
+  make_factor_smd_rows("Education", ipw_data$educ_label)
+)
+
+smd_table <- smd_table[order(smd_table$Before_weighting, decreasing = TRUE), ]
+smd_table$Before_weighting <- round(smd_table$Before_weighting, 3)
+smd_table$After_IPW <- round(smd_table$After_IPW, 3)
+
+summary_smd_table <- data.frame(
+  Summary = c("Largest absolute SMD", "Average absolute SMD"),
+  Before_weighting = c(
+    max(smd_table$Before_weighting),
+    mean(smd_table$Before_weighting)
+  ),
+  After_IPW = c(
+    max(smd_table$After_IPW),
+    mean(smd_table$After_IPW)
+  )
+)
+
+summary_smd_table$Before_weighting <- round(
+  summary_smd_table$Before_weighting,
+  3
+)
+summary_smd_table$After_IPW <- round(summary_smd_table$After_IPW, 3)
+
+knitr::kable(
+  smd_table,
+  col.names = c("Covariate", "Before weighting", "After IPW"),
+  caption = "Absolute standardized mean differences before and after IPW"
+)
+```
+
+```{r smd-summary-table}
+knitr::kable(
+  summary_smd_table,
+  col.names = c("Summary", "Before weighting", "After IPW")
+)
+```
+
+```{r balance-picture, echo=FALSE, fig.width=9.5, fig.height=7.2}
+love_plot_table <- smd_table[order(smd_table$Before_weighting), ]
+n_covariates <- nrow(love_plot_table)
+y_positions <- seq_len(n_covariates)
+
+x_limit <- max(
+  0.12,
+  love_plot_table$Before_weighting,
+  love_plot_table$After_IPW
+) * 1.15
+
+old_par <- par(mar = c(5.5, 15, 4, 2))
+
+plot(
+  NA,
+  xlim = c(0, x_limit),
+  ylim = c(0.5, n_covariates + 0.5),
+  xlab = "Absolute standardized mean difference",
+  ylab = "",
+  yaxt = "n",
+  main = "",
+  bty = "l"
+)
+
+abline(h = y_positions, col = "#B0B0B0", lty = 2)
+abline(v = 0.10, col = "#666666", lty = 2, lwd = 1.5)
+
+axis(
+  2,
+  at = y_positions,
+  labels = love_plot_table$Covariate,
+  las = 1,
+  tick = FALSE,
+  cex.axis = 0.72
+)
+
+points(
+  love_plot_table$Before_weighting,
+  y_positions,
+  pch = 1,
+  col = "#E15759",
+  lwd = 2.5,
+  cex = 1.55
+)
+
+points(
+  love_plot_table$After_IPW,
+  y_positions,
+  pch = 0,
+  col = "#2E86C1",
+  lwd = 2.5,
+  cex = 1.55
+)
+
+mtext(
+  "Covariate balance",
+  side = 3,
+  line = 1.2,
+  font = 2,
+  cex = 1.4
+)
+
+text(
+  0.10,
+  n_covariates + 0.30,
+  "0.10 guide",
+  pos = 4,
+  cex = 0.75,
+  col = "#444444"
+)
+
+legend(
+  "bottomright",
+  legend = c("Before weighting", "After IPW"),
+  pch = c(1, 0),
+  col = c("#E15759", "#2E86C1"),
+  pt.lwd = 2.5,
+  pt.cex = 1.4,
+  bty = "n"
+)
+
+par(old_par)
+```
+
+After weighting, the absolute SMDs are much smaller. This means the weighted smoker group and weighted non-smoker group are more comparable on the measured baseline covariates.
+
+## Step 4: Estimate CVD Risk With IPW
+
+Now we estimate the CVD risk for each treatment group using the IPW weights.
+
+```{r ipw-estimator}
+weighted_risk <- function(outcome, weights) {
+  sum(weights * outcome) / sum(weights)
+}
+
+smoker_rows <- ipw_data$smoking_group == "Smoker"
+non_smoker_rows <- ipw_data$smoking_group == "Non-smoker"
+
+observed_risk_smoker <- mean(ipw_data$cvd_indicator[smoker_rows])
+observed_risk_non_smoker <- mean(ipw_data$cvd_indicator[non_smoker_rows])
+
+ipw_risk_smoker <- weighted_risk(
+  ipw_data$cvd_indicator[smoker_rows],
+  ipw_data$ipw_weight[smoker_rows]
+)
+
+ipw_risk_non_smoker <- weighted_risk(
+  ipw_data$cvd_indicator[non_smoker_rows],
+  ipw_data$ipw_weight[non_smoker_rows]
+)
+
+observed_difference <- observed_risk_smoker - observed_risk_non_smoker
+ipw_difference <- ipw_risk_smoker - ipw_risk_non_smoker
+
+observed_ratio <- observed_risk_smoker / observed_risk_non_smoker
+ipw_ratio <- ipw_risk_smoker / ipw_risk_non_smoker
+
+result_table <- data.frame(
+  Method = c("Simple observed comparison", "IPW-adjusted comparison"),
+  Risk_non_smokers_percent = round(
+    100 * c(observed_risk_non_smoker, ipw_risk_non_smoker),
+    1
+  ),
+  Risk_smokers_percent = round(
+    100 * c(observed_risk_smoker, ipw_risk_smoker),
+    1
+  ),
+  Difference_percentage_points = round(
+    100 * c(observed_difference, ipw_difference),
+    1
+  ),
+  Risk_ratio = round(c(observed_ratio, ipw_ratio), 2)
+)
+
+knitr::kable(
+  result_table,
+  col.names = c(
+    "Method",
+    "Non-smoker risk (%)",
+    "Smoker risk (%)",
+    "Difference (percentage points)",
+    "Risk ratio"
+  )
+)
+```
+
+The simple observed comparison uses the original dataset. The IPW-adjusted comparison uses the weighted pseudo-population.
+
+```{r ipw-result-picture, echo=FALSE, fig.width=8, fig.height=4.8}
+risk_matrix <- rbind(
+  c(100 * observed_risk_non_smoker, 100 * observed_risk_smoker),
+  c(100 * ipw_risk_non_smoker, 100 * ipw_risk_smoker)
+)
+
+colnames(risk_matrix) <- c("Non-smoker", "Smoker")
+rownames(risk_matrix) <- c("Observed", "IPW-adjusted")
+
+old_par <- par(mar = c(5, 4.5, 4.8, 1))
+
+bar_locations <- barplot(
+  risk_matrix,
+  beside = TRUE,
+  col = c("#A0CBE8", "#F28E2B"),
+  ylim = c(0, max(risk_matrix) * 1.25),
+  ylab = "Percent with CVD",
+  main = "",
+  cex.names = 0.95
+)
+
+mtext(
+  "CVD Risk Before and After IPW",
+  side = 3,
+  line = 1.4,
+  font = 2,
+  cex = 1.1
+)
+
+text(
+  x = bar_locations,
+  y = risk_matrix + 1,
+  labels = paste0(round(risk_matrix, 1), "%"),
+  cex = 0.85
+)
+
+legend(
+  "topright",
+  legend = rownames(risk_matrix),
+  fill = c("#A0CBE8", "#F28E2B"),
+  bty = "n"
+)
+
+par(old_par)
+```
+
+This plot has two different comparisons.
+
+The **blue bars** are the simple observed comparison from the original complete-case dataset. In that comparison, CVD risk is `r round(100 * observed_risk_non_smoker, 1)`% for non-smokers and `r round(100 * observed_risk_smoker, 1)`% for smokers. The observed difference is `r round(100 * observed_difference, 1)` percentage points.
+
+The **orange bars** are the IPW-adjusted comparison. These bars use the weighted pseudo-population, where measured baseline covariates are more balanced between smokers and non-smokers. In the weighted comparison, CVD risk is `r round(100 * ipw_risk_non_smoker, 1)`% for non-smokers and `r round(100 * ipw_risk_smoker, 1)`% for smokers. The IPW-adjusted difference is `r round(100 * ipw_difference, 1)` percentage points.
+
+The important teaching point is that the gap becomes smaller after IPW. This suggests that part of the large raw smoker versus non-smoker difference was connected to baseline covariate differences between the groups. After balancing the measured covariates, the remaining difference is smaller, but it is still not automatic proof of causation. The IPW interpretation depends on important assumptions, especially that we measured and adjusted for the important confounders.
+
+## What Did IPW Do?
+
+IPW did not change the actual people in the dataset. It changed how much each person counted.
+
+```{r pseudo-population-picture, echo=FALSE, fig.width=8, fig.height=4.5}
+start_picture()
+
+draw_box(0.18, 0.62, 0.25, 0.20, "Original\ndataset",
+         fill = "#E8E8E8", cex = 0.95, font = 2)
+draw_box(0.50, 0.62, 0.25, 0.20, "IPW\nweights",
+         fill = "#F1CE63", cex = 0.95, font = 2)
+draw_box(0.82, 0.62, 0.25, 0.20, "Weighted\npseudo-\npopulation",
+         fill = "#B7D7A8", cex = 0.85, font = 2)
+
+draw_arrow(0.31, 0.62, 0.37, 0.62)
+draw_arrow(0.63, 0.62, 0.69, 0.62)
+
+draw_text(0.50, 0.28, "The weighted pseudo-population is designed so that\nmeasured baseline covariates are balanced across treatment groups.",
+          cex = 0.95, font = 2)
+```
+
+The goal is to make the comparison closer to the causal question:
+
+> What would CVD risk be if everyone were compared under smoking versus no smoking, after accounting for measured baseline covariates?
+
+## What Can We Conclude?
+
+In this teaching analysis:
+
+1. Smokers and non-smokers differed on several baseline covariates.
+2. We estimated each person's probability of being a smoker using those covariates.
+3. We created IPW weights from those probabilities.
+4. Weighting improved measured covariate balance.
+5. The IPW-adjusted smoker versus non-smoker CVD risk difference was smaller than the simple observed difference.
+
+We should still be careful. IPW adjusts only for the covariates we measured and included in the model. It does not solve unmeasured confounding, measurement error, or timing problems.
+
+## Key Takeaways
+
+1. Confounders are baseline variables related to both treatment and outcome.
+2. The propensity score is the probability of treatment given baseline covariates.
+3. IPW gives larger weights to people whose observed treatment status was less common for people like them.
+4. IPW creates a weighted pseudo-population where measured covariates are more balanced.
+5. IPW estimates causal effects only under important assumptions, including no unmeasured confounding and good overlap.

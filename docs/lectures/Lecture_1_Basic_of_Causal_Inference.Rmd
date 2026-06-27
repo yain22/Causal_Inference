@@ -1,0 +1,556 @@
+---
+title: "Lecture 1: Basics of Causal Inference"
+author: "Se Yoon Lee"
+date: "2026-06-27"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    number_sections: true
+    theme: readable
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+```{r picture-helpers, include=FALSE}
+start_picture <- function() {
+  par(mar = c(0, 0, 0, 0), xaxs = "i", yaxs = "i")
+  plot.new()
+  plot.window(xlim = c(0, 1), ylim = c(0, 1))
+}
+
+draw_text <- function(x, y, label, cex = 1, font = 1, col = "#222222") {
+  lines <- strsplit(label, "\n", fixed = TRUE)[[1]]
+  line_height <- 0.055 * cex
+  offsets <- seq((length(lines) - 1) / 2, -(length(lines) - 1) / 2) *
+    line_height
+  text(rep(x, length(lines)), y + offsets, labels = lines,
+       cex = cex, font = font, col = col)
+}
+
+draw_box <- function(x, y, w, h, label, fill = "#FFFFFF",
+                     border = "#333333", lwd = 2, lty = 1,
+                     cex = 1, font = 1) {
+  rect(x - w / 2, y - h / 2, x + w / 2, y + h / 2,
+       col = fill, border = border, lwd = lwd, lty = lty)
+  draw_text(x, y, label, cex = cex, font = font)
+}
+
+draw_arrow <- function(x0, y0, x1, y1, col = "#333333", lwd = 2) {
+  arrows(x0, y0, x1, y1, length = 0.08, lwd = lwd, col = col)
+}
+
+draw_person <- function(x, y, col = "#4E79A7", scale = 1) {
+  symbols(x, y + 0.055 * scale, circles = 0.025 * scale,
+          inches = FALSE, add = TRUE, bg = col, fg = col)
+  segments(x, y + 0.03 * scale, x, y - 0.045 * scale,
+           col = col, lwd = 3 * scale)
+  segments(x, y, x - 0.035 * scale, y - 0.035 * scale,
+           col = col, lwd = 3 * scale)
+  segments(x, y, x + 0.035 * scale, y - 0.035 * scale,
+           col = col, lwd = 3 * scale)
+  segments(x, y - 0.045 * scale, x - 0.025 * scale, y - 0.095 * scale,
+           col = col, lwd = 3 * scale)
+  segments(x, y - 0.045 * scale, x + 0.025 * scale, y - 0.095 * scale,
+           col = col, lwd = 3 * scale)
+}
+
+draw_people_grid <- function(x0, y0, n_cvd, title) {
+  ids <- 1:100
+  x <- x0 + ((ids - 1) %% 10) * 0.032
+  y <- y0 + (9 - ((ids - 1) %/% 10)) * 0.032
+  dot_col <- ifelse(ids <= n_cvd, "#E15759", "#B7D7A8")
+
+  points(x, y, pch = 21, bg = dot_col, col = "white", cex = 1.65)
+  draw_text(x0 + 0.145, y0 + 0.37, title, cex = 0.9, font = 2)
+}
+```
+
+## Today's Question
+
+In this lecture, we ask a simple causal question:
+
+> Is the risk of cardiovascular disease (CVD) different for smokers and non-smokers?
+
+Here, **CVD** means a person reported at least one of the following: congestive heart failure, coronary heart disease, angina, heart attack, or stroke.
+
+In this dataset, **smoker** means a person reported that they had smoked at least 100 cigarettes in their life. So this is not exactly the same as "currently smokes every day." It is a simple lifetime smoking measure.
+
+We will use the word **risk** in a classroom-friendly way: the percent of people in the dataset who had CVD before the interview.
+
+We will use the NHANES classroom dataset. To keep the first lecture simple, we will **not use survey weights**. That means our results describe the people in this classroom dataset, not a perfectly weighted estimate for the whole United States.
+
+```{r causal-question-picture, echo=FALSE, fig.width=8, fig.height=3.8}
+start_picture()
+
+draw_box(0.16, 0.60, 0.24, 0.22, "Smoking\nexposure",
+         fill = "#F28E2B", cex = 1.05, font = 2)
+draw_box(0.50, 0.60, 0.27, 0.22, "Body and health\nover time",
+         fill = "#F1CE63", cex = 1.05, font = 2)
+draw_box(0.84, 0.60, 0.22, 0.22, "CVD\noutcome",
+         fill = "#E15759", cex = 1.05, font = 2)
+
+draw_arrow(0.29, 0.60, 0.36, 0.60)
+draw_arrow(0.64, 0.60, 0.73, 0.60)
+
+draw_text(
+  0.50, 0.24,
+  "Causal question: if smoking changed, would CVD risk change?",
+  cex = 1.1,
+  font = 2
+)
+```
+
+The picture shows the basic story we want to study: smoking happens before the health outcome, and we want to know whether changing smoking would change CVD risk.
+
+## Association Is Not Always Causation
+
+Suppose we see that smokers have more CVD than non-smokers.
+
+Can we immediately say smoking caused the difference?
+
+Not quite.
+
+Smokers and non-smokers might differ in many ways besides smoking. For example, they might have different ages, diets, exercise habits, medical histories, or income levels. These other differences can make a simple comparison unfair.
+
+Still, a simple comparison is a great place to start. It helps us see the main idea before we learn more advanced methods.
+
+```{r association-causation-picture, echo=FALSE, fig.width=8, fig.height=4.5}
+start_picture()
+
+draw_box(0.24, 0.75, 0.34, 0.16, "Observed association",
+         fill = "#A0CBE8", cex = 1, font = 2)
+draw_box(0.24, 0.48, 0.34, 0.18, "Smokers and\nnon-smokers differ",
+         fill = "#DCEAF7", cex = 0.95)
+draw_box(0.24, 0.20, 0.34, 0.18, "Some difference\nmay be smoking",
+         fill = "#DCEAF7", cex = 0.95)
+
+draw_arrow(0.24, 0.67, 0.24, 0.57)
+draw_arrow(0.24, 0.39, 0.24, 0.29)
+
+draw_box(0.76, 0.75, 0.34, 0.16, "Causal effect",
+         fill = "#F28E2B", cex = 1, font = 2)
+draw_box(0.76, 0.48, 0.34, 0.18, "Same people\nin two worlds",
+         fill = "#FCE4C6", cex = 0.95)
+draw_box(0.76, 0.20, 0.34, 0.18, "Only smoking\nis changed",
+         fill = "#FCE4C6", cex = 0.95)
+
+draw_arrow(0.76, 0.67, 0.76, 0.57)
+draw_arrow(0.76, 0.39, 0.76, 0.29)
+
+segments(0.50, 0.10, 0.50, 0.88, lty = 2, col = "#777777")
+draw_text(0.50, 0.94, "Association is what we see. Causation is what we want to learn.",
+          cex = 1, font = 2)
+```
+
+## Potential Outcomes
+
+Causal inference starts with a very important imagination exercise.
+
+For each person, imagine two possible outcomes:
+
+| Symbol | Meaning |
+|:--|:--|
+| `Y(1)` | The person's CVD outcome if the person smoked |
+| `Y(0)` | The person's CVD outcome if the person did not smoke |
+
+For a single person, the causal effect of smoking would be:
+
+```{r potential-outcome-formula, echo=FALSE, results='asis'}
+cat("Causal effect for one person = Y(1) - Y(0)")
+```
+
+If `Y(1) = 1` and `Y(0) = 0`, then smoking would change that person's outcome from no CVD to CVD.
+
+If `Y(1) = 0` and `Y(0) = 0`, then that person would not have CVD either way.
+
+The hard part is that we cannot observe both possible worlds for the same person.
+
+```{r potential-outcomes-picture, echo=FALSE, fig.width=8, fig.height=4.5}
+start_picture()
+
+draw_person(0.16, 0.50, col = "#4E79A7", scale = 1.6)
+draw_text(0.16, 0.25, "Alex", cex = 1, font = 2)
+
+draw_box(0.52, 0.72, 0.32, 0.18, "World 1:\nAlex smokes",
+         fill = "#FCE4C6", cex = 0.95, font = 2)
+draw_box(0.84, 0.72, 0.22, 0.18, "Outcome\nY(1)",
+         fill = "#F28E2B", cex = 0.95, font = 2)
+
+draw_box(0.52, 0.28, 0.32, 0.18, "World 0:\nAlex does not smoke",
+         fill = "#DCEAF7", cex = 0.95, font = 2)
+draw_box(0.84, 0.28, 0.22, 0.18, "Outcome\nY(0)",
+         fill = "#4E79A7", cex = 0.95, font = 2)
+
+draw_arrow(0.24, 0.54, 0.36, 0.68)
+draw_arrow(0.24, 0.46, 0.36, 0.32)
+draw_arrow(0.68, 0.72, 0.73, 0.72)
+draw_arrow(0.68, 0.28, 0.73, 0.28)
+
+draw_text(0.50, 0.08, "Causal effect compares these two possible outcomes.",
+          cex = 1, font = 2)
+```
+
+## The Fundamental Problem
+
+Imagine one student named Alex.
+
+| Person | If smoker: `Y(1)` | If non-smoker: `Y(0)` | What do we actually observe? |
+|:--|:--:|:--:|:--|
+| Alex | ? | ? | Only one of these two outcomes |
+
+If Alex smoked, we can observe Alex's outcome as a smoker. But we cannot rewind life and also observe Alex as a non-smoker.
+
+This is called the **fundamental problem of causal inference**:
+
+> For the same person, at the same time, we can observe only one potential outcome.
+
+Because we cannot compare Alex to Alex in two possible worlds, we compare groups of people instead.
+
+```{r missing-counterfactual-picture, echo=FALSE, fig.width=8, fig.height=4.2}
+start_picture()
+
+draw_person(0.13, 0.50, col = "#4E79A7", scale = 1.45)
+draw_text(0.13, 0.25, "Alex", cex = 1, font = 2)
+
+draw_box(0.48, 0.66, 0.36, 0.20, "Observed:\nAlex smoked, saw Y(1)",
+         fill = "#FCE4C6", border = "#F28E2B", cex = 0.95, font = 2)
+draw_box(0.48, 0.34, 0.36, 0.20, "Missing:\nAlex did not smoke, Y(0)",
+         fill = "#FFFFFF", border = "#777777", lty = 2, cex = 0.95, font = 2)
+
+draw_arrow(0.23, 0.54, 0.30, 0.63, col = "#F28E2B")
+draw_arrow(0.23, 0.46, 0.30, 0.37, col = "#777777")
+
+draw_box(0.83, 0.50, 0.24, 0.24, "One real life\none missing\nwhat-if",
+         fill = "#F5F5F5", cex = 0.95, font = 2)
+
+draw_arrow(0.66, 0.66, 0.72, 0.56, col = "#F28E2B")
+draw_arrow(0.66, 0.34, 0.72, 0.44, col = "#777777")
+```
+
+## A Simple Classroom Method
+
+Our simple method is:
+
+1. Split people into smokers and non-smokers.
+2. Find the proportion with CVD in each group.
+3. Subtract the two proportions.
+
+The observed risk difference is:
+
+```{r risk-difference-formula, echo=FALSE, results='asis'}
+cat("Risk among smokers - Risk among non-smokers")
+```
+
+This is easy to understand, but we should be careful with words.
+
+This number is an **observed difference**. It becomes a causal estimate only if the smoker and non-smoker groups are comparable enough that smoking is the main important difference between them.
+
+```{r simple-method-picture, echo=FALSE, fig.width=8, fig.height=4.5}
+start_picture()
+
+draw_box(0.12, 0.50, 0.20, 0.18, "Classroom\ndataset",
+         fill = "#E8E8E8", cex = 0.95, font = 2)
+
+draw_box(0.39, 0.72, 0.25, 0.16, "Non-smokers",
+         fill = "#A0CBE8", cex = 0.95, font = 2)
+draw_box(0.39, 0.28, 0.25, 0.16, "Smokers",
+         fill = "#F28E2B", cex = 0.95, font = 2)
+
+draw_box(0.67, 0.72, 0.24, 0.16, "CVD risk\nin group",
+         fill = "#DCEAF7", cex = 0.9)
+draw_box(0.67, 0.28, 0.24, 0.16, "CVD risk\nin group",
+         fill = "#FCE4C6", cex = 0.9)
+
+draw_box(0.89, 0.50, 0.18, 0.20, "Subtract\nrisks",
+         fill = "#B7D7A8", cex = 0.9, font = 2)
+
+draw_arrow(0.22, 0.54, 0.26, 0.68)
+draw_arrow(0.22, 0.46, 0.26, 0.32)
+draw_arrow(0.52, 0.72, 0.55, 0.72)
+draw_arrow(0.52, 0.28, 0.55, 0.28)
+draw_arrow(0.78, 0.68, 0.82, 0.56)
+draw_arrow(0.78, 0.32, 0.82, 0.44)
+
+draw_text(0.50, 0.06, "This is the first, simplest comparison.",
+          cex = 1, font = 2)
+```
+
+## Load the Data
+
+```{r load-data}
+data_path <- file.path("..", "Data", "NHANES_data.csv")
+
+if (!file.exists(data_path)) {
+  data_path <- file.path("Data", "NHANES_data.csv")
+}
+
+nhanes <- read.csv(data_path, stringsAsFactors = FALSE)
+
+analysis_data <- subset(
+  nhanes,
+  !is.na(smoker_indicator) & !is.na(cvd_indicator)
+)
+
+analysis_data$smoking_group <- ifelse(
+  analysis_data$smoker_indicator == 1,
+  "Smoker",
+  "Non-smoker"
+)
+
+analysis_data$cvd_status <- ifelse(
+  analysis_data$cvd_indicator == 1,
+  "Had CVD",
+  "No CVD"
+)
+
+nrow(analysis_data)
+```
+
+The last line shows how many people have both smoking information and CVD information available.
+
+## Count CVD by Smoking Group
+
+```{r count-table}
+count_table <- with(analysis_data, table(smoking_group, cvd_status))
+count_table <- count_table[, c("No CVD", "Had CVD")]
+
+knitr::kable(
+  addmargins(count_table),
+  caption = "Number of people with and without CVD by smoking group"
+)
+```
+
+This table gives the raw counts. Now we turn the counts into percentages.
+
+## Compare CVD Risk
+
+```{r risk-summary}
+groups <- split(analysis_data$cvd_indicator, analysis_data$smoking_group)
+
+risk_summary <- data.frame(
+  smoking_group = names(groups),
+  number_of_people = as.integer(sapply(groups, length)),
+  number_with_cvd = as.integer(sapply(groups, sum)),
+  cvd_risk = as.numeric(sapply(groups, mean))
+)
+
+risk_summary <- risk_summary[
+  match(c("Non-smoker", "Smoker"), risk_summary$smoking_group),
+]
+
+risk_summary$cvd_risk_percent <- round(100 * risk_summary$cvd_risk, 1)
+
+knitr::kable(
+  risk_summary[, c(
+    "smoking_group",
+    "number_of_people",
+    "number_with_cvd",
+    "cvd_risk_percent"
+  )],
+  col.names = c("Group", "Number of people", "Number with CVD", "CVD risk (%)"),
+  caption = "Observed CVD risk by smoking group"
+)
+```
+
+## Risk Difference
+
+```{r risk-difference}
+risk_non_smoker <- risk_summary$cvd_risk[
+  risk_summary$smoking_group == "Non-smoker"
+]
+
+risk_smoker <- risk_summary$cvd_risk[
+  risk_summary$smoking_group == "Smoker"
+]
+
+risk_difference <- risk_smoker - risk_non_smoker
+risk_ratio <- risk_smoker / risk_non_smoker
+
+cat(
+  "Observed risk among non-smokers:",
+  round(100 * risk_non_smoker, 1),
+  "%\n"
+)
+
+cat(
+  "Observed risk among smokers:",
+  round(100 * risk_smoker, 1),
+  "%\n"
+)
+
+cat(
+  "Observed risk difference:",
+  round(100 * risk_difference, 1),
+  "percentage points\n"
+)
+
+cat(
+  "Observed risk ratio:",
+  round(risk_ratio, 2),
+  "\n"
+)
+```
+
+In this dataset, the observed CVD risk is higher among smokers than non-smokers.
+
+The risk difference tells us the gap in percentage points. The risk ratio tells us how many times larger the smoker group's observed risk is compared with the non-smoker group's observed risk.
+
+## Pictures of the Difference
+
+First, imagine 100 people from each group. Red dots represent people with CVD. Green dots represent people without CVD.
+
+```{r hundred-person-picture, echo=FALSE, fig.width=8, fig.height=4.8}
+start_picture()
+
+draw_people_grid(
+  0.09,
+  0.23,
+  round(100 * risk_non_smoker),
+  paste0("Non-smokers\n", round(100 * risk_non_smoker, 1), "% with CVD")
+)
+
+draw_people_grid(
+  0.60,
+  0.23,
+  round(100 * risk_smoker),
+  paste0("Smokers\n", round(100 * risk_smoker, 1), "% with CVD")
+)
+
+points(0.40, 0.12, pch = 21, bg = "#E15759", col = "white", cex = 1.8)
+draw_text(0.48, 0.12, "CVD", cex = 0.9)
+points(0.58, 0.12, pch = 21, bg = "#B7D7A8", col = "white", cex = 1.8)
+draw_text(0.68, 0.12, "No CVD", cex = 0.9)
+```
+
+This picture turns percentages into something more concrete. Out of 100 similar-looking dots, about 7 non-smoker dots are red and about 15 smoker dots are red.
+
+```{r risk-difference-picture, echo=FALSE, fig.width=8, fig.height=3.8}
+start_picture()
+
+draw_box(
+  0.24, 0.55, 0.25, 0.20,
+  paste0("Non-smokers\n", round(100 * risk_non_smoker, 1), "%"),
+  fill = "#A0CBE8", cex = 1, font = 2
+)
+
+draw_box(
+  0.76, 0.55, 0.25, 0.20,
+  paste0("Smokers\n", round(100 * risk_smoker, 1), "%"),
+  fill = "#F28E2B", cex = 1, font = 2
+)
+
+draw_arrow(0.38, 0.55, 0.62, 0.55)
+draw_text(
+  0.50,
+  0.72,
+  paste0("+", round(100 * risk_difference, 1), " percentage points"),
+  cex = 1.05,
+  font = 2
+)
+draw_text(0.50, 0.22, "Risk difference = smoker risk - non-smoker risk",
+          cex = 1, font = 2)
+```
+
+```{r risk-plot, fig.width=7, fig.height=4.5}
+risk_percent <- setNames(
+  100 * risk_summary$cvd_risk,
+  risk_summary$smoking_group
+)
+
+bar_locations <- barplot(
+  risk_percent,
+  ylim = c(0, max(risk_percent) * 1.25),
+  col = c("#4E79A7", "#F28E2B"),
+  ylab = "Percent with CVD",
+  main = "Observed CVD Risk by Smoking Group"
+)
+
+text(
+  x = bar_locations,
+  y = risk_percent + 1,
+  labels = paste0(round(risk_percent, 1), "%")
+)
+```
+
+The bar plot makes the comparison easier to see: the smoker group has a larger observed percentage with CVD.
+
+## Why We Are Careful
+
+The simple comparison is useful, but the smoker and non-smoker groups may differ in other ways.
+
+```{r confounding-picture, echo=FALSE, fig.width=8, fig.height=4.8}
+start_picture()
+
+draw_box(0.20, 0.52, 0.30, 0.42, "Other differences\nAge\nExercise\nIncome\nMedical history",
+         fill = "#E8E8E8", cex = 0.85, font = 2)
+
+draw_box(0.56, 0.72, 0.22, 0.15, "Smoking",
+         fill = "#F28E2B", cex = 1, font = 2)
+draw_box(0.80, 0.35, 0.22, 0.15, "CVD",
+         fill = "#E15759", cex = 1, font = 2)
+
+draw_arrow(0.36, 0.61, 0.45, 0.68)
+draw_arrow(0.36, 0.43, 0.68, 0.36)
+draw_arrow(0.64, 0.66, 0.72, 0.43, col = "#F28E2B", lwd = 3)
+
+draw_text(0.53, 0.10, "Other differences can make a simple comparison unfair.",
+          cex = 1, font = 2)
+```
+
+This is why we say the simple result is an observed difference. Later methods will try to compare smokers and non-smokers who are more similar on other important variables.
+
+## What Can We Conclude?
+
+From this simple analysis, we can say:
+
+> In this classroom NHANES dataset, smokers had a higher observed CVD risk than non-smokers.
+
+More specifically, the observed CVD risk was `r round(100 * risk_non_smoker, 1)`% for non-smokers and `r round(100 * risk_smoker, 1)`% for smokers. The observed difference was `r round(100 * risk_difference, 1)` percentage points.
+
+But we should not overclaim.
+
+This simple comparison does **not** prove by itself that smoking caused the entire difference. It does not adjust for age, sex, race, income, hypertension, or other possible differences between smokers and non-smokers.
+
+It also uses a simple lifetime smoking variable and does not check exact timing between smoking and CVD. That is another reason to treat this as a first classroom example, not the final scientific answer.
+
+The causal inference idea is:
+
+> We want to compare what would happen under smoking with what would happen under no smoking.
+
+The simple analysis is our first step. Later, we can learn methods that try to make the smoker and non-smoker groups more comparable.
+
+```{r lecture-map-picture, echo=FALSE, fig.width=8, fig.height=3.8}
+start_picture()
+
+draw_box(0.10, 0.58, 0.16, 0.18, "Ask a\ncausal\nquestion",
+         fill = "#A0CBE8", cex = 0.82, font = 2)
+draw_box(0.31, 0.58, 0.18, 0.18, "Imagine\nY(1) and\nY(0)",
+         fill = "#F1CE63", cex = 0.82, font = 2)
+draw_box(0.52, 0.58, 0.18, 0.18, "Observe\nonly one\nworld",
+         fill = "#E8E8E8", cex = 0.82, font = 2)
+draw_box(0.73, 0.58, 0.18, 0.18, "Compare\ngroups",
+         fill = "#F28E2B", cex = 0.82, font = 2)
+draw_box(0.91, 0.58, 0.16, 0.18, "Be\ncareful",
+         fill = "#B7D7A8", cex = 0.82, font = 2)
+
+draw_arrow(0.18, 0.58, 0.22, 0.58)
+draw_arrow(0.40, 0.58, 0.43, 0.58)
+draw_arrow(0.61, 0.58, 0.64, 0.58)
+draw_arrow(0.82, 0.58, 0.84, 0.58)
+
+draw_text(0.50, 0.22, "Lecture 1 path: from a question to a cautious first answer.",
+          cex = 1, font = 2)
+```
+
+## Key Takeaways
+
+1. A causal question asks what would happen under different choices or exposures.
+2. Potential outcomes are the outcomes a person would have under each possible exposure.
+3. We can observe only one potential outcome for each person.
+4. A simple difference in observed risks is easy to compute and easy to understand.
+5. A simple difference is an association unless we can justify that the groups are comparable.
