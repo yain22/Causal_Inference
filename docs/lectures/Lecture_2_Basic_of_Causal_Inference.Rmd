@@ -923,3 +923,263 @@ We should still be careful. IPW adjusts only for the covariates we measured and 
 3. IPW gives larger weights to people whose observed treatment status was less common for people like them.
 4. IPW creates a weighted pseudo-population where measured covariates are more balanced.
 5. IPW estimates causal effects only under important assumptions, including no unmeasured confounding and good overlap.
+
+## Appendix: Math of Inverse Probability Weighting
+
+This appendix gives the mathematical notation for the IPW method used in this lecture.
+
+For each person \(i = 1, \ldots, n\), define:
+
+$$
+\begin{aligned}
+T_i &= \text{smoking indicator}, \\
+Y_i &= \text{CVD indicator}, \\
+X_i &= \text{baseline covariates}.
+\end{aligned}
+$$
+
+Here \(T_i = 1\) means smoker, \(T_i = 0\) means non-smoker, and \(Y_i = 1\) means the person has CVD.
+
+Our goal is to estimate two adjusted risks:
+
+$$
+\begin{aligned}
+\psi_1 &= \text{CVD risk if everyone smoked}, \\
+\psi_0 &= \text{CVD risk if everyone did not smoke}.
+\end{aligned}
+$$
+
+Then the adjusted risk difference and adjusted risk ratio are:
+
+$$
+\begin{aligned}
+RD &= \psi_1 - \psi_0, \\
+RR &= \frac{\psi_1}{\psi_0}.
+\end{aligned}
+$$
+
+### Appendix 1: Propensity Score
+
+The propensity score is the probability of treatment given baseline covariates:
+
+$$
+e(X_i)
+=
+P(T_i = 1 \mid X_i).
+$$
+
+In this lecture, treatment means smoking, so:
+
+$$
+e(X_i)
+=
+P(\text{smoker} \mid X_i).
+$$
+
+We estimate this probability using logistic regression:
+
+$$
+\text{logit}\{e(X_i)\}
+=
+\alpha_0 + \alpha^\top X_i.
+$$
+
+The fitted propensity score is:
+
+$$
+\hat e_i
+=
+\hat e(X_i).
+$$
+
+### Appendix 2: IPW Weights
+
+IPW gives each person a weight based on the inverse probability of the treatment status they actually received.
+
+For smokers:
+
+$$
+w_i
+=
+\frac{1}{\hat e_i}
+\quad \text{if } T_i = 1.
+$$
+
+For non-smokers:
+
+$$
+w_i
+=
+\frac{1}{1 - \hat e_i}
+\quad \text{if } T_i = 0.
+$$
+
+Equivalently:
+
+$$
+w_i
+=
+\frac{T_i}{\hat e_i}
++
+\frac{1 - T_i}{1 - \hat e_i}.
+$$
+
+The intuition is:
+
+> If a person's observed smoking status was unlikely for someone with their covariates, that person receives a larger weight.
+
+### Appendix 3: Weighted Risks
+
+The lecture uses normalized weighted averages.
+
+The IPW estimate of the smoker risk is:
+
+$$
+\hat\psi_1^{IPW}
+=
+\frac{
+\sum_{i=1}^{n}
+\dfrac{T_iY_i}{\hat e_i}
+}{
+\sum_{i=1}^{n}
+\dfrac{T_i}{\hat e_i}
+}.
+$$
+
+The IPW estimate of the non-smoker risk is:
+
+$$
+\hat\psi_0^{IPW}
+=
+\frac{
+\sum_{i=1}^{n}
+\dfrac{(1 - T_i)Y_i}{1 - \hat e_i}
+}{
+\sum_{i=1}^{n}
+\dfrac{1 - T_i}{1 - \hat e_i}
+}.
+$$
+
+These formulas match the R code in the lecture:
+
+$$
+\text{weighted mean}
+=
+\frac{\sum_i w_iY_i}{\sum_i w_i}.
+$$
+
+### Appendix 4: Risk Difference and Risk Ratio
+
+Once we estimate the two weighted risks, the IPW risk difference is:
+
+$$
+\widehat{RD}^{IPW}
+=
+\hat\psi_1^{IPW}
+-
+\hat\psi_0^{IPW}.
+$$
+
+The IPW risk ratio is:
+
+$$
+\widehat{RR}^{IPW}
+=
+\frac{\hat\psi_1^{IPW}}
+       {\hat\psi_0^{IPW}}.
+$$
+
+In the lecture, the risk difference is reported in percentage points:
+
+$$
+100 \times \widehat{RD}^{IPW}.
+$$
+
+### Appendix 5: Covariate Balance and SMD
+
+IPW is trying to create a weighted pseudo-population where measured baseline covariates look similar between smokers and non-smokers.
+
+For a numerical covariate \(Z_i\), the weighted mean among smokers is:
+
+$$
+\bar Z_1^{w}
+=
+\frac{
+\sum_{i=1}^{n} T_i w_i Z_i
+}{
+\sum_{i=1}^{n} T_i w_i
+}.
+$$
+
+The weighted mean among non-smokers is:
+
+$$
+\bar Z_0^{w}
+=
+\frac{
+\sum_{i=1}^{n} (1 - T_i) w_i Z_i
+}{
+\sum_{i=1}^{n} (1 - T_i) w_i
+}.
+$$
+
+The absolute standardized mean difference is:
+
+$$
+\text{SMD}
+=
+\left|
+\frac{
+\bar Z_1^{w} - \bar Z_0^{w}
+}{
+s_{pooled}^{w}
+}
+\right|,
+$$
+
+where:
+
+$$
+s_{pooled}^{w}
+=
+\sqrt{
+\frac{
+(s_1^{w})^2 + (s_0^{w})^2
+}{2}
+}.
+$$
+
+Here \(s_1^{w}\) and \(s_0^{w}\) are the weighted standard deviations among smokers and non-smokers.
+
+For a categorical covariate, the lecture turns each category into a yes/no indicator and then uses the same idea.
+
+Smaller SMD values mean better balance:
+
+$$
+\text{SMD close to } 0
+\quad \Longrightarrow \quad
+\text{better covariate balance}.
+$$
+
+### Appendix 6: Assumptions
+
+IPW needs causal assumptions.
+
+The main assumptions are:
+
+1. **Consistency**: the observed outcome equals the potential outcome under the treatment actually received.
+2. **No important unmeasured confounding**: after adjustment for \(X_i\), smoking is as good as randomly assigned for this teaching question.
+3. **Positivity**: for each important covariate pattern, both smoking and non-smoking are possible.
+4. **Correct enough propensity model**: the fitted propensity score \(\hat e_i\) is good enough for creating useful weights.
+
+If the propensity score model is badly wrong, or if some people have extremely small probabilities of their observed treatment status, IPW can become unstable.
+
+## References
+
+Austin, P. C., & Stuart, E. A. (2015). Moving towards best practice when using inverse probability of treatment weighting using the propensity score to estimate causal treatment effects in observational studies. *Statistics in Medicine*, 34(28), 3661-3679.
+
+Cole, S. R., & Hernan, M. A. (2008). Constructing inverse probability weights for marginal structural models. *American Journal of Epidemiology*, 168(6), 656-664.
+
+Hernan, M. A., & Robins, J. M. (2020). *Causal Inference: What If*. Chapman & Hall/CRC.
+
+Rosenbaum, P. R., & Rubin, D. B. (1983). The central role of the propensity score in observational studies for causal effects. *Biometrika*, 70(1), 41-55.

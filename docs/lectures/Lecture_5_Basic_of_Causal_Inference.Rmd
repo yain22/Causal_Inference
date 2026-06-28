@@ -757,3 +757,218 @@ It does not prove:
 4. We used bootstrapping for IPW, outcome regression, and doubly robust estimation.
 5. Hypothesis testing asks whether zero difference is plausible.
 6. Statistical evidence is not the same as causal proof; causal assumptions still matter.
+
+## Appendix: Bootstrap Math Used in This Lecture
+
+This appendix gives the mathematical notation for the bootstrap procedure used in this lecture.
+
+For each person \(i = 1, \ldots, n\), let:
+
+$$
+O_i = (Y_i, T_i, X_i)
+$$
+
+where \(Y_i\) is CVD status, \(T_i\) is smoking status, and \(X_i\) is the vector of measured baseline covariates.
+
+For each method \(m\), where:
+
+$$
+m \in \{\text{IPW}, \text{OR}, \text{DR}\},
+$$
+
+let the estimated adjusted risk difference from the original dataset be:
+
+$$
+\hat\Delta_m.
+$$
+
+In words, \(\hat\Delta_m\) estimates:
+
+$$
+\Delta_m
+=
+\text{CVD risk if everyone smoked}
+-
+\text{CVD risk if everyone did not smoke}.
+$$
+
+In this lecture, we report this risk difference in percentage points:
+
+$$
+100 \times \hat\Delta_m.
+$$
+
+### Bootstrap Resampling
+
+The empirical distribution of the observed data is:
+
+$$
+\hat F_n
+=
+\frac{1}{n}
+\sum_{i=1}^{n}
+\delta_{O_i},
+$$
+
+where \(\delta_{O_i}\) means a point mass at person \(i\)'s observed data.
+
+A bootstrap sample is created by drawing:
+
+$$
+O_1^{*(b)}, O_2^{*(b)}, \ldots, O_n^{*(b)}
+\overset{iid}{\sim}
+\hat F_n,
+$$
+
+for bootstrap repetition \(b = 1, \ldots, B\).
+
+In this lecture:
+
+$$
+B = 300.
+$$
+
+Because we sample from \(\hat F_n\), a person can appear more than once in a bootstrap sample, and another person may not appear at all.
+
+### Bootstrap Estimates
+
+For each bootstrap sample \(b\), we repeat the whole analysis and recompute the risk difference:
+
+$$
+\hat\Delta_m^{*(b)}
+=
+\text{risk difference estimate from bootstrap sample } b.
+$$
+
+So for each method \(m\), the bootstrap gives many estimates:
+
+$$
+\hat\Delta_m^{*(1)},
+\hat\Delta_m^{*(2)},
+\ldots,
+\hat\Delta_m^{*(B)}.
+$$
+
+These values form the bootstrap distribution.
+
+### Bootstrap Standard Error
+
+The bootstrap mean is:
+
+$$
+\bar{\Delta}_m^*
+=
+\frac{1}{B}
+\sum_{b=1}^{B}
+\hat\Delta_m^{*(b)}.
+$$
+
+The bootstrap standard error is:
+
+$$
+\widehat{SE}_{boot}(\hat\Delta_m)
+=
+\sqrt{
+\frac{1}{B - 1}
+\sum_{b=1}^{B}
+\left(
+\hat\Delta_m^{*(b)}
+-
+\bar{\Delta}_m^*
+\right)^2
+}.
+$$
+
+This number measures how much the estimate moves across the bootstrap samples.
+
+### Percentile Bootstrap Confidence Interval
+
+The lecture uses a percentile bootstrap confidence interval.
+
+Let:
+
+$$
+q_{0.025,m}^*
+=
+\text{2.5th percentile of }
+\left\{
+\hat\Delta_m^{*(1)}, \ldots, \hat\Delta_m^{*(B)}
+\right\},
+$$
+
+and:
+
+$$
+q_{0.975,m}^*
+=
+\text{97.5th percentile of }
+\left\{
+\hat\Delta_m^{*(1)}, \ldots, \hat\Delta_m^{*(B)}
+\right\}.
+$$
+
+Then the 95% bootstrap confidence interval is:
+
+$$
+\left[
+q_{0.025,m}^*,
+q_{0.975,m}^*
+\right].
+$$
+
+In percentage points, this becomes:
+
+$$
+\left[
+100q_{0.025,m}^*,
+100q_{0.975,m}^*
+\right].
+$$
+
+### Bootstrap-Based Hypothesis Test
+
+For hypothesis testing, the lecture tests:
+
+$$
+H_0: \Delta_m = 0
+$$
+
+against:
+
+$$
+H_1: \Delta_m \neq 0.
+$$
+
+The test statistic is:
+
+$$
+z_m
+=
+\frac{\hat\Delta_m}
+{\widehat{SE}_{boot}(\hat\Delta_m)}.
+$$
+
+The two-sided p-value is:
+
+$$
+p_m
+=
+2
+\left\{
+1 - \Phi\left(|z_m|\right)
+\right\},
+$$
+
+where \(\Phi(\cdot)\) is the cumulative distribution function of the standard normal distribution.
+
+If \(p_m < 0.05\), we reject \(H_0\) at the 5% significance level.
+
+In plain language:
+
+> If zero is far away from the estimate compared with the bootstrap standard error, we get stronger evidence against no adjusted risk difference.
+
+## References
+
+Efron, B. (1979). Bootstrap methods: Another look at the jackknife. *The Annals of Statistics*, 7(1), 1-26.
+
+Efron, B., & Tibshirani, R. J. (1993). *An Introduction to the Bootstrap*. Chapman & Hall/CRC.

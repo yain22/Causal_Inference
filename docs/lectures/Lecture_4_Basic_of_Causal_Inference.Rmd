@@ -683,3 +683,258 @@ We still need important causal assumptions:
 3. Doubly robust estimation uses both models.
 4. It starts with model-predicted risks and adds a correction from observed outcomes.
 5. It can work well if at least one of the two models is reasonable, but it is not magic.
+
+## Appendix: Math of the Doubly Robust Estimator
+
+This appendix gives the mathematical notation for the doubly robust estimator used in this lecture.
+
+For each person \(i = 1, \ldots, n\), define:
+
+$$
+\begin{aligned}
+T_i &= \text{smoking indicator}, \\
+Y_i &= \text{CVD indicator}, \\
+X_i &= \text{baseline covariates}.
+\end{aligned}
+$$
+
+Here \(T_i = 1\) means smoker, \(T_i = 0\) means non-smoker, and \(Y_i = 1\) means the person has CVD.
+
+Our goal is to estimate two adjusted risks:
+
+$$
+\begin{aligned}
+\psi_1 &= \text{CVD risk if everyone smoked}, \\
+\psi_0 &= \text{CVD risk if everyone did not smoke}.
+\end{aligned}
+$$
+
+Then the adjusted risk difference and adjusted risk ratio are:
+
+$$
+\begin{aligned}
+RD &= \psi_1 - \psi_0, \\
+RR &= \frac{\psi_1}{\psi_0}.
+\end{aligned}
+$$
+
+### Appendix 1: Treatment Model
+
+The treatment model estimates the propensity score:
+
+$$
+e(X_i)
+=
+P(T_i = 1 \mid X_i).
+$$
+
+In this lecture, we fit a logistic regression:
+
+$$
+\text{logit}\{e(X_i)\}
+=
+\alpha_0 + \alpha^\top X_i.
+$$
+
+The fitted propensity score is:
+
+$$
+\hat e_i = \hat e(X_i).
+$$
+
+### Appendix 2: Outcome Model
+
+The outcome model estimates CVD risk given smoking and covariates:
+
+$$
+m(t, X_i)
+=
+P(Y_i = 1 \mid T_i = t, X_i).
+$$
+
+In this lecture, we fit another logistic regression:
+
+$$
+\text{logit}\{m(T_i, X_i)\}
+=
+\beta_0 + \beta_1 T_i + \beta^\top X_i.
+$$
+
+Then we predict each person's CVD risk under both treatment choices:
+
+$$
+\begin{aligned}
+\hat m_1(X_i) &= \hat m(1, X_i), \\
+\hat m_0(X_i) &= \hat m(0, X_i).
+\end{aligned}
+$$
+
+Here \(\hat m_1(X_i)\) means predicted CVD risk if person \(i\) were set to smoker, and \(\hat m_0(X_i)\) means predicted CVD risk if person \(i\) were set to non-smoker.
+
+### Appendix 3: Doubly Robust Risk Under Smoking
+
+For the smoker world, \(T = 1\), the doubly robust estimator is:
+
+$$
+\hat\psi_1^{DR}
+=
+\frac{1}{n}
+\sum_{i=1}^{n}
+\left[
+\hat m_1(X_i)
++
+\frac{T_i}{\hat e_i}
+\{Y_i - \hat m_1(X_i)\}
+\right].
+$$
+
+This has two pieces:
+
+$$
+\text{prediction}
+=
+\hat m_1(X_i),
+$$
+
+and:
+
+$$
+\text{correction}
+=
+\frac{T_i}{\hat e_i}
+\{Y_i - \hat m_1(X_i)\}.
+$$
+
+The correction compares the observed outcome \(Y_i\) with the predicted outcome \(\hat m_1(X_i)\), but it only contributes for people who were actually smokers.
+
+### Appendix 4: Doubly Robust Risk Under Non-Smoking
+
+For the non-smoker world, \(T = 0\), the doubly robust estimator is:
+
+$$
+\hat\psi_0^{DR}
+=
+\frac{1}{n}
+\sum_{i=1}^{n}
+\left[
+\hat m_0(X_i)
++
+\frac{1 - T_i}{1 - \hat e_i}
+\{Y_i - \hat m_0(X_i)\}
+\right].
+$$
+
+Again, this has two pieces:
+
+$$
+\text{prediction}
+=
+\hat m_0(X_i),
+$$
+
+and:
+
+$$
+\text{correction}
+=
+\frac{1 - T_i}{1 - \hat e_i}
+\{Y_i - \hat m_0(X_i)\}.
+$$
+
+The correction only contributes for people who were actually non-smokers.
+
+### Appendix 5: Risk Difference and Risk Ratio
+
+Once we estimate the two adjusted risks, the doubly robust risk difference is:
+
+$$
+\widehat{RD}^{DR}
+=
+\hat\psi_1^{DR}
+-
+\hat\psi_0^{DR}.
+$$
+
+The doubly robust risk ratio is:
+
+$$
+\widehat{RR}^{DR}
+=
+\frac{\hat\psi_1^{DR}}
+       {\hat\psi_0^{DR}}.
+$$
+
+In the main lecture, the risk difference is reported in percentage points:
+
+$$
+100 \times \widehat{RD}^{DR}.
+$$
+
+### Appendix 6: Why the Estimator Is Called Doubly Robust
+
+The doubly robust estimator combines two models:
+
+$$
+\hat e(X_i)
+\quad \text{and} \quad
+\hat m(t, X_i).
+$$
+
+It is called doubly robust because it can still estimate the target risk correctly if either one of these models is correct.
+
+For this statement, we still need the usual causal assumptions: consistency, no important unmeasured confounding after adjustment for \(X_i\), and positivity. Let \(Y_i^1\) be the potential CVD outcome if person \(i\) smoked, and let \(Y_i^0\) be the potential CVD outcome if person \(i\) did not smoke.
+
+If the outcome model is correct, then:
+
+$$
+E\{Y_i - m(1, X_i) \mid T_i = 1, X_i\}
+=
+0.
+$$
+
+So the average correction term for the smoker world is centered around zero:
+
+$$
+E\left[
+\frac{T_i}{e(X_i)}
+\{Y_i - m(1, X_i)\}
+\right]
+=
+0.
+$$
+
+In that case, the outcome-model prediction is already correct enough.
+
+If the treatment model is correct, then the inverse-probability correction reweights the observed smokers so they represent the full covariate distribution:
+
+$$
+E\left[
+\frac{T_i}{e(X_i)}Y_i
+\right]
+=
+E(Y_i^{1}).
+$$
+
+Similarly:
+
+$$
+E\left[
+\frac{1 - T_i}{1 - e(X_i)}Y_i
+\right]
+=
+E(Y_i^{0}).
+$$
+
+So if the treatment model is correct, the correction can protect us even when the outcome model is imperfect.
+
+The important classroom message is:
+
+> Doubly robust means either the treatment model or the outcome model can be correct enough. It does not mean both models can be wrong.
+
+## References
+
+Bang, H., & Robins, J. M. (2005). Doubly robust estimation in missing data and causal inference models. *Biometrics*, 61(4), 962-973.
+
+Hernan, M. A., & Robins, J. M. (2020). *Causal Inference: What If*. Chapman & Hall/CRC.
+
+Robins, J. M., Rotnitzky, A., & Zhao, L. P. (1994). Estimation of regression coefficients when some regressors are not always observed. *Journal of the American Statistical Association*, 89(427), 846-866.

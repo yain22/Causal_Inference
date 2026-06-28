@@ -865,3 +865,202 @@ We should still be careful. Outcome regression adjusts only for covariates inclu
 3. Standardization predicts both treatment worlds for the same people.
 4. The adjusted risk difference is based on average predicted risks.
 5. Outcome regression needs measured confounders and a reasonable outcome model.
+
+## Appendix: Math of Outcome Regression Standardization
+
+This appendix gives the mathematical notation for the outcome regression method used in this lecture.
+
+For each person \(i = 1, \ldots, n\), define:
+
+$$
+\begin{aligned}
+T_i &= \text{smoking indicator}, \\
+Y_i &= \text{CVD indicator}, \\
+X_i &= \text{baseline covariates}.
+\end{aligned}
+$$
+
+Here \(T_i = 1\) means smoker, \(T_i = 0\) means non-smoker, and \(Y_i = 1\) means the person has CVD.
+
+The causal targets are two adjusted risks:
+
+$$
+\begin{aligned}
+\psi_1 &= \text{CVD risk if everyone smoked}, \\
+\psi_0 &= \text{CVD risk if everyone did not smoke}.
+\end{aligned}
+$$
+
+Then the adjusted risk difference and adjusted risk ratio are:
+
+$$
+\begin{aligned}
+RD &= \psi_1 - \psi_0, \\
+RR &= \frac{\psi_1}{\psi_0}.
+\end{aligned}
+$$
+
+### Appendix 1: Outcome Model
+
+Outcome regression begins by modeling the outcome:
+
+$$
+m(t, X_i)
+=
+P(Y_i = 1 \mid T_i = t, X_i).
+$$
+
+Because CVD is a yes/no variable, this lecture uses logistic regression:
+
+$$
+\text{logit}\{m(T_i, X_i)\}
+=
+\beta_0 + \beta_1T_i + \beta^\top X_i.
+$$
+
+Here \(X_i\) includes age, gender, race, education, income-to-poverty ratio, and BMI.
+
+After fitting the model, we get:
+
+$$
+\hat m(t, X_i).
+$$
+
+This is the fitted probability of CVD for a person with covariates \(X_i\) if treatment is set to \(t\).
+
+### Appendix 2: Predict Both Treatment Worlds
+
+For each person, we make two model-based predictions.
+
+First, predict CVD risk if that person were set to non-smoker:
+
+$$
+\hat m_0(X_i)
+=
+\hat m(0, X_i).
+$$
+
+Second, predict CVD risk if that person were set to smoker:
+
+$$
+\hat m_1(X_i)
+=
+\hat m(1, X_i).
+$$
+
+The key idea is that \(X_i\) stays the same. Only \(T_i\) changes.
+
+This is why outcome regression standardization compares:
+
+$$
+\hat m(1, X_i)
+\quad \text{versus} \quad
+\hat m(0, X_i)
+$$
+
+for the same covariate distribution.
+
+### Appendix 3: Standardized Risks
+
+The standardized risk if everyone were set to smoker is:
+
+$$
+\hat\psi_1^{OR}
+=
+\frac{1}{n}
+\sum_{i=1}^{n}
+\hat m_1(X_i).
+$$
+
+The standardized risk if everyone were set to non-smoker is:
+
+$$
+\hat\psi_0^{OR}
+=
+\frac{1}{n}
+\sum_{i=1}^{n}
+\hat m_0(X_i).
+$$
+
+These formulas match the R code in the lecture:
+
+$$
+\begin{aligned}
+\hat\psi_1^{OR}
+&=
+\text{average predicted risk if everyone is set to smoker}, \\
+\hat\psi_0^{OR}
+&=
+\text{average predicted risk if everyone is set to non-smoker}.
+\end{aligned}
+$$
+
+### Appendix 4: Risk Difference and Risk Ratio
+
+The outcome-regression risk difference is:
+
+$$
+\widehat{RD}^{OR}
+=
+\hat\psi_1^{OR}
+-
+\hat\psi_0^{OR}.
+$$
+
+The outcome-regression risk ratio is:
+
+$$
+\widehat{RR}^{OR}
+=
+\frac{\hat\psi_1^{OR}}
+       {\hat\psi_0^{OR}}.
+$$
+
+In the lecture, the risk difference is reported in percentage points:
+
+$$
+100 \times \widehat{RD}^{OR}.
+$$
+
+### Appendix 5: Why This Adjusts for Covariates
+
+The model uses \(X_i\) when predicting CVD risk:
+
+$$
+\hat m(t, X_i).
+$$
+
+Then we average predictions over the observed covariate distribution:
+
+$$
+\frac{1}{n}
+\sum_{i=1}^{n}
+\hat m(t, X_i).
+$$
+
+This means we compare smoker and non-smoker risk using the same set of covariates \(X_1, \ldots, X_n\).
+
+In plain language:
+
+> We ask what CVD risk would look like if the same classroom dataset were placed into two worlds: everyone non-smoker and everyone smoker.
+
+### Appendix 6: Assumptions
+
+Outcome regression standardization needs causal assumptions.
+
+The main assumptions are:
+
+1. **Consistency**: the observed outcome equals the potential outcome under the treatment actually received.
+2. **No important unmeasured confounding**: after adjustment for \(X_i\), smoking is as good as randomly assigned for this teaching question.
+3. **Positivity**: for each important covariate pattern, both smoking and non-smoking are possible.
+4. **Reasonable outcome model**: the fitted model \(\hat m(t, X_i)\) is good enough for the comparison.
+
+If the outcome model is badly wrong, the standardized outcome-regression estimate can be biased.
+
+## References
+
+Hernan, M. A., & Robins, J. M. (2020). *Causal Inference: What If*. Chapman & Hall/CRC.
+
+Robins, J. M. (1986). A new approach to causal inference in mortality studies with a sustained exposure period: Application to control of the healthy worker survivor effect. *Mathematical Modelling*, 7(9-12), 1393-1512.
+
+Snowden, J. M., Rose, S., & Mortimer, K. M. (2011). Implementation of G-computation on a simulated data set: Demonstration of a causal inference technique. *American Journal of Epidemiology*, 173(7), 731-738.

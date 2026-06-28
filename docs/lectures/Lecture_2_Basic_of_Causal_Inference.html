@@ -2548,6 +2548,253 @@ are more balanced.</li>
 including no unmeasured confounding and good overlap.</li>
 </ol>
 </div>
+<div id="appendix-math-of-inverse-probability-weighting" class="section level2" number="14">
+<h2><span class="header-section-number">14</span> Appendix: Math of
+Inverse Probability Weighting</h2>
+<p>This appendix gives the mathematical notation for the IPW method used
+in this lecture.</p>
+<p>For each person <span class="math inline">\(i = 1, \ldots,
+n\)</span>, define:</p>
+<p><span class="math display">\[
+\begin{aligned}
+T_i &amp;= \text{smoking indicator}, \\
+Y_i &amp;= \text{CVD indicator}, \\
+X_i &amp;= \text{baseline covariates}.
+\end{aligned}
+\]</span></p>
+<p>Here <span class="math inline">\(T_i = 1\)</span> means smoker, <span class="math inline">\(T_i = 0\)</span> means non-smoker, and <span class="math inline">\(Y_i = 1\)</span> means the person has CVD.</p>
+<p>Our goal is to estimate two adjusted risks:</p>
+<p><span class="math display">\[
+\begin{aligned}
+\psi_1 &amp;= \text{CVD risk if everyone smoked}, \\
+\psi_0 &amp;= \text{CVD risk if everyone did not smoke}.
+\end{aligned}
+\]</span></p>
+<p>Then the adjusted risk difference and adjusted risk ratio are:</p>
+<p><span class="math display">\[
+\begin{aligned}
+RD &amp;= \psi_1 - \psi_0, \\
+RR &amp;= \frac{\psi_1}{\psi_0}.
+\end{aligned}
+\]</span></p>
+<div id="appendix-1-propensity-score" class="section level3" number="14.1">
+<h3><span class="header-section-number">14.1</span> Appendix 1:
+Propensity Score</h3>
+<p>The propensity score is the probability of treatment given baseline
+covariates:</p>
+<p><span class="math display">\[
+e(X_i)
+=
+P(T_i = 1 \mid X_i).
+\]</span></p>
+<p>In this lecture, treatment means smoking, so:</p>
+<p><span class="math display">\[
+e(X_i)
+=
+P(\text{smoker} \mid X_i).
+\]</span></p>
+<p>We estimate this probability using logistic regression:</p>
+<p><span class="math display">\[
+\text{logit}\{e(X_i)\}
+=
+\alpha_0 + \alpha^\top X_i.
+\]</span></p>
+<p>The fitted propensity score is:</p>
+<p><span class="math display">\[
+\hat e_i
+=
+\hat e(X_i).
+\]</span></p>
+</div>
+<div id="appendix-2-ipw-weights" class="section level3" number="14.2">
+<h3><span class="header-section-number">14.2</span> Appendix 2: IPW
+Weights</h3>
+<p>IPW gives each person a weight based on the inverse probability of
+the treatment status they actually received.</p>
+<p>For smokers:</p>
+<p><span class="math display">\[
+w_i
+=
+\frac{1}{\hat e_i}
+\quad \text{if } T_i = 1.
+\]</span></p>
+<p>For non-smokers:</p>
+<p><span class="math display">\[
+w_i
+=
+\frac{1}{1 - \hat e_i}
+\quad \text{if } T_i = 0.
+\]</span></p>
+<p>Equivalently:</p>
+<p><span class="math display">\[
+w_i
+=
+\frac{T_i}{\hat e_i}
++
+\frac{1 - T_i}{1 - \hat e_i}.
+\]</span></p>
+<p>The intuition is:</p>
+<blockquote>
+<p>If a person’s observed smoking status was unlikely for someone with
+their covariates, that person receives a larger weight.</p>
+</blockquote>
+</div>
+<div id="appendix-3-weighted-risks" class="section level3" number="14.3">
+<h3><span class="header-section-number">14.3</span> Appendix 3: Weighted
+Risks</h3>
+<p>The lecture uses normalized weighted averages.</p>
+<p>The IPW estimate of the smoker risk is:</p>
+<p><span class="math display">\[
+\hat\psi_1^{IPW}
+=
+\frac{
+\sum_{i=1}^{n}
+\dfrac{T_iY_i}{\hat e_i}
+}{
+\sum_{i=1}^{n}
+\dfrac{T_i}{\hat e_i}
+}.
+\]</span></p>
+<p>The IPW estimate of the non-smoker risk is:</p>
+<p><span class="math display">\[
+\hat\psi_0^{IPW}
+=
+\frac{
+\sum_{i=1}^{n}
+\dfrac{(1 - T_i)Y_i}{1 - \hat e_i}
+}{
+\sum_{i=1}^{n}
+\dfrac{1 - T_i}{1 - \hat e_i}
+}.
+\]</span></p>
+<p>These formulas match the R code in the lecture:</p>
+<p><span class="math display">\[
+\text{weighted mean}
+=
+\frac{\sum_i w_iY_i}{\sum_i w_i}.
+\]</span></p>
+</div>
+<div id="appendix-4-risk-difference-and-risk-ratio" class="section level3" number="14.4">
+<h3><span class="header-section-number">14.4</span> Appendix 4: Risk
+Difference and Risk Ratio</h3>
+<p>Once we estimate the two weighted risks, the IPW risk difference
+is:</p>
+<p><span class="math display">\[
+\widehat{RD}^{IPW}
+=
+\hat\psi_1^{IPW}
+-
+\hat\psi_0^{IPW}.
+\]</span></p>
+<p>The IPW risk ratio is:</p>
+<p><span class="math display">\[
+\widehat{RR}^{IPW}
+=
+\frac{\hat\psi_1^{IPW}}
+       {\hat\psi_0^{IPW}}.
+\]</span></p>
+<p>In the lecture, the risk difference is reported in percentage
+points:</p>
+<p><span class="math display">\[
+100 \times \widehat{RD}^{IPW}.
+\]</span></p>
+</div>
+<div id="appendix-5-covariate-balance-and-smd" class="section level3" number="14.5">
+<h3><span class="header-section-number">14.5</span> Appendix 5:
+Covariate Balance and SMD</h3>
+<p>IPW is trying to create a weighted pseudo-population where measured
+baseline covariates look similar between smokers and non-smokers.</p>
+<p>For a numerical covariate <span class="math inline">\(Z_i\)</span>,
+the weighted mean among smokers is:</p>
+<p><span class="math display">\[
+\bar Z_1^{w}
+=
+\frac{
+\sum_{i=1}^{n} T_i w_i Z_i
+}{
+\sum_{i=1}^{n} T_i w_i
+}.
+\]</span></p>
+<p>The weighted mean among non-smokers is:</p>
+<p><span class="math display">\[
+\bar Z_0^{w}
+=
+\frac{
+\sum_{i=1}^{n} (1 - T_i) w_i Z_i
+}{
+\sum_{i=1}^{n} (1 - T_i) w_i
+}.
+\]</span></p>
+<p>The absolute standardized mean difference is:</p>
+<p><span class="math display">\[
+\text{SMD}
+=
+\left|
+\frac{
+\bar Z_1^{w} - \bar Z_0^{w}
+}{
+s_{pooled}^{w}
+}
+\right|,
+\]</span></p>
+<p>where:</p>
+<p><span class="math display">\[
+s_{pooled}^{w}
+=
+\sqrt{
+\frac{
+(s_1^{w})^2 + (s_0^{w})^2
+}{2}
+}.
+\]</span></p>
+<p>Here <span class="math inline">\(s_1^{w}\)</span> and <span class="math inline">\(s_0^{w}\)</span> are the weighted standard
+deviations among smokers and non-smokers.</p>
+<p>For a categorical covariate, the lecture turns each category into a
+yes/no indicator and then uses the same idea.</p>
+<p>Smaller SMD values mean better balance:</p>
+<p><span class="math display">\[
+\text{SMD close to } 0
+\quad \Longrightarrow \quad
+\text{better covariate balance}.
+\]</span></p>
+</div>
+<div id="appendix-6-assumptions" class="section level3" number="14.6">
+<h3><span class="header-section-number">14.6</span> Appendix 6:
+Assumptions</h3>
+<p>IPW needs causal assumptions.</p>
+<p>The main assumptions are:</p>
+<ol style="list-style-type: decimal">
+<li><strong>Consistency</strong>: the observed outcome equals the
+potential outcome under the treatment actually received.</li>
+<li><strong>No important unmeasured confounding</strong>: after
+adjustment for <span class="math inline">\(X_i\)</span>, smoking is as
+good as randomly assigned for this teaching question.</li>
+<li><strong>Positivity</strong>: for each important covariate pattern,
+both smoking and non-smoking are possible.</li>
+<li><strong>Correct enough propensity model</strong>: the fitted
+propensity score <span class="math inline">\(\hat e_i\)</span> is good
+enough for creating useful weights.</li>
+</ol>
+<p>If the propensity score model is badly wrong, or if some people have
+extremely small probabilities of their observed treatment status, IPW
+can become unstable.</p>
+</div>
+</div>
+<div id="references" class="section level2" number="15">
+<h2><span class="header-section-number">15</span> References</h2>
+<p>Austin, P. C., &amp; Stuart, E. A. (2015). Moving towards best
+practice when using inverse probability of treatment weighting using the
+propensity score to estimate causal treatment effects in observational
+studies. <em>Statistics in Medicine</em>, 34(28), 3661-3679.</p>
+<p>Cole, S. R., &amp; Hernan, M. A. (2008). Constructing inverse
+probability weights for marginal structural models. <em>American Journal
+of Epidemiology</em>, 168(6), 656-664.</p>
+<p>Hernan, M. A., &amp; Robins, J. M. (2020). <em>Causal Inference: What
+If</em>. Chapman &amp; Hall/CRC.</p>
+<p>Rosenbaum, P. R., &amp; Rubin, D. B. (1983). The central role of the
+propensity score in observational studies for causal effects.
+<em>Biometrika</em>, 70(1), 41-55.</p>
+</div>
 
 
 

@@ -147,6 +147,86 @@ draw_text(0.50, 0.94, "Association is what we see. Causation is what we want to 
           cex = 1, font = 2)
 ```
 
+Here is a cartoon example. On a hot sunny day, people may buy more ice cream and also get more sunburn. Ice cream and sunburn can be correlated, but eating ice cream is not what caused the sunburn.
+
+```{r correlation-causation-cartoon, echo=FALSE, fig.width=8, fig.height=5.0}
+start_picture()
+
+draw_sun <- function(x, y, r = 0.06) {
+  symbols(x, y, circles = r, inches = FALSE, add = TRUE,
+          bg = "#F1CE63", fg = "#D9A441", lwd = 2)
+  angles <- seq(0, 2 * pi, length.out = 13)[-13]
+  segments(
+    x + cos(angles) * r * 1.25,
+    y + sin(angles) * r * 1.25,
+    x + cos(angles) * r * 1.75,
+    y + sin(angles) * r * 1.75,
+    col = "#D9A441",
+    lwd = 2
+  )
+}
+
+draw_ice_cream <- function(x, y, scale = 1) {
+  polygon(
+    c(x - 0.035, x + 0.035, x),
+    c(y - 0.01, y - 0.01, y - 0.13),
+    col = "#D9A441",
+    border = "#333333",
+    lwd = 2
+  )
+  symbols(x, y + 0.02, circles = 0.045 * scale, inches = FALSE,
+          add = TRUE, bg = "#F4A7B9", fg = "#333333", lwd = 2)
+}
+
+draw_sunburn_face <- function(x, y, scale = 1) {
+  symbols(x, y, circles = 0.06 * scale, inches = FALSE, add = TRUE,
+          bg = "#E15759", fg = "#333333", lwd = 2)
+  points(c(x - 0.02, x + 0.02), c(y + 0.015, y + 0.015),
+         pch = 16, cex = 0.7)
+  lines(c(x - 0.025, x, x + 0.025),
+        c(y - 0.025, y - 0.035, y - 0.025),
+        lwd = 2)
+}
+
+draw_box(0.25, 0.91, 0.42, 0.10, "Correlation example",
+         fill = "#DCEAF7", cex = 1, font = 2)
+draw_sun(0.25, 0.70, 0.055)
+draw_text(0.25, 0.58, "Hot sunny\nday", cex = 0.88, font = 2)
+
+draw_ice_cream(0.11, 0.31)
+draw_text(0.11, 0.14, "More ice\ncream", cex = 0.8, font = 2)
+
+draw_sunburn_face(0.39, 0.31)
+draw_text(0.39, 0.14, "More\nsunburn", cex = 0.8, font = 2)
+
+draw_arrow(0.22, 0.62, 0.13, 0.39, col = "#777777")
+draw_arrow(0.28, 0.62, 0.37, 0.39, col = "#777777")
+draw_text(0.25, 0.05, "Ice cream and sunburn move together,\nbut the sun is the hidden reason.",
+          cex = 0.78)
+
+segments(0.50, 0.08, 0.50, 0.94, lty = 2, col = "#777777")
+
+draw_box(0.75, 0.91, 0.42, 0.10, "Causal question",
+         fill = "#FCE4C6", cex = 1, font = 2)
+draw_box(0.63, 0.56, 0.22, 0.15, "Smoking\nT",
+         fill = "#F28E2B", cex = 0.9, font = 2)
+draw_box(0.87, 0.56, 0.22, 0.15, "CVD\nY",
+         fill = "#E15759", cex = 0.9, font = 2)
+draw_arrow(0.74, 0.56, 0.76, 0.56, col = "#F28E2B", lwd = 3)
+
+draw_box(0.75, 0.30, 0.34, 0.16, "What if we\nchanged smoking?",
+         fill = "#B7D7A8", cex = 0.85, font = 2)
+draw_arrow(0.75, 0.38, 0.66, 0.49, col = "#59A14F")
+draw_arrow(0.75, 0.38, 0.84, 0.49, col = "#59A14F")
+
+draw_text(0.75, 0.05, "Causation asks whether changing T\nwould change Y.",
+          cex = 0.78)
+```
+
+So the key difference is:
+
+> **Correlation** means two things tend to appear together. **Causation** means changing one thing would change the other.
+
 ## Potential Outcomes
 
 Causal inference starts with a very important imagination exercise.
@@ -197,39 +277,69 @@ draw_text(0.50, 0.08, "Causal effect compares these two possible outcomes.",
 
 ## The Fundamental Problem
 
-Imagine one student named Alex.
+Imagine three students: Alex, Tom, and Jane.
 
 | Person | If smoker: `Y(1)` | If non-smoker: `Y(0)` | What do we actually observe? |
 |:--|:--:|:--:|:--|
-| Alex | ? | ? | Only one of these two outcomes |
+| Alex | ? | ? | If Alex smoked, we observe only `Y(1)` |
+| Tom | ? | ? | If Tom did not smoke, we observe only `Y(0)` |
+| Jane | ? | ? | If Jane smoked, we observe only `Y(1)` |
 
-If Alex smoked, we can observe Alex's outcome as a smoker. But we cannot rewind life and also observe Alex as a non-smoker.
+If Alex or Jane smoked, we can observe their outcomes as smokers. But we cannot rewind life and also observe them as non-smokers.
+
+If Tom did not smoke, we can observe Tom's outcome as a non-smoker. But we cannot rewind life and also observe Tom as a smoker.
 
 This is called the **fundamental problem of causal inference**:
 
 > For the same person, at the same time, we can observe only one potential outcome.
 
-Because we cannot compare Alex to Alex in two possible worlds, we compare groups of people instead.
+Because we cannot compare Alex to Alex, Tom to Tom, or Jane to Jane in two possible worlds, we compare groups of people instead.
 
-```{r missing-counterfactual-picture, echo=FALSE, fig.width=8, fig.height=4.2}
+```{r missing-counterfactual-picture, echo=FALSE, fig.width=8, fig.height=5.2}
 start_picture()
 
-draw_person(0.13, 0.50, col = "#4E79A7", scale = 1.45)
-draw_text(0.13, 0.25, "Alex", cex = 1, font = 2)
+draw_counterfactual_row <- function(y, name, observed_label, missing_label,
+                                    person_col, observed_fill,
+                                    observed_border = "#333333") {
+  draw_person(0.10, y, col = person_col, scale = 0.82)
+  draw_text(0.10, y - 0.12, name, cex = 0.78, font = 2)
 
-draw_box(0.48, 0.66, 0.36, 0.20, "Observed:\nAlex smoked, saw Y(1)",
-         fill = "#FCE4C6", border = "#F28E2B", cex = 0.95, font = 2)
-draw_box(0.48, 0.34, 0.36, 0.20, "Missing:\nAlex did not smoke, Y(0)",
-         fill = "#FFFFFF", border = "#777777", lty = 2, cex = 0.95, font = 2)
+  draw_box(0.37, y + 0.045, 0.30, 0.13, observed_label,
+           fill = observed_fill, border = observed_border,
+           cex = 0.68, font = 2)
+  draw_box(0.67, y - 0.045, 0.28, 0.13, missing_label,
+           fill = "#FFFFFF", border = "#777777", lty = 2,
+           cex = 0.66, font = 2)
 
-draw_arrow(0.23, 0.54, 0.30, 0.63, col = "#F28E2B")
-draw_arrow(0.23, 0.46, 0.30, 0.37, col = "#777777")
+  draw_arrow(0.17, y + 0.02, 0.22, y + 0.055,
+             col = observed_border, lwd = 2)
+  draw_arrow(0.17, y - 0.02, 0.53, y - 0.045,
+             col = "#777777", lwd = 2)
+}
 
-draw_box(0.83, 0.50, 0.24, 0.24, "One real life\none missing\nwhat-if",
-         fill = "#F5F5F5", cex = 0.95, font = 2)
+draw_counterfactual_row(
+  0.78, "Alex",
+  "Observed:\nsmoked, saw Y(1)",
+  "Missing:\ndid not smoke, Y(0)",
+  "#4E79A7", "#FCE4C6", "#F28E2B"
+)
 
-draw_arrow(0.66, 0.66, 0.72, 0.56, col = "#F28E2B")
-draw_arrow(0.66, 0.34, 0.72, 0.44, col = "#777777")
+draw_counterfactual_row(
+  0.50, "Tom",
+  "Observed:\ndid not smoke, saw Y(0)",
+  "Missing:\nsmoked, Y(1)",
+  "#59A14F", "#DCEAF7", "#4E79A7"
+)
+
+draw_counterfactual_row(
+  0.22, "Jane",
+  "Observed:\nsmoked, saw Y(1)",
+  "Missing:\ndid not smoke, Y(0)",
+  "#B07AA1", "#FCE4C6", "#F28E2B"
+)
+
+draw_box(0.91, 0.50, 0.15, 0.30, "For each\nperson:\none real life\none missing\nwhat-if",
+         fill = "#F5F5F5", cex = 0.64, font = 2)
 ```
 
 ## A Simple Classroom Method
@@ -554,3 +664,189 @@ draw_text(0.50, 0.22, "Lecture 1 path: from a question to a cautious first answe
 3. We can observe only one potential outcome for each person.
 4. A simple difference in observed risks is easy to compute and easy to understand.
 5. A simple difference is an association unless we can justify that the groups are comparable.
+
+## Appendix: Rubin's Potential Outcome Framework
+
+This lecture used the central idea behind **Rubin's potential outcome framework**, also called the **Rubin causal model**.
+
+The framework starts with one simple question:
+
+> What would happen to the same person under different treatment choices?
+
+In our example, the treatment is smoking status and the outcome is CVD.
+
+### Appendix 1: Notation
+
+For person \(i\), define:
+
+$$
+T_i =
+\begin{cases}
+1, & \text{if person } i \text{ is a smoker},\\
+0, & \text{if person } i \text{ is a non-smoker}.
+\end{cases}
+$$
+
+Also define the observed CVD outcome:
+
+$$
+Y_i =
+\begin{cases}
+1, & \text{if person } i \text{ has CVD},\\
+0, & \text{if person } i \text{ does not have CVD}.
+\end{cases}
+$$
+
+The potential outcomes are:
+
+$$
+Y_i(1) = \text{CVD outcome if person } i \text{ smoked},
+$$
+
+and
+
+$$
+Y_i(0) = \text{CVD outcome if person } i \text{ did not smoke}.
+$$
+
+So each person has two possible outcomes in our imagination:
+
+$$
+\{Y_i(1), Y_i(0)\}.
+$$
+
+### Appendix 2: The Individual Causal Effect
+
+For one person, the causal effect of smoking would be:
+
+$$
+\tau_i = Y_i(1) - Y_i(0).
+$$
+
+For example, if:
+
+$$
+Y_i(1) = 1
+\quad \text{and} \quad
+Y_i(0) = 0,
+$$
+
+then smoking would change this person's CVD outcome from no CVD to CVD.
+
+But there is a problem. We cannot observe both \(Y_i(1)\) and \(Y_i(0)\) for the same person.
+
+If person \(i\) smoked, we observe \(Y_i(1)\), but \(Y_i(0)\) is missing. If person \(i\) did not smoke, we observe \(Y_i(0)\), but \(Y_i(1)\) is missing.
+
+This is the **fundamental problem of causal inference**.
+
+### Appendix 3: The Observed Outcome
+
+Rubin's framework writes the observed outcome as:
+
+$$
+Y_i = T_iY_i(1) + (1 - T_i)Y_i(0).
+$$
+
+This formula says:
+
+- if \(T_i = 1\), then \(Y_i = Y_i(1)\);
+- if \(T_i = 0\), then \(Y_i = Y_i(0)\).
+
+So the observed outcome is the potential outcome from the world the person actually lived in.
+
+### Appendix 4: Average Causal Effect
+
+Because we cannot see both outcomes for the same person, we usually talk about an average causal effect in a population.
+
+The average treatment effect is:
+
+$$
+ATE = E\{Y(1) - Y(0)\}.
+$$
+
+This can also be written as:
+
+$$
+ATE = E\{Y(1)\} - E\{Y(0)\}.
+$$
+
+In words:
+
+> The causal risk difference compares the average CVD risk if everyone smoked with the average CVD risk if everyone did not smoke.
+
+That is the causal quantity we would like to know.
+
+### Appendix 5: What Lecture 1 Actually Calculates
+
+Lecture 1 calculates the observed risk among smokers:
+
+$$
+\hat P(Y = 1 \mid T = 1)
+=
+\frac{\sum_{i=1}^{n} T_iY_i}
+       {\sum_{i=1}^{n} T_i},
+$$
+
+and the observed risk among non-smokers:
+
+$$
+\hat P(Y = 1 \mid T = 0)
+=
+\frac{\sum_{i=1}^{n} (1 - T_i)Y_i}
+       {\sum_{i=1}^{n} (1 - T_i)}.
+$$
+
+The observed risk difference is:
+
+$$
+\widehat{RD}_{obs}
+=
+\hat P(Y = 1 \mid T = 1)
+-
+\hat P(Y = 1 \mid T = 0).
+$$
+
+The observed risk ratio is:
+
+$$
+\widehat{RR}_{obs}
+=
+\frac{\hat P(Y = 1 \mid T = 1)}
+       {\hat P(Y = 1 \mid T = 0)}.
+$$
+
+These are the simple classroom estimates used in this lecture.
+
+### Appendix 6: When Can We Call It Causal?
+
+The observed comparison becomes a causal comparison only under strong assumptions.
+
+The most important idea is **exchangeability**:
+
+$$
+\{Y_i(1), Y_i(0)\} \perp T_i.
+$$
+
+This means:
+
+> The smoker and non-smoker groups are comparable in the outcomes they would have had under either choice.
+
+In a randomized experiment, exchangeability is created by random assignment. In this observational NHANES example, people chose or experienced smoking status in real life, so exchangeability is not guaranteed.
+
+We also need:
+
+1. **Consistency**: the observed outcome equals the potential outcome under the person's actual smoking status.
+2. **Exchangeability**: smokers and non-smokers are comparable enough for the question being asked.
+3. **Positivity**: for the kinds of people in the study, both smoking and non-smoking are possible.
+
+That is why Lecture 1 says the simple result is an **observed association**. Later lectures use IPW, outcome regression, and doubly robust methods to make the comparison more fair using measured baseline covariates.
+
+## References
+
+Holland, P. W. (1986). Statistics and causal inference. *Journal of the American Statistical Association*, 81(396), 945-960.
+
+Imbens, G. W., & Rubin, D. B. (2015). *Causal Inference for Statistics, Social, and Biomedical Sciences: An Introduction*. Cambridge University Press.
+
+Neyman, J. (1990). On the application of probability theory to agricultural experiments. Essay on principles. Section 9. *Statistical Science*, 5(4), 465-472. Originally published 1923.
+
+Rubin, D. B. (1974). Estimating causal effects of treatments in randomized and nonrandomized studies. *Journal of Educational Psychology*, 66(5), 688-701.

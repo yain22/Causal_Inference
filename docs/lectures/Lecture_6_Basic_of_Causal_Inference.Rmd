@@ -1,0 +1,1662 @@
+---
+title: "Lecture 6: Sensitivity Analysis With E-values"
+author: "Se Yoon Lee"
+date: "2026-06-27"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    number_sections: true
+    theme: readable
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+```{r picture-helpers, include=FALSE}
+start_picture <- function() {
+  par(mar = c(0, 0, 0, 0), xaxs = "i", yaxs = "i")
+  plot.new()
+  plot.window(xlim = c(0, 1), ylim = c(0, 1))
+}
+
+draw_text <- function(x, y, label, cex = 1, font = 1, col = "#222222") {
+  lines <- strsplit(label, "\n", fixed = TRUE)[[1]]
+  line_height <- 0.055 * cex
+  offsets <- seq((length(lines) - 1) / 2, -(length(lines) - 1) / 2) *
+    line_height
+  text(rep(x, length(lines)), y + offsets, labels = lines,
+       cex = cex, font = font, col = col)
+}
+
+draw_box <- function(x, y, w, h, label, fill = "#FFFFFF",
+                     border = "#333333", lwd = 2, lty = 1,
+                     cex = 1, font = 1) {
+  rect(x - w / 2, y - h / 2, x + w / 2, y + h / 2,
+       col = fill, border = border, lwd = lwd, lty = lty)
+  draw_text(x, y, label, cex = cex, font = font)
+}
+
+draw_circle <- function(x, y, r, label, fill = "#FFFFFF",
+                        border = "#333333", lwd = 2, lty = 1,
+                        cex = 1, font = 1) {
+  symbols(x, y, circles = r, inches = FALSE, add = TRUE,
+          bg = fill, fg = border, lwd = lwd, lty = lty)
+  draw_text(x, y, label, cex = cex, font = font)
+}
+
+draw_arrow <- function(x0, y0, x1, y1, col = "#333333",
+                       lwd = 2, lty = 1) {
+  arrows(x0, y0, x1, y1, length = 0.08, lwd = lwd,
+         col = col, lty = lty)
+}
+
+draw_curve_arrow <- function(x0, y0, x1, y1, cx, cy,
+                             col = "#333333", lwd = 2, lty = 1) {
+  t <- seq(0, 1, length.out = 80)
+  x <- (1 - t)^2 * x0 + 2 * (1 - t) * t * cx + t^2 * x1
+  y <- (1 - t)^2 * y0 + 2 * (1 - t) * t * cy + t^2 * y1
+
+  lines(x, y, col = col, lwd = lwd, lty = lty)
+  arrows(
+    x[length(x) - 1], y[length(y) - 1],
+    x[length(x)], y[length(y)],
+    length = 0.08, lwd = lwd, col = col, lty = lty
+  )
+}
+```
+
+## Today's Question
+
+In Lecture 5, we used bootstrapping to ask:
+
+> How much random sampling uncertainty do we have?
+
+Lecture 6 asks a different question:
+
+> What if there is an important confounder we did not measure?
+
+This is called **sensitivity analysis**.
+
+The goal is not to prove that our answer is perfect. The goal is to ask:
+
+> How sensitive is our conclusion to a possible hidden problem?
+
+## The Sensitivity Analysis We Will Use
+
+For this setting, we use the **E-value**.
+
+Yes, E-value is possible here.
+
+But there is one important detail:
+
+> E-values are naturally calculated for a risk ratio, not a risk difference.
+
+In earlier lectures, we focused on the risk difference:
+
+```text
+risk among smokers - risk among non-smokers
+```
+
+For the E-value, we also calculate the adjusted risk ratio:
+
+```text
+risk among smokers / risk among non-smokers
+```
+
+Then the E-value asks:
+
+> How strong would an unmeasured confounder need to be to explain away the adjusted association?
+
+This is exactly the kind of question we want for a sensitivity analysis. We are not pretending that all confounders were measured perfectly. Instead, we ask how powerful a missing confounder would have to be before our adjusted result could disappear.
+
+## Toy Example: Interpreting an E-value
+
+Imagine our adjusted analysis gives this result:
+
+```text
+Adjusted risk ratio = 1.4
+E-value is about 2.1
+```
+
+The risk ratio of 1.4 means:
+
+> After adjustment, smoker CVD risk is about 1.4 times the non-smoker CVD risk.
+
+The E-value of 2.1 means:
+
+> To make this result disappear, a missing confounder would need to have two strong links.
+
+The missing confounder would need to be:
+
+1. About **2.1 times related to smoking**
+2. About **2.1 times related to CVD**
+
+Both links matter. If the hidden factor is strongly related to smoking but barely related to CVD, it cannot explain much. If it strongly raises CVD risk but is equally common among smokers and non-smokers, it also cannot explain much.
+
+So the easiest interpretation is:
+
+> Higher E-value = the hidden confounder would need to be stronger.
+
+For our example, `E-value = 2.1` is **moderate**. The result is not extremely fragile, but it is not invincible either.
+
+```{r toy-evalue-picture, echo=FALSE, fig.width=8.8, fig.height=4.8}
+start_picture()
+
+draw_box(0.25, 0.82, 0.32, 0.14,
+         "Observed result\nAdjusted RR = 1.4",
+         fill = "#F1CE63", cex = 0.82, font = 2)
+draw_box(0.75, 0.82, 0.32, 0.14,
+         "E-value = 2.1\nstrength needed to erase it",
+         fill = "#B7D7A8", cex = 0.78, font = 2)
+
+draw_arrow(0.41, 0.82, 0.59, 0.82)
+
+draw_text(0.50, 0.62,
+          "A hidden confounder U would need BOTH links to be strong:",
+          cex = 0.88, font = 2)
+
+draw_box(0.28, 0.42, 0.34, 0.20,
+         "Link 1\nU related to smoking\nabout 2.1x or stronger",
+         fill = "#D9EAF7", cex = 0.72, font = 2)
+draw_box(0.72, 0.42, 0.34, 0.20,
+         "Link 2\nU related to CVD\nabout 2.1x or stronger",
+         fill = "#FCE4C6", cex = 0.72, font = 2)
+
+draw_text(0.50, 0.42, "AND", cex = 1.05, font = 2)
+
+draw_box(0.50, 0.16, 0.66, 0.14,
+         "If both links are that strong,\nU could explain away the result.",
+         fill = "#F5F5F5", cex = 0.78, font = 2)
+
+draw_arrow(0.28, 0.31, 0.42, 0.22)
+draw_arrow(0.72, 0.31, 0.58, 0.22)
+```
+
+A simple reading guide:
+
+| E-value size | Easy interpretation |
+|:--|:--|
+| Close to 1 | The result is not very robust. A small hidden confounder could explain it away. |
+| Around 2 | A moderately strong hidden confounder would be needed. |
+| Much bigger than 2 | A very strong hidden confounder would be needed. The result is harder to explain away. |
+
+For our smoking and CVD analysis, the E-values are around 2.0 to 2.2. That means:
+
+> The adjusted result is moderately robust, but not invincible.
+
+In plain language:
+
+> A hidden factor would need to be pretty strongly related to both smoking and CVD to fully erase the adjusted association.
+
+## What Problem Are We Worried About?
+
+We already adjusted for measured baseline covariates:
+
+1. Age
+2. Gender
+3. Race
+4. Education
+5. Income-to-poverty ratio
+6. BMI
+
+But maybe there is another variable we did not measure. Call it `U`.
+
+```{r unmeasured-confounder-picture, echo=FALSE, fig.width=8.8, fig.height=5.0}
+start_picture()
+
+draw_circle(0.50, 0.88, 0.060, "Unmeasured\nfactor\nU",
+            fill = "#F5F5F5", border = "#E15759",
+            lwd = 2, lty = 2, cex = 0.68, font = 2)
+draw_circle(0.50, 0.58, 0.080, "Measured\ncovariates\nX",
+            fill = "#F1CE63", cex = 0.75, font = 2)
+draw_circle(0.25, 0.30, 0.075, "Treatment\nsmoking\nT",
+            fill = "#F28E2B", cex = 0.74, font = 2)
+draw_circle(0.75, 0.30, 0.075, "Outcome\nCVD\nY",
+            fill = "#E15759", cex = 0.74, font = 2)
+
+draw_arrow(0.44, 0.53, 0.31, 0.36)
+draw_arrow(0.56, 0.53, 0.69, 0.36)
+draw_arrow(0.33, 0.30, 0.67, 0.30, col = "#F28E2B", lwd = 3)
+
+draw_arrow(0.46, 0.83, 0.30, 0.37, col = "#E15759", lwd = 2, lty = 2)
+draw_arrow(0.54, 0.83, 0.70, 0.37, col = "#E15759", lwd = 2, lty = 2)
+
+draw_box(0.50, 0.08, 0.74, 0.11,
+         "Sensitivity analysis asks: could a hidden U explain the T to Y association?",
+         fill = "#FFFFFF", border = "#E15759", lwd = 2,
+         cex = 0.78, font = 2)
+```
+
+If `U` affects both smoking and CVD, it could act like a hidden confounder.
+
+Examples might include long-term diet, family history, stress, physical activity, or other health behaviors not measured well in our teaching dataset.
+
+## What Is an E-value?
+
+The E-value is a number on the risk ratio scale. VanderWeele and Ding introduced it as a simple way to summarize sensitivity to possible unmeasured confounding.
+
+For an observed risk ratio above 1:
+
+```text
+E-value = RR + sqrt(RR * (RR - 1))
+```
+
+Here, `RR` means the adjusted risk ratio:
+
+```text
+RR = CVD risk if everyone smoked / CVD risk if everyone did not smoke
+```
+
+The E-value tells us the minimum common strength of association an unmeasured confounder would need to have with both:
+
+1. Smoking
+2. CVD
+
+to explain away the adjusted association, after the measured covariates have already been adjusted for.
+
+The phrase **after the measured covariates have already been adjusted for** is important. The hidden confounder would need to add information beyond age, gender, race, education, income-to-poverty ratio, and BMI.
+
+The E-value is not a p-value. It is not a probability. It is not a new estimate of CVD risk. It is a robustness benchmark.
+
+```{r evalue-formula-picture, echo=FALSE, fig.width=8.8, fig.height=4.4}
+start_picture()
+
+draw_box(0.16, 0.64, 0.22, 0.18, "Risk ratio\nRR",
+         fill = "#F1CE63", cex = 0.86, font = 2)
+draw_box(0.50, 0.64, 0.28, 0.18, "RR + sqrt(RR * (RR - 1))",
+         fill = "#A0CBE8", cex = 0.72, font = 2)
+draw_box(0.84, 0.64, 0.22, 0.18, "E-value",
+         fill = "#B7D7A8", cex = 0.90, font = 2)
+
+draw_arrow(0.27, 0.64, 0.36, 0.64)
+draw_arrow(0.64, 0.64, 0.73, 0.64)
+
+draw_text(
+  0.50, 0.30,
+  "The formula changes the adjusted risk ratio into a\nhidden-confounder strength benchmark.",
+  cex = 0.86,
+  font = 2
+)
+```
+
+```{r evalue-intuition-picture, echo=FALSE, fig.width=8.8, fig.height=4.6}
+start_picture()
+
+draw_box(0.16, 0.62, 0.22, 0.20, "Adjusted\nrisk ratio",
+         fill = "#F1CE63", cex = 0.86, font = 2)
+draw_box(0.50, 0.62, 0.26, 0.20, "E-value\ncalculation",
+         fill = "#A0CBE8", cex = 0.86, font = 2)
+draw_box(0.84, 0.62, 0.22, 0.20, "How strong\nwould U need\nto be?",
+         fill = "#B7D7A8", cex = 0.78, font = 2)
+
+draw_arrow(0.27, 0.62, 0.36, 0.62)
+draw_arrow(0.64, 0.62, 0.73, 0.62)
+
+draw_text(
+  0.50, 0.25,
+  "Small E-value: a modest hidden confounder could explain it.\nLarge E-value: a stronger hidden confounder would be needed.",
+  cex = 0.86,
+  font = 2
+)
+```
+
+## Load and Prepare the Data
+
+```{r load-data}
+data_path <- file.path("..", "Data", "NHANES_data.csv")
+
+if (!file.exists(data_path)) {
+  data_path <- file.path("Data", "NHANES_data.csv")
+}
+
+nhanes <- read.csv(data_path, stringsAsFactors = FALSE)
+
+baseline_vars <- c(
+  "age_yr",
+  "gender",
+  "race",
+  "educ_lvl",
+  "inc_to_pov_ratio",
+  "bmi"
+)
+
+analysis_vars <- c("smoker_indicator", "cvd_indicator", baseline_vars)
+
+analysis_data <- nhanes[complete.cases(nhanes[, analysis_vars]), analysis_vars]
+
+analysis_data$smoker_indicator <- as.integer(analysis_data$smoker_indicator)
+analysis_data$cvd_indicator <- as.integer(analysis_data$cvd_indicator)
+
+analysis_data$smoking_group <- ifelse(
+  analysis_data$smoker_indicator == 1,
+  "Smoker",
+  "Non-smoker"
+)
+
+analysis_data$smoking_group <- factor(
+  analysis_data$smoking_group,
+  levels = c("Non-smoker", "Smoker")
+)
+
+analysis_data$gender_label <- factor(
+  analysis_data$gender,
+  levels = c("F", "M"),
+  labels = c("Female", "Male")
+)
+
+analysis_data$race_label <- factor(
+  analysis_data$race,
+  levels = c(
+    "mex_american",
+    "other_hispanic",
+    "nh_white",
+    "nh_black",
+    "nh_asian"
+  ),
+  labels = c(
+    "Mexican American",
+    "Other Hispanic",
+    "Non-Hispanic White",
+    "Non-Hispanic Black",
+    "Non-Hispanic Asian"
+  )
+)
+
+analysis_data$educ_label <- factor(
+  analysis_data$educ_lvl,
+  levels = c(
+    "lt_9th_grade",
+    "9_to_12th_grade_no_diploma",
+    "hs_grad_or_ged",
+    "start_college_to_aa",
+    "college_grad_or_above"
+  ),
+  labels = c(
+    "Less than 9th grade",
+    "9th-12th, no diploma",
+    "High school or GED",
+    "Some college or AA",
+    "College graduate or above"
+  )
+)
+
+nrow(analysis_data)
+```
+
+```{r sample-summary}
+sample_summary <- data.frame(
+  Quantity = c(
+    "Number of people",
+    "Number of smokers",
+    "Number of non-smokers",
+    "Number with CVD"
+  ),
+  Value = c(
+    nrow(analysis_data),
+    sum(analysis_data$smoker_indicator == 1),
+    sum(analysis_data$smoker_indicator == 0),
+    sum(analysis_data$cvd_indicator == 1)
+  )
+)
+
+knitr::kable(sample_summary)
+```
+
+## Recalculate the Three Adjusted Methods
+
+We use the same three methods as before:
+
+1. IPW
+2. Outcome regression
+3. Doubly robust estimation
+
+```{r analysis-functions}
+weighted_mean <- function(outcome, weights) {
+  sum(weights * outcome) / sum(weights)
+}
+
+fit_sensitivity_methods <- function(input_data) {
+  treatment_model <- glm(
+    smoker_indicator ~ age_yr + gender_label + race_label +
+      educ_label + inc_to_pov_ratio + bmi,
+    data = input_data,
+    family = binomial()
+  )
+
+  e_hat <- predict(treatment_model, type = "response")
+
+  outcome_model <- glm(
+    cvd_indicator ~ smoker_indicator + age_yr + gender_label +
+      race_label + educ_label + inc_to_pov_ratio + bmi,
+    data = input_data,
+    family = binomial()
+  )
+
+  data_if_non_smoker <- input_data
+  data_if_smoker <- input_data
+
+  data_if_non_smoker$smoker_indicator <- 0
+  data_if_smoker$smoker_indicator <- 1
+
+  m0_hat <- predict(
+    outcome_model,
+    newdata = data_if_non_smoker,
+    type = "response"
+  )
+
+  m1_hat <- predict(
+    outcome_model,
+    newdata = data_if_smoker,
+    type = "response"
+  )
+
+  smoker_rows <- input_data$smoker_indicator == 1
+  non_smoker_rows <- input_data$smoker_indicator == 0
+
+  ipw_risk_smoker <- weighted_mean(
+    input_data$cvd_indicator[smoker_rows],
+    1 / e_hat[smoker_rows]
+  )
+
+  ipw_risk_non_smoker <- weighted_mean(
+    input_data$cvd_indicator[non_smoker_rows],
+    1 / (1 - e_hat[non_smoker_rows])
+  )
+
+  or_risk_smoker <- mean(m1_hat)
+  or_risk_non_smoker <- mean(m0_hat)
+
+  T_obs <- input_data$smoker_indicator
+  Y_obs <- input_data$cvd_indicator
+
+  dr_risk_smoker <- mean(m1_hat + T_obs / e_hat * (Y_obs - m1_hat))
+  dr_risk_non_smoker <- mean(
+    m0_hat + (1 - T_obs) / (1 - e_hat) * (Y_obs - m0_hat)
+  )
+
+  c(
+    IPW_risk0 = ipw_risk_non_smoker,
+    IPW_risk1 = ipw_risk_smoker,
+    IPW_difference = ipw_risk_smoker - ipw_risk_non_smoker,
+    IPW_ratio = ipw_risk_smoker / ipw_risk_non_smoker,
+    Outcome_regression_risk0 = or_risk_non_smoker,
+    Outcome_regression_risk1 = or_risk_smoker,
+    Outcome_regression_difference = or_risk_smoker - or_risk_non_smoker,
+    Outcome_regression_ratio = or_risk_smoker / or_risk_non_smoker,
+    Doubly_robust_risk0 = dr_risk_non_smoker,
+    Doubly_robust_risk1 = dr_risk_smoker,
+    Doubly_robust_difference = dr_risk_smoker - dr_risk_non_smoker,
+    Doubly_robust_ratio = dr_risk_smoker / dr_risk_non_smoker
+  )
+}
+
+safe_fit_sensitivity_methods <- function(input_data) {
+  tryCatch(
+    fit_sensitivity_methods(input_data),
+    error = function(e) {
+      rep(NA_real_, 12)
+    }
+  )
+}
+```
+
+```{r point-estimates}
+point_results <- fit_sensitivity_methods(analysis_data)
+
+methods <- c("IPW", "Outcome_regression", "Doubly_robust")
+method_labels <- c("IPW", "Outcome regression", "Doubly robust")
+
+point_risk0 <- point_results[paste0(methods, "_risk0")]
+point_risk1 <- point_results[paste0(methods, "_risk1")]
+point_difference <- point_results[paste0(methods, "_difference")]
+point_ratio <- point_results[paste0(methods, "_ratio")]
+
+names(point_risk0) <- methods
+names(point_risk1) <- methods
+names(point_difference) <- methods
+names(point_ratio) <- methods
+
+point_table <- data.frame(
+  Method = method_labels,
+  Non_smoker_risk_percent = round(100 * point_risk0, 1),
+  Smoker_risk_percent = round(100 * point_risk1, 1),
+  Difference_pp = round(100 * point_difference, 2),
+  Risk_ratio = round(point_ratio, 2)
+)
+
+knitr::kable(
+  point_table,
+  col.names = c(
+    "Method",
+    "Non-smoker risk (%)",
+    "Smoker risk (%)",
+    "Difference (pp)",
+    "Risk ratio"
+  )
+)
+```
+
+## Bootstrap Confidence Intervals for the Risk Ratio
+
+We still report a 95% confidence interval for the risk ratio, using the same bootstrap idea from Lecture 5.
+
+For the E-value itself, we will keep the lecture simple and use only the point-estimate E-value.
+
+```{r bootstrap-risk-ratios}
+set.seed(20260627)
+
+B <- 300
+n <- nrow(analysis_data)
+
+bootstrap_ratios <- matrix(
+  NA_real_,
+  nrow = B,
+  ncol = length(methods)
+)
+
+colnames(bootstrap_ratios) <- methods
+
+ratio_names <- paste0(methods, "_ratio")
+
+for (b in seq_len(B)) {
+  bootstrap_rows <- sample.int(n, size = n, replace = TRUE)
+  bootstrap_data <- analysis_data[bootstrap_rows, ]
+  bootstrap_results <- safe_fit_sensitivity_methods(bootstrap_data)
+  bootstrap_ratios[b, ] <- bootstrap_results[ratio_names]
+}
+
+bootstrap_ratios <- bootstrap_ratios[complete.cases(bootstrap_ratios), ]
+
+number_of_successful_bootstraps <- nrow(bootstrap_ratios)
+number_of_successful_bootstraps
+```
+
+```{r risk-ratio-ci}
+ratio_ci <- t(apply(
+  bootstrap_ratios,
+  2,
+  quantile,
+  probs = c(0.025, 0.975),
+  na.rm = TRUE
+))
+
+colnames(ratio_ci) <- c("Lower", "Upper")
+
+log_ratio_se <- (log(ratio_ci[, "Upper"]) - log(ratio_ci[, "Lower"])) /
+  (2 * qnorm(0.975))
+ratio_z <- log(point_ratio) / log_ratio_se
+ratio_p_value <- 2 * pnorm(-abs(ratio_z))
+
+names(ratio_p_value) <- methods
+
+format_p_value <- function(p) {
+  ifelse(p < 0.001, "<0.001", sprintf("%.3f", p))
+}
+
+ratio_table <- data.frame(
+  Method = method_labels,
+  Risk_ratio = round(point_ratio, 2),
+  CI_lower = round(ratio_ci[, "Lower"], 2),
+  CI_upper = round(ratio_ci[, "Upper"], 2),
+  P_value = format_p_value(ratio_p_value)
+)
+
+knitr::kable(
+  ratio_table,
+  col.names = c(
+    "Method",
+    "Risk ratio",
+    "95% CI lower",
+    "95% CI upper",
+    "p-value"
+  )
+)
+```
+
+The p-value tests the null hypothesis:
+
+```text
+H0: adjusted risk ratio = 1
+```
+
+Here, `1` means no difference in CVD risk between smokers and non-smokers after adjustment.
+
+We calculate the p-values on the log risk-ratio scale, using the bootstrap confidence interval to estimate the standard error.
+
+## Calculate E-values
+
+```{r evalue-functions}
+e_value <- function(rr) {
+  rr_away_from_null <- ifelse(rr < 1, 1 / rr, rr)
+  ifelse(
+    rr_away_from_null <= 1,
+    1,
+    rr_away_from_null +
+      sqrt(rr_away_from_null * (rr_away_from_null - 1))
+  )
+}
+```
+
+```{r evalue-table}
+point_evalues <- e_value(point_ratio)
+
+names(point_evalues) <- methods
+
+evalue_table <- data.frame(
+  Method = method_labels,
+  Risk_ratio = round(point_ratio, 2),
+  RR_95_CI = paste0(
+    "(",
+    round(ratio_ci[, "Lower"], 2),
+    ", ",
+    round(ratio_ci[, "Upper"], 2),
+    ")"
+  ),
+  P_value = format_p_value(ratio_p_value),
+  E_value = round(point_evalues, 2)
+)
+
+knitr::kable(
+  evalue_table,
+  col.names = c(
+    "Method",
+    "Risk ratio",
+    "95% CI",
+    "p-value",
+    "E-value"
+  )
+)
+```
+
+In this lecture, the E-value is calculated from the point estimate of the risk ratio.
+
+The p-value and the E-value answer different questions:
+
+| Number | Question it answers |
+|---|---|
+| p-value | Is the adjusted association statistically different from no association? |
+| E-value | How strong would hidden confounding need to be to explain away the adjusted association? |
+
+In our table, all three p-values are `<0.001`. This means the adjusted smoker versus non-smoker risk ratios are statistically different from 1 in this dataset. However, a small p-value does not prove causation; that is why we also use the E-value.
+
+## How Were the E-values Calculated?
+
+The formula is:
+
+```text
+E-value = RR + sqrt(RR * (RR - 1))
+```
+
+```{r evalue-calculation-table}
+display_rr <- round(point_ratio, 2)
+
+evalue_calculation_table <- data.frame(
+  Method = method_labels,
+  Risk_ratio = display_rr,
+  Calculation = paste0(
+    display_rr,
+    " + sqrt(",
+    display_rr,
+    " * (",
+    display_rr,
+    " - 1))"
+  ),
+  E_value = round(point_evalues, 2)
+)
+
+knitr::kable(
+  evalue_calculation_table,
+  col.names = c("Method", "Risk ratio", "Calculation", "E-value")
+)
+```
+
+The table uses the rounded risk ratios for display. R calculates using the exact risk ratios and then rounds the final E-value.
+
+For example, for IPW:
+
+```text
+RR = 1.34
+E-value = 1.34 + sqrt(1.34 * (1.34 - 1))
+        = 2.02
+```
+
+So the IPW E-value of `2.02` means:
+
+> To fully explain away the IPW point estimate, a hidden confounder would need to be associated with both smoking and CVD by about 2.02-fold each, after adjusting for the measured covariates.
+
+```{r evalue-calculation-picture, echo=FALSE, fig.width=8.8, fig.height=4.8}
+start_picture()
+
+draw_box(0.16, 0.72, 0.22, 0.16, paste0("IPW\nRR = ", display_rr["IPW"]),
+         fill = "#F28E2B", cex = 0.78, font = 2)
+draw_box(0.50, 0.72, 0.30, 0.16, "Apply formula",
+         fill = "#A0CBE8", cex = 0.82, font = 2)
+draw_box(0.84, 0.72, 0.22, 0.16,
+         paste0("E-value\n", round(point_evalues["IPW"], 2)),
+         fill = "#B7D7A8", cex = 0.82, font = 2)
+
+draw_box(0.16, 0.46, 0.22, 0.16,
+         paste0("Outcome\nRR = ", display_rr["Outcome_regression"]),
+         fill = "#59A14F", cex = 0.72, font = 2)
+draw_box(0.50, 0.46, 0.30, 0.16, "Apply formula",
+         fill = "#A0CBE8", cex = 0.82, font = 2)
+draw_box(0.84, 0.46, 0.22, 0.16,
+         paste0("E-value\n", round(point_evalues["Outcome_regression"], 2)),
+         fill = "#B7D7A8", cex = 0.82, font = 2)
+
+draw_box(0.16, 0.20, 0.22, 0.16,
+         paste0("DR\nRR = ", display_rr["Doubly_robust"]),
+         fill = "#B7D7A8", cex = 0.78, font = 2)
+draw_box(0.50, 0.20, 0.30, 0.16, "Apply formula",
+         fill = "#A0CBE8", cex = 0.82, font = 2)
+draw_box(0.84, 0.20, 0.22, 0.16,
+         paste0("E-value\n", round(point_evalues["Doubly_robust"], 2)),
+         fill = "#B7D7A8", cex = 0.82, font = 2)
+
+draw_arrow(0.27, 0.72, 0.35, 0.72)
+draw_arrow(0.65, 0.72, 0.73, 0.72)
+draw_arrow(0.27, 0.46, 0.35, 0.46)
+draw_arrow(0.65, 0.46, 0.73, 0.46)
+draw_arrow(0.27, 0.20, 0.35, 0.20)
+draw_arrow(0.65, 0.20, 0.73, 0.20)
+```
+
+## E-value Function
+
+The E-value is a mathematical function of the risk ratio.
+
+When the risk ratio is close to 1, the E-value is close to 1.
+
+As the risk ratio moves farther away from 1, the E-value becomes larger.
+
+```{r evalue-function-plot, echo=FALSE, fig.width=8.8, fig.height=5.0}
+rr_grid <- seq(1, max(2, max(point_ratio) + 0.30), length.out = 300)
+evalue_grid <- e_value(rr_grid)
+
+method_colors <- c(
+  IPW = "#F28E2B",
+  Outcome_regression = "#59A14F",
+  Doubly_robust = "#4E79A7"
+)
+
+old_par <- par(mar = c(5, 5, 4.2, 1.5))
+
+plot(
+  rr_grid,
+  evalue_grid,
+  type = "l",
+  lwd = 4,
+  col = "#444444",
+  xlab = "Adjusted risk ratio",
+  ylab = "E-value",
+  xlim = range(rr_grid),
+  ylim = c(1, max(evalue_grid) * 1.08),
+  main = "E-value Function"
+)
+
+grid(col = "#E6E6E6", lty = 1)
+lines(rr_grid, evalue_grid, lwd = 4, col = "#444444")
+
+abline(v = 1, h = 1, lty = 2, col = "#777777", lwd = 2)
+
+for (m in methods) {
+  segments(
+    x0 = point_ratio[m],
+    y0 = 1,
+    x1 = point_ratio[m],
+    y1 = point_evalues[m],
+    lty = 3,
+    lwd = 2,
+    col = method_colors[m]
+  )
+  segments(
+    x0 = 1,
+    y0 = point_evalues[m],
+    x1 = point_ratio[m],
+    y1 = point_evalues[m],
+    lty = 3,
+    lwd = 2,
+    col = method_colors[m]
+  )
+}
+
+points(
+  point_ratio,
+  point_evalues,
+  pch = 21,
+  bg = method_colors[methods],
+  col = "#222222",
+  cex = 1.8,
+  lwd = 1.4
+)
+
+label_x <- c(IPW = 1.18, Outcome_regression = 1.63, Doubly_robust = 1.63)
+label_y <- c(IPW = 1.92, Outcome_regression = 2.36, Doubly_robust = 1.86)
+
+for (m in methods) {
+  arrows(
+    x0 = label_x[m],
+    y0 = label_y[m],
+    x1 = point_ratio[m],
+    y1 = point_evalues[m],
+    length = 0.08,
+    lwd = 1.4,
+    col = method_colors[m]
+  )
+}
+
+text(
+  x = label_x,
+  y = label_y,
+  labels = c(
+    paste0("IPW\nRR ", round(point_ratio["IPW"], 2),
+           "\nE-value ", round(point_evalues["IPW"], 2)),
+    paste0("Outcome regression\nRR ", round(point_ratio["Outcome_regression"], 2),
+           "\nE-value ", round(point_evalues["Outcome_regression"], 2)),
+    paste0("Doubly robust\nRR ", round(point_ratio["Doubly_robust"], 2),
+           "\nE-value ", round(point_evalues["Doubly_robust"], 2))
+  ),
+  cex = 0.68,
+  font = 2
+)
+
+legend(
+  "topleft",
+  legend = c("E-value formula", method_labels),
+  col = c("#444444", method_colors[methods]),
+  lwd = c(4, NA, NA, NA),
+  pt.bg = c(NA, method_colors[methods]),
+  pch = c(NA, 21, 21, 21),
+  pt.cex = c(NA, 1.3, 1.3, 1.3),
+  bty = "n",
+  cex = 0.82
+)
+
+par(old_par)
+```
+
+This curve shows why a larger risk ratio leads to a larger E-value. Our three methods sit close together because their adjusted risk ratios are close together.
+
+## Picture of the E-values
+
+```{r evalue-picture, echo=FALSE, fig.width=8.8, fig.height=4.8}
+plot_order <- c("Doubly_robust", "Outcome_regression", "IPW")
+plot_y <- seq_along(plot_order)
+
+old_par <- par(mar = c(5, 9, 4.5, 1))
+
+plot(
+  point_evalues[plot_order],
+  plot_y,
+  xlim = c(1, max(point_evalues) * 1.20),
+  ylim = c(0.5, length(plot_order) + 0.5),
+  yaxt = "n",
+  xlab = "Minimum hidden-confounder strength on the risk ratio scale",
+  ylab = "",
+  pch = 19,
+  cex = 1.6,
+  col = "#E15759",
+  main = ""
+)
+
+segments(
+  x0 = 1,
+  y0 = plot_y,
+  x1 = point_evalues[plot_order],
+  y1 = plot_y,
+  lwd = 4,
+  col = "#FCE4C6"
+)
+
+abline(v = 1, lwd = 2, lty = 2, col = "#555555")
+abline(v = 2, lwd = 2, lty = 3, col = "#777777")
+
+axis(
+  2,
+  at = plot_y,
+  labels = c("Doubly robust", "Outcome regression", "IPW"),
+  las = 1
+)
+
+mtext(
+  "E-values for Possible Unmeasured Confounding",
+  side = 3,
+  line = 1.3,
+  font = 2,
+  cex = 1.05
+)
+
+text(
+  point_evalues[plot_order],
+  plot_y + 0.18,
+  labels = round(point_evalues[plot_order], 2),
+  cex = 0.86
+)
+
+legend(
+  "bottomright",
+  legend = c("E-value from point estimate", "Reference line: 2-fold"),
+  pch = c(19, NA),
+  lty = c(NA, 3),
+  lwd = c(NA, 2),
+  col = c("#E15759", "#777777"),
+  bty = "n"
+)
+
+par(old_par)
+```
+
+The dotted vertical line at 2 is a visual reference. It helps us see whether the E-value is around 2-fold, below 2-fold, or above 2-fold.
+
+## How to Interpret Our E-values
+
+```{r evalue-conclusion-box, echo=FALSE, fig.width=8.8, fig.height=4.2}
+start_picture()
+
+min_point_evalue <- min(round(point_evalues, 1))
+max_point_evalue <- max(round(point_evalues, 1))
+
+draw_box(
+  0.50, 0.74, 0.74, 0.18,
+  paste0(
+    "Sensitivity analysis conclusion\nPoint-estimate E-values are about ",
+    min_point_evalue,
+    " to ",
+    max_point_evalue,
+    "."
+  ),
+  fill = "#B7D7A8",
+  cex = 0.86,
+  font = 2
+)
+
+draw_box(
+  0.50, 0.46, 0.74, 0.24,
+  paste0(
+    "Interpretation\nA hidden confounder would need associations of roughly this size\n",
+    "with both smoking and CVD to explain away the point estimates."
+  ),
+  fill = "#FCE4C6",
+  cex = 0.76,
+  font = 2
+)
+
+draw_box(
+  0.50, 0.18, 0.74, 0.18,
+  "Plain language\nThe result is moderately robust, but not invincible.",
+  fill = "#D9EAF7",
+  cex = 0.82,
+  font = 2
+)
+```
+
+For our classroom dataset, the adjusted risk ratios are around `r round(min(point_ratio), 2)` to `r round(max(point_ratio), 2)`.
+
+The E-values for the point estimates are around `r round(min(point_evalues), 2)` to `r round(max(point_evalues), 2)`.
+
+That means an unmeasured confounder would need to be associated with both smoking and CVD by about a `r round(min(point_evalues), 1)`-fold to `r round(max(point_evalues), 1)`-fold risk ratio, above and beyond the covariates we already adjusted for, to fully explain away the point estimates.
+
+## Peng Ding-Style Interpretation
+
+VanderWeele and Ding often write the interpretation as one complete sentence.
+
+The sentence pattern is:
+
+```text
+The observed risk ratio of [RR] could be explained away by an unmeasured
+confounder that was associated with both the treatment and the outcome by
+a risk ratio of [E-value]-fold each, above and beyond the measured covariates.
+But if both hidden-confounder links were weaker than this, they could not fully
+explain away the point estimate.
+```
+
+Applied to our smoking and CVD example:
+
+```{r ding-style-statements, results='asis', echo=FALSE}
+format_two_digits <- function(x) sprintf("%.2f", x)
+
+for (i in seq_along(methods)) {
+  cat(
+    "**",
+    method_labels[i],
+    ".** The observed risk ratio of ",
+    format_two_digits(point_ratio[i]),
+    " could be explained away by an unmeasured confounder that was associated with both smoking and CVD by a risk ratio of ",
+    format_two_digits(point_evalues[i]),
+    "-fold each, above and beyond the measured covariates. If both hidden-confounder links were weaker than ",
+    format_two_digits(point_evalues[i]),
+    "-fold, they could not fully explain away this point estimate.\n\n",
+    sep = ""
+  )
+}
+```
+
+```{r ding-style-picture, echo=FALSE, fig.width=8.8, fig.height=5.0}
+start_picture()
+
+draw_box(
+  0.50, 0.86, 0.76, 0.13,
+  "Ding-style reading of our E-values",
+  fill = "#B7D7A8",
+  cex = 0.90,
+  font = 2
+)
+
+method_box_y <- c(0.64, 0.42, 0.20)
+method_box_fill <- c("#FCE4C6", "#D9EAF7", "#F5F5F5")
+
+for (i in seq_along(methods)) {
+  draw_box(
+    0.50, method_box_y[i], 0.82, 0.16,
+    paste0(
+      method_labels[i],
+      "\nObserved RR = ",
+      format_two_digits(point_ratio[i]),
+      "; E-value = ",
+      format_two_digits(point_evalues[i]),
+      "\nHidden U would need about ",
+      format_two_digits(point_evalues[i]),
+      "-fold associations with both smoking and CVD."
+    ),
+    fill = method_box_fill[i],
+    cex = 0.68,
+    font = 2
+  )
+}
+
+draw_text(
+  0.50, 0.04,
+  "Above and beyond measured covariates. If both U links are weaker than the E-value, they cannot fully explain away the point estimate.",
+  cex = 0.67,
+  font = 2
+)
+```
+
+This wording is useful because it forces us to say exactly how strong the hidden confounder would need to be.
+
+## How Do We Use the E-value in Practice?
+
+We compare the E-value with a realistic guess about a possible hidden confounder.
+
+For example, suppose we worry about a missing variable such as physical activity.
+
+```{r practical-use-picture, echo=FALSE, fig.width=8.8, fig.height=4.8}
+start_picture()
+
+draw_box(0.18, 0.68, 0.26, 0.18,
+         "Possible hidden U\nphysical activity",
+         fill = "#F5F5F5", border = "#E15759",
+         lty = 2, cex = 0.78, font = 2)
+draw_box(0.50, 0.68, 0.28, 0.18,
+         "How strong might\nU really be?",
+         fill = "#D9EAF7", cex = 0.78, font = 2)
+draw_box(0.82, 0.68, 0.26, 0.18,
+         paste0("Our E-values\nabout ",
+                min_point_evalue, " to ", max_point_evalue),
+         fill = "#B7D7A8", cex = 0.78, font = 2)
+
+draw_arrow(0.31, 0.68, 0.36, 0.68)
+draw_arrow(0.64, 0.68, 0.69, 0.68)
+
+draw_box(0.31, 0.34, 0.36, 0.18,
+         "If plausible U strength\nis much smaller than E-value:\nless worried",
+         fill = "#FCE4C6", cex = 0.68, font = 2)
+draw_box(0.69, 0.34, 0.36, 0.18,
+         "If plausible U strength\nis near or above E-value:\nmore worried",
+         fill = "#FCE4C6", cex = 0.68, font = 2)
+
+draw_text(
+  0.50, 0.10,
+  "E-value is not compared with the CI upper bound.\nIt is compared with plausible hidden-confounder strength.",
+  cex = 0.82,
+  font = 2
+)
+```
+
+So in practice:
+
+1. Name a possible hidden confounder.
+2. Ask how strongly it might be related to smoking.
+3. Ask how strongly it might be related to CVD.
+4. Compare those strengths with the E-value.
+
+If both links could realistically be around 2-fold, then the result may be sensitive to that hidden confounder. If both links are probably much weaker than 2-fold, then the result is more reassuring.
+
+This is why the E-value is useful: it changes a vague worry into a concrete question.
+
+```text
+Could a missing variable be this strongly related to both smoking and CVD?
+```
+
+## A Simple Teaching Example
+
+Suppose there is a hidden variable `U`.
+
+```{r hidden-confounder-example, echo=FALSE, fig.width=8.8, fig.height=4.6}
+start_picture()
+
+draw_circle(0.60, 0.82, 0.075, "Hidden\nU",
+            fill = "#F5F5F5", border = "#E15759",
+            lty = 2, cex = 0.82, font = 2)
+draw_circle(0.24, 0.42, 0.080, "Measured\ncovariates\nX",
+            fill = "#F1CE63", cex = 0.70, font = 2)
+draw_circle(0.50, 0.42, 0.080, "Smoking\nT",
+            fill = "#F28E2B", cex = 0.82, font = 2)
+draw_circle(0.78, 0.42, 0.080, "CVD\nY",
+            fill = "#E15759", cex = 0.82, font = 2)
+
+draw_arrow(0.31, 0.42, 0.42, 0.42)
+draw_curve_arrow(0.30, 0.35, 0.71, 0.35, 0.50, 0.18)
+draw_arrow(0.58, 0.42, 0.70, 0.42, col = "#F28E2B", lwd = 3)
+
+draw_arrow(0.55, 0.76, 0.51, 0.50, col = "#E15759",
+           lwd = 2, lty = 2)
+draw_arrow(0.65, 0.76, 0.75, 0.50, col = "#E15759",
+           lwd = 2, lty = 2)
+
+draw_text(0.42, 0.66, "U related to\nsmoking", cex = 0.72, font = 2)
+draw_text(0.80, 0.66, "U related to\nCVD", cex = 0.72, font = 2)
+draw_text(0.23, 0.24, "Already adjusted\nfor X", cex = 0.70, font = 2)
+
+draw_text(
+  0.50, 0.18,
+  "E-value asks how strong the two dashed U arrows would need to be\nabove and beyond the measured covariates X.",
+  cex = 0.86,
+  font = 2
+)
+```
+
+This is closer to Peng Ding's figure: `U` sits above treatment and outcome because it is the hidden variable that may create extra association between them.
+
+If the E-value is about 2, then a hidden confounder would need to be related to both smoking and CVD by about 2-fold each, after adjustment for `X`, to explain away the point estimate.
+
+This does not mean such a confounder exists. It gives us a way to judge how worried we should be.
+
+One more subtle point from the paper:
+
+> The E-value gives the minimum common strength if the two hidden-confounder links are equally strong.
+
+If one link is weaker than the E-value, the other link would need to be even stronger to explain away the result.
+
+```{r equal-links-picture, echo=FALSE, fig.width=8.8, fig.height=4.6}
+start_picture()
+
+draw_box(0.18, 0.66, 0.26, 0.18,
+         "Link 1\nU with smoking",
+         fill = "#D9EAF7", cex = 0.82, font = 2)
+draw_box(0.50, 0.66, 0.26, 0.18,
+         "E-value idea\nmake both links equal",
+         fill = "#B7D7A8", cex = 0.78, font = 2)
+draw_box(0.82, 0.66, 0.26, 0.18,
+         "Link 2\nU with CVD",
+         fill = "#FCE4C6", cex = 0.82, font = 2)
+
+draw_arrow(0.31, 0.66, 0.37, 0.66)
+draw_arrow(0.63, 0.66, 0.69, 0.66)
+
+draw_text(0.50, 0.38,
+          paste0("For our result, both links would need to be about ",
+                 min_point_evalue, " to ", max_point_evalue, " or stronger."),
+          cex = 0.86, font = 2)
+
+draw_text(0.50, 0.18,
+          "If one link is weaker, the other link must be stronger\nto explain away the adjusted association.",
+          cex = 0.82, font = 2)
+```
+
+## Other Sensitivity Analyses We Could Do
+
+E-values are a good first sensitivity analysis because they are simple and visual.
+
+Other useful sensitivity checks include:
+
+1. Repeating the analysis with different covariate sets.
+2. Checking whether very large IPW weights drive the results.
+3. Truncating extreme propensity-score weights and comparing results.
+4. Comparing IPW, outcome regression, and doubly robust results.
+5. Thinking carefully about plausible unmeasured confounders, such as physical activity or family history.
+
+For this lecture, the E-value is the best main topic because it directly answers:
+
+> How strong would hidden confounding need to be?
+
+## What the E-value Does Not Fix
+
+The E-value is helpful, but it is not magic.
+
+It does not fix:
+
+1. A badly measured smoking variable
+2. A badly measured CVD variable
+3. Poor model choices
+4. Lack of overlap
+5. Survey-design issues we intentionally skipped
+6. Reverse timing, where CVD status might affect smoking behavior
+
+The E-value only asks about one type of concern:
+
+> possible unmeasured confounding.
+
+A large E-value does not prove causation. A small E-value does not prove there is no effect. The E-value simply tells us how easy or hard it would be for hidden confounding to explain away the adjusted association.
+
+## Key Takeaways
+
+1. Sensitivity analysis asks how much our conclusion depends on assumptions.
+2. The E-value asks how strong hidden confounding would need to be to explain away the adjusted association.
+3. E-values use the risk ratio scale, so we calculate adjusted risk ratios.
+4. Our point-estimate E-values are around `r round(min(point_evalues), 1)` to `r round(max(point_evalues), 1)`.
+5. This means a hidden confounder would need to be moderately strong and related to both smoking and CVD.
+6. E-values help us think clearly, but they do not prove causation by themselves.
+
+## Appendix 1: Why the E-value Formula Works
+
+This appendix is optional. It gives the algebra behind the formula.
+
+Suppose the observed adjusted risk ratio is greater than 1:
+
+$$
+RR_{\text{obs}} > 1.
+$$
+
+For us, \(RR_{\text{obs}}\) is the adjusted smoker-versus-non-smoker CVD risk ratio.
+
+Now imagine there is an unmeasured confounder \(U\).
+
+VanderWeele and Ding describe two hidden-confounder strengths:
+
+$$
+\begin{aligned}
+RR_{EU} &= \text{strength of association between exposure and } U, \\
+RR_{UD} &= \text{strength of association between } U \text{ and outcome}.
+\end{aligned}
+$$
+
+In our lecture, \(RR_{EU}\) means how strongly \(U\) is related to smoking, and \(RR_{UD}\) means how strongly \(U\) is related to CVD. These are considered after the measured covariates \(X\) have already been adjusted for.
+
+The risk-ratio bias factor is:
+
+$$
+B
+=
+\frac{RR_{EU} \times RR_{UD}}
+     {RR_{EU} + RR_{UD} - 1}.
+$$
+
+Think of \(B\) as the largest amount by which hidden confounding could multiply the risk ratio. If there is no hidden confounding, \(B = 1\). If hidden confounding is strong, \(B > 1\).
+
+The adjusted risk ratio could be explained away if hidden confounding is strong enough to move the observed risk ratio down to 1:
+
+$$
+\frac{RR_{\text{obs}}}{B} \leq 1.
+$$
+
+This is equivalent to:
+
+$$
+B \geq RR_{\text{obs}}.
+$$
+
+So the question becomes:
+
+> How large do \(RR_{EU}\) and \(RR_{UD}\) need to be so that the bias factor is at least as large as the observed risk ratio?
+
+The E-value gives a simple benchmark by setting the two hidden-confounder strengths equal:
+
+$$
+RR_{EU} = RR_{UD} = r.
+$$
+
+Then the bias factor becomes:
+
+$$
+B
+=
+\frac{r \times r}{r + r - 1}
+=
+\frac{r^2}{2r - 1}.
+$$
+
+To find the smallest equal strength that could explain away the result, set the bias factor equal to the observed risk ratio:
+
+$$
+\frac{r^2}{2r - 1}
+=
+RR_{\text{obs}}.
+$$
+
+Now solve for \(r\):
+
+$$
+\begin{aligned}
+r^2 &= RR_{\text{obs}}(2r - 1), \\
+r^2 &= 2RR_{\text{obs}}r - RR_{\text{obs}}, \\
+r^2 - 2RR_{\text{obs}}r + RR_{\text{obs}} &= 0.
+\end{aligned}
+$$
+
+Using the quadratic formula:
+
+$$
+r
+=
+\frac{2RR_{\text{obs}} \pm
+\sqrt{(2RR_{\text{obs}})^2 - 4RR_{\text{obs}}}}{2}.
+$$
+
+Simplify:
+
+$$
+\begin{aligned}
+r
+&=
+RR_{\text{obs}}
+\pm
+\sqrt{RR_{\text{obs}}^2 - RR_{\text{obs}}} \\
+&=
+RR_{\text{obs}}
+\pm
+\sqrt{RR_{\text{obs}}(RR_{\text{obs}} - 1)}.
+\end{aligned}
+$$
+
+The smaller solution is below 1, but a risk-ratio strength is defined away from the null and must be at least 1. So we use the larger solution:
+
+$$
+\boxed{
+\text{E-value}
+=
+RR_{\text{obs}}
++
+\sqrt{RR_{\text{obs}}(RR_{\text{obs}} - 1)}
+}
+$$
+
+That is the E-value formula.
+
+For example, using the IPW risk ratio:
+
+$$
+\begin{aligned}
+RR_{\text{obs}} &= 1.34, \\
+\text{E-value}
+&=
+1.34 + \sqrt{1.34(1.34 - 1)} \\
+&=
+2.02.
+\end{aligned}
+$$
+
+For a protective association where \(RR_{\text{obs}} < 1\), we first invert the risk ratio:
+
+$$
+RR_{\text{away from null}}
+=
+\frac{1}{RR_{\text{obs}}}.
+$$
+
+Then we apply the same formula to \(RR_{\text{away from null}}\).
+
+## Appendix 2: How the Three Estimators Are Obtained
+
+This appendix shows the math behind the three adjusted estimators used in this lecture.
+
+For each person \(i = 1, \ldots, n\), define:
+
+$$
+\begin{aligned}
+T_i &= \text{smoking indicator}, \\
+Y_i &= \text{CVD indicator}, \\
+X_i &= \text{baseline covariates}.
+\end{aligned}
+$$
+
+Here \(T_i = 1\) means smoker, \(T_i = 0\) means non-smoker, and \(Y_i = 1\) means the person has CVD.
+
+Our goal is to estimate two adjusted risks:
+
+$$
+\begin{aligned}
+\psi_1 &= \text{CVD risk if everyone smoked}, \\
+\psi_0 &= \text{CVD risk if everyone did not smoke}.
+\end{aligned}
+$$
+
+Then the adjusted risk difference and adjusted risk ratio are:
+
+$$
+\begin{aligned}
+RD &= \psi_1 - \psi_0, \\
+RR &= \frac{\psi_1}{\psi_0}.
+\end{aligned}
+$$
+
+### Appendix 2.1: Propensity Score Model
+
+For IPW and doubly robust estimation, we first estimate the probability of being a smoker given the baseline covariates:
+
+$$
+e(X_i)
+=
+P(T_i = 1 \mid X_i).
+$$
+
+In this lecture, we estimate \(e(X_i)\) using logistic regression:
+
+$$
+\text{logit}\{e(X_i)\}
+=
+\alpha_0 + \alpha^\top X_i.
+$$
+
+The fitted value is:
+
+$$
+\hat e_i = \hat e(X_i).
+$$
+
+### Appendix 2.2: IPW Estimator
+
+IPW means inverse probability weighting.
+
+The idea is:
+
+> Give more weight to people whose observed smoking status was less likely given their covariates.
+
+For smokers, the weight is:
+
+$$
+w_i^{(1)}
+=
+\frac{T_i}{\hat e_i}.
+$$
+
+For non-smokers, the weight is:
+
+$$
+w_i^{(0)}
+=
+\frac{1 - T_i}{1 - \hat e_i}.
+$$
+
+The normalized IPW estimator of the smoker risk is:
+
+$$
+\hat\psi_1^{IPW}
+=
+\frac{
+\sum_{i=1}^n \dfrac{T_iY_i}{\hat e_i}
+}{
+\sum_{i=1}^n \dfrac{T_i}{\hat e_i}
+}.
+$$
+
+The normalized IPW estimator of the non-smoker risk is:
+
+$$
+\hat\psi_0^{IPW}
+=
+\frac{
+\sum_{i=1}^n \dfrac{(1 - T_i)Y_i}{1 - \hat e_i}
+}{
+\sum_{i=1}^n \dfrac{1 - T_i}{1 - \hat e_i}
+}.
+$$
+
+Then:
+
+$$
+\begin{aligned}
+\widehat{RD}^{IPW}
+&=
+\hat\psi_1^{IPW} - \hat\psi_0^{IPW}, \\
+\widehat{RR}^{IPW}
+&=
+\frac{\hat\psi_1^{IPW}}{\hat\psi_0^{IPW}}.
+\end{aligned}
+$$
+
+### Appendix 2.3: Outcome Regression Estimator
+
+Outcome regression models the outcome directly.
+
+Let:
+
+$$
+m(t, X_i)
+=
+P(Y_i = 1 \mid T_i = t, X_i).
+$$
+
+In this lecture, we estimate this using logistic regression:
+
+$$
+\text{logit}\{m(T_i, X_i)\}
+=
+\beta_0 + \beta_1T_i + \beta^\top X_i.
+$$
+
+After fitting the model, we predict each person's CVD risk twice:
+
+$$
+\begin{aligned}
+\hat m_1(X_i) &= \hat m(1, X_i), \\
+\hat m_0(X_i) &= \hat m(0, X_i).
+\end{aligned}
+$$
+
+Here \(\hat m_1(X_i)\) means predicted CVD risk if person \(i\) were set to smoker, and \(\hat m_0(X_i)\) means predicted CVD risk if person \(i\) were set to non-smoker.
+
+The outcome regression estimator is:
+
+$$
+\hat\psi_1^{OR}
+=
+\frac{1}{n}
+\sum_{i=1}^n \hat m_1(X_i),
+$$
+
+and:
+
+$$
+\hat\psi_0^{OR}
+=
+\frac{1}{n}
+\sum_{i=1}^n \hat m_0(X_i).
+$$
+
+Then:
+
+$$
+\begin{aligned}
+\widehat{RD}^{OR}
+&=
+\hat\psi_1^{OR} - \hat\psi_0^{OR}, \\
+\widehat{RR}^{OR}
+&=
+\frac{\hat\psi_1^{OR}}{\hat\psi_0^{OR}}.
+\end{aligned}
+$$
+
+### Appendix 2.4: Doubly Robust Estimator
+
+Doubly robust estimation combines the two ideas:
+
+1. A treatment model: \(\hat e_i\)
+2. An outcome model: \(\hat m_t(X_i)\)
+
+For the smoker risk:
+
+$$
+\hat\psi_1^{DR}
+=
+\frac{1}{n}
+\sum_{i=1}^n
+\left[
+\hat m_1(X_i)
++
+\frac{T_i}{\hat e_i}
+\{Y_i - \hat m_1(X_i)\}
+\right].
+$$
+
+For the non-smoker risk:
+
+$$
+\hat\psi_0^{DR}
+=
+\frac{1}{n}
+\sum_{i=1}^n
+\left[
+\hat m_0(X_i)
++
+\frac{1 - T_i}{1 - \hat e_i}
+\{Y_i - \hat m_0(X_i)\}
+\right].
+$$
+
+The first part, \(\hat m_t(X_i)\), is the outcome model prediction.
+
+The second part is a correction term:
+
+$$
+\frac{\mathbf{1}(T_i = t)}{\hat P(T_i = t \mid X_i)}
+\{Y_i - \hat m_t(X_i)\}.
+$$
+
+This correction uses the observed data to adjust the prediction when the model is off.
+
+Then:
+
+$$
+\begin{aligned}
+\widehat{RD}^{DR}
+&=
+\hat\psi_1^{DR} - \hat\psi_0^{DR}, \\
+\widehat{RR}^{DR}
+&=
+\frac{\hat\psi_1^{DR}}{\hat\psi_0^{DR}}.
+\end{aligned}
+$$
+
+### Appendix 2.5: Why It Is Called Doubly Robust
+
+The doubly robust estimator has a useful property:
+
+> It can still be consistent if either the treatment model is correct or the outcome model is correct.
+
+In simple language:
+
+1. If the propensity score model is correct, the correction term can protect us even if the outcome model is imperfect.
+2. If the outcome model is correct, the prediction part can protect us even if the propensity score model is imperfect.
+
+This does not mean it is magic. If both models are badly wrong, the doubly robust estimator can still be biased.
+
+## References
+
+VanderWeele, T. J., & Ding, P. (2017). Sensitivity analysis in observational research: Introducing the E-value. *Annals of Internal Medicine*, 167(4), 268-274. https://doi.org/10.7326/M16-2607
+
+Ding, P., & VanderWeele, T. J. (2016). Sensitivity analysis without assumptions. *Epidemiology*, 27(3), 368-377.

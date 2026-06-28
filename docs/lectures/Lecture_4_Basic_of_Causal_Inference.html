@@ -2173,6 +2173,248 @@ observed outcomes.</li>
 but it is not magic.</li>
 </ol>
 </div>
+<div id="appendix-math-of-the-doubly-robust-estimator" class="section level2" number="13">
+<h2><span class="header-section-number">13</span> Appendix: Math of the
+Doubly Robust Estimator</h2>
+<p>This appendix gives the mathematical notation for the doubly robust
+estimator used in this lecture.</p>
+<p>For each person <span class="math inline">\(i = 1, \ldots,
+n\)</span>, define:</p>
+<p><span class="math display">\[
+\begin{aligned}
+T_i &amp;= \text{smoking indicator}, \\
+Y_i &amp;= \text{CVD indicator}, \\
+X_i &amp;= \text{baseline covariates}.
+\end{aligned}
+\]</span></p>
+<p>Here <span class="math inline">\(T_i = 1\)</span> means smoker, <span class="math inline">\(T_i = 0\)</span> means non-smoker, and <span class="math inline">\(Y_i = 1\)</span> means the person has CVD.</p>
+<p>Our goal is to estimate two adjusted risks:</p>
+<p><span class="math display">\[
+\begin{aligned}
+\psi_1 &amp;= \text{CVD risk if everyone smoked}, \\
+\psi_0 &amp;= \text{CVD risk if everyone did not smoke}.
+\end{aligned}
+\]</span></p>
+<p>Then the adjusted risk difference and adjusted risk ratio are:</p>
+<p><span class="math display">\[
+\begin{aligned}
+RD &amp;= \psi_1 - \psi_0, \\
+RR &amp;= \frac{\psi_1}{\psi_0}.
+\end{aligned}
+\]</span></p>
+<div id="appendix-1-treatment-model" class="section level3" number="13.1">
+<h3><span class="header-section-number">13.1</span> Appendix 1:
+Treatment Model</h3>
+<p>The treatment model estimates the propensity score:</p>
+<p><span class="math display">\[
+e(X_i)
+=
+P(T_i = 1 \mid X_i).
+\]</span></p>
+<p>In this lecture, we fit a logistic regression:</p>
+<p><span class="math display">\[
+\text{logit}\{e(X_i)\}
+=
+\alpha_0 + \alpha^\top X_i.
+\]</span></p>
+<p>The fitted propensity score is:</p>
+<p><span class="math display">\[
+\hat e_i = \hat e(X_i).
+\]</span></p>
+</div>
+<div id="appendix-2-outcome-model" class="section level3" number="13.2">
+<h3><span class="header-section-number">13.2</span> Appendix 2: Outcome
+Model</h3>
+<p>The outcome model estimates CVD risk given smoking and
+covariates:</p>
+<p><span class="math display">\[
+m(t, X_i)
+=
+P(Y_i = 1 \mid T_i = t, X_i).
+\]</span></p>
+<p>In this lecture, we fit another logistic regression:</p>
+<p><span class="math display">\[
+\text{logit}\{m(T_i, X_i)\}
+=
+\beta_0 + \beta_1 T_i + \beta^\top X_i.
+\]</span></p>
+<p>Then we predict each person’s CVD risk under both treatment
+choices:</p>
+<p><span class="math display">\[
+\begin{aligned}
+\hat m_1(X_i) &amp;= \hat m(1, X_i), \\
+\hat m_0(X_i) &amp;= \hat m(0, X_i).
+\end{aligned}
+\]</span></p>
+<p>Here <span class="math inline">\(\hat m_1(X_i)\)</span> means
+predicted CVD risk if person <span class="math inline">\(i\)</span> were
+set to smoker, and <span class="math inline">\(\hat m_0(X_i)\)</span>
+means predicted CVD risk if person <span class="math inline">\(i\)</span> were set to non-smoker.</p>
+</div>
+<div id="appendix-3-doubly-robust-risk-under-smoking" class="section level3" number="13.3">
+<h3><span class="header-section-number">13.3</span> Appendix 3: Doubly
+Robust Risk Under Smoking</h3>
+<p>For the smoker world, <span class="math inline">\(T = 1\)</span>, the
+doubly robust estimator is:</p>
+<p><span class="math display">\[
+\hat\psi_1^{DR}
+=
+\frac{1}{n}
+\sum_{i=1}^{n}
+\left[
+\hat m_1(X_i)
++
+\frac{T_i}{\hat e_i}
+\{Y_i - \hat m_1(X_i)\}
+\right].
+\]</span></p>
+<p>This has two pieces:</p>
+<p><span class="math display">\[
+\text{prediction}
+=
+\hat m_1(X_i),
+\]</span></p>
+<p>and:</p>
+<p><span class="math display">\[
+\text{correction}
+=
+\frac{T_i}{\hat e_i}
+\{Y_i - \hat m_1(X_i)\}.
+\]</span></p>
+<p>The correction compares the observed outcome <span class="math inline">\(Y_i\)</span> with the predicted outcome <span class="math inline">\(\hat m_1(X_i)\)</span>, but it only contributes
+for people who were actually smokers.</p>
+</div>
+<div id="appendix-4-doubly-robust-risk-under-non-smoking" class="section level3" number="13.4">
+<h3><span class="header-section-number">13.4</span> Appendix 4: Doubly
+Robust Risk Under Non-Smoking</h3>
+<p>For the non-smoker world, <span class="math inline">\(T = 0\)</span>,
+the doubly robust estimator is:</p>
+<p><span class="math display">\[
+\hat\psi_0^{DR}
+=
+\frac{1}{n}
+\sum_{i=1}^{n}
+\left[
+\hat m_0(X_i)
++
+\frac{1 - T_i}{1 - \hat e_i}
+\{Y_i - \hat m_0(X_i)\}
+\right].
+\]</span></p>
+<p>Again, this has two pieces:</p>
+<p><span class="math display">\[
+\text{prediction}
+=
+\hat m_0(X_i),
+\]</span></p>
+<p>and:</p>
+<p><span class="math display">\[
+\text{correction}
+=
+\frac{1 - T_i}{1 - \hat e_i}
+\{Y_i - \hat m_0(X_i)\}.
+\]</span></p>
+<p>The correction only contributes for people who were actually
+non-smokers.</p>
+</div>
+<div id="appendix-5-risk-difference-and-risk-ratio" class="section level3" number="13.5">
+<h3><span class="header-section-number">13.5</span> Appendix 5: Risk
+Difference and Risk Ratio</h3>
+<p>Once we estimate the two adjusted risks, the doubly robust risk
+difference is:</p>
+<p><span class="math display">\[
+\widehat{RD}^{DR}
+=
+\hat\psi_1^{DR}
+-
+\hat\psi_0^{DR}.
+\]</span></p>
+<p>The doubly robust risk ratio is:</p>
+<p><span class="math display">\[
+\widehat{RR}^{DR}
+=
+\frac{\hat\psi_1^{DR}}
+       {\hat\psi_0^{DR}}.
+\]</span></p>
+<p>In the main lecture, the risk difference is reported in percentage
+points:</p>
+<p><span class="math display">\[
+100 \times \widehat{RD}^{DR}.
+\]</span></p>
+</div>
+<div id="appendix-6-why-the-estimator-is-called-doubly-robust" class="section level3" number="13.6">
+<h3><span class="header-section-number">13.6</span> Appendix 6: Why the
+Estimator Is Called Doubly Robust</h3>
+<p>The doubly robust estimator combines two models:</p>
+<p><span class="math display">\[
+\hat e(X_i)
+\quad \text{and} \quad
+\hat m(t, X_i).
+\]</span></p>
+<p>It is called doubly robust because it can still estimate the target
+risk correctly if either one of these models is correct.</p>
+<p>For this statement, we still need the usual causal assumptions:
+consistency, no important unmeasured confounding after adjustment for
+<span class="math inline">\(X_i\)</span>, and positivity. Let <span class="math inline">\(Y_i^1\)</span> be the potential CVD outcome if
+person <span class="math inline">\(i\)</span> smoked, and let <span class="math inline">\(Y_i^0\)</span> be the potential CVD outcome if
+person <span class="math inline">\(i\)</span> did not smoke.</p>
+<p>If the outcome model is correct, then:</p>
+<p><span class="math display">\[
+E\{Y_i - m(1, X_i) \mid T_i = 1, X_i\}
+=
+0.
+\]</span></p>
+<p>So the average correction term for the smoker world is centered
+around zero:</p>
+<p><span class="math display">\[
+E\left[
+\frac{T_i}{e(X_i)}
+\{Y_i - m(1, X_i)\}
+\right]
+=
+0.
+\]</span></p>
+<p>In that case, the outcome-model prediction is already correct
+enough.</p>
+<p>If the treatment model is correct, then the inverse-probability
+correction reweights the observed smokers so they represent the full
+covariate distribution:</p>
+<p><span class="math display">\[
+E\left[
+\frac{T_i}{e(X_i)}Y_i
+\right]
+=
+E(Y_i^{1}).
+\]</span></p>
+<p>Similarly:</p>
+<p><span class="math display">\[
+E\left[
+\frac{1 - T_i}{1 - e(X_i)}Y_i
+\right]
+=
+E(Y_i^{0}).
+\]</span></p>
+<p>So if the treatment model is correct, the correction can protect us
+even when the outcome model is imperfect.</p>
+<p>The important classroom message is:</p>
+<blockquote>
+<p>Doubly robust means either the treatment model or the outcome model
+can be correct enough. It does not mean both models can be wrong.</p>
+</blockquote>
+</div>
+</div>
+<div id="references" class="section level2" number="14">
+<h2><span class="header-section-number">14</span> References</h2>
+<p>Bang, H., &amp; Robins, J. M. (2005). Doubly robust estimation in
+missing data and causal inference models. <em>Biometrics</em>, 61(4),
+962-973.</p>
+<p>Hernan, M. A., &amp; Robins, J. M. (2020). <em>Causal Inference: What
+If</em>. Chapman &amp; Hall/CRC.</p>
+<p>Robins, J. M., Rotnitzky, A., &amp; Zhao, L. P. (1994). Estimation of
+regression coefficients when some regressors are not always observed.
+<em>Journal of the American Statistical Association</em>, 89(427),
+846-866.</p>
+</div>
 
 
 
