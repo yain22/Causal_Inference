@@ -1,0 +1,1724 @@
+---
+title: "Propensity Score"
+author: "Se Yoon Lee"
+date: "2026-07-05"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    number_sections: true
+    theme: readable
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+<style type="text/css">
+.concept-box {
+  margin: 1.3em 0 1.5em 0;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #eeeeee;
+  box-shadow: 8px 8px 12px rgba(0, 0, 0, 0.18);
+}
+.concept-title {
+  background: #cfcfcf;
+  padding: 0.55em 0.9em;
+  font-weight: 700;
+  font-size: 1.05em;
+}
+.concept-title p {
+  margin: 0;
+}
+.concept-body {
+  padding: 1.0em 1.25em 1.1em 1.25em;
+}
+.concept-body > p:first-child {
+  margin-top: 0;
+}
+.math-hi {
+  display: inline-block;
+  padding: 0.02em 0.18em;
+  border-radius: 3px;
+}
+.hi-ps {
+  background: #DDFBE1;
+}
+.hi-weight {
+  background: #FFF6C7;
+}
+.hi-warning {
+  background: #FFE0E0;
+}
+</style>
+
+```{r helpers, include=FALSE}
+start_picture <- function() {
+  par(mar = c(0, 0, 0, 0), xaxs = "i", yaxs = "i")
+  plot.new()
+  plot.window(xlim = c(0, 1), ylim = c(0, 1))
+}
+
+draw_text <- function(x, y, label, cex = 1, font = 1, col = "#222222") {
+  lines <- strsplit(label, "\n", fixed = TRUE)[[1]]
+  line_height <- 0.058 * cex
+  offsets <- seq((length(lines) - 1) / 2, -(length(lines) - 1) / 2) *
+    line_height
+  text(rep(x, length(lines)), y + offsets, labels = lines,
+       cex = cex, font = font, col = col)
+}
+
+draw_box <- function(x, y, w, h, label, fill = "#FFFFFF",
+                     border = "#333333", lwd = 2, lty = 1,
+                     cex = 1, font = 1, col = "#222222") {
+  rect(x - w / 2, y - h / 2, x + w / 2, y + h / 2,
+       col = fill, border = border, lwd = lwd, lty = lty)
+  draw_text(x, y, label, cex = cex, font = font, col = col)
+}
+
+draw_circle <- function(x, y, r, label, fill = "#FFFFFF",
+                        border = "#333333", lwd = 2, cex = 1,
+                        font = 1, col = "#222222") {
+  symbols(x, y, circles = r, inches = FALSE, add = TRUE,
+          bg = fill, fg = border, lwd = lwd)
+  draw_text(x, y, label, cex = cex, font = font, col = col)
+}
+
+draw_arrow <- function(x0, y0, x1, y1, col = "#333333",
+                       lwd = 2, lty = 1) {
+  arrows(x0, y0, x1, y1, length = 0.08, lwd = lwd, col = col, lty = lty)
+}
+
+weighted_mean <- function(x, w) {
+  ok <- !is.na(x) & !is.na(w)
+  sum(w[ok] * x[ok]) / sum(w[ok])
+}
+
+weighted_var <- function(x, w) {
+  ok <- !is.na(x) & !is.na(w)
+  x <- x[ok]
+  w <- w[ok]
+  m <- sum(w * x) / sum(w)
+  sum(w * (x - m)^2) / sum(w)
+}
+
+absolute_smd_numeric <- function(x, treatment, weights = rep(1, length(x))) {
+  treated <- treatment == 1
+  untreated <- treatment == 0
+  m1 <- weighted_mean(x[treated], weights[treated])
+  m0 <- weighted_mean(x[untreated], weights[untreated])
+  v1 <- weighted_var(x[treated], weights[treated])
+  v0 <- weighted_var(x[untreated], weights[untreated])
+  denom <- sqrt((v1 + v0) / 2)
+  abs(m1 - m0) / denom
+}
+
+absolute_smd_binary <- function(x, treatment, weights = rep(1, length(x))) {
+  x <- as.numeric(x)
+  treated <- treatment == 1
+  untreated <- treatment == 0
+  p1 <- weighted_mean(x[treated], weights[treated])
+  p0 <- weighted_mean(x[untreated], weights[untreated])
+  denom <- sqrt((p1 * (1 - p1) + p0 * (1 - p0)) / 2)
+  abs(p1 - p0) / denom
+}
+
+most_common <- function(x) {
+  names(sort(table(x), decreasing = TRUE))[1]
+}
+```
+
+## Overview
+
+The causal question in the smoking-CVD lectures is:
+
+$$
+\text{Is the risk of cardiovascular disease different if everyone smoked versus if everyone did not smoke?}
+$$
+
+The observed data do not come from a randomized smoking experiment. Smokers and non-smokers may differ in age, gender, race/ethnicity, education, income-to-poverty ratio, BMI, and other baseline risk factors. The propensity score is one way to organize this problem.
+
+::: {.concept-box}
+::: {.concept-title}
+Conceptual Goal
+:::
+::: {.concept-body}
+The propensity score is not an outcome model and not a causal assumption. It is a scalar summary of the measured baseline covariates that predicts treatment assignment:
+\[
+e(X)=P(T=1\mid X).
+\]
+In this lecture, \(T=1\) means lifetime smoker and \(T=0\) means non-smoker. The propensity score helps us compare smokers and non-smokers who had similar measured chances of being smokers.
+:::
+:::
+
+```{r overview-picture, echo=FALSE, fig.width=8.8, fig.height=4.5}
+start_picture()
+
+draw_box(0.12, 0.70, 0.20, 0.18,
+         "Measured baseline\ncovariates X",
+         fill = "#F1CE63", cex = 0.60, font = 2)
+draw_box(0.38, 0.70, 0.25, 0.18,
+         "Propensity score\ne(X)=P(T=1 | X)",
+         fill = "#DDFBE1", cex = 0.60, font = 2)
+draw_box(0.65, 0.70, 0.20, 0.18,
+         "Observed smoking\nT",
+         fill = "#F28E2B", cex = 0.60, font = 2)
+draw_box(0.88, 0.70, 0.18, 0.18,
+         "Observed CVD\nY",
+         fill = "#E15759", cex = 0.60, font = 2)
+
+draw_arrow(0.22, 0.70, 0.255, 0.70)
+draw_arrow(0.505, 0.70, 0.55, 0.70)
+draw_arrow(0.75, 0.70, 0.79, 0.70, col = "#F28E2B")
+draw_arrow(0.18, 0.61, 0.80, 0.61, col = "#777777", lty = 2)
+draw_text(0.50, 0.48,
+          "Confounding problem: X can affect both smoking and CVD.",
+          cex = 0.68, font = 2)
+
+draw_box(0.28, 0.23, 0.30, 0.16,
+         "Design stage\ncreate comparable groups",
+         fill = "#A0CBE8", cex = 0.58, font = 2)
+draw_box(0.66, 0.23, 0.30, 0.16,
+         "Analysis stage\nweight, match, or stratify",
+         fill = "#FCE4C6", cex = 0.58, font = 2)
+draw_arrow(0.43, 0.23, 0.51, 0.23)
+```
+
+## Definition
+
+For a binary treatment \(T\in\{0,1\}\), the propensity score is
+
+$$
+e(X)=P(T=1\mid X).
+$$
+
+In the smoking example,
+
+$$
+e(X)
+=
+P(\text{smoker}=1\mid
+\text{age},\text{gender},\text{race},\text{education},\text{income},\text{BMI}).
+$$
+
+The propensity score is a probability. A participant with \(\hat e(X_i)=0.70\) is not "70% smoker" in any biological sense. It means that, among participants with similar measured covariates, the fitted treatment model expects about 70% to be smokers.
+
+```{r definition-picture, echo=FALSE, fig.width=8.8, fig.height=4.4}
+start_picture()
+
+draw_box(0.15, 0.68, 0.22, 0.16,
+         "Age\nBMI\nIncome\nRace\nEducation",
+         fill = "#F1CE63", cex = 0.48, font = 2)
+draw_box(0.42, 0.68, 0.25, 0.16,
+         "Treatment model\nlogistic regression",
+         fill = "#A0CBE8", cex = 0.58, font = 2)
+draw_circle(0.70, 0.68, 0.085,
+            "e(X)\n0 to 1",
+            fill = "#DDFBE1", cex = 0.58, font = 2)
+draw_box(0.88, 0.68, 0.16, 0.16,
+         "Chance of\nsmoking",
+         fill = "#F28E2B", cex = 0.55, font = 2)
+
+draw_arrow(0.26, 0.68, 0.295, 0.68)
+draw_arrow(0.545, 0.68, 0.61, 0.68)
+draw_arrow(0.785, 0.68, 0.80, 0.68)
+
+draw_text(0.50, 0.35,
+          "Many baseline covariates are compressed into one scalar score.",
+          cex = 0.70, font = 2)
+draw_text(0.50, 0.20,
+          "The score predicts treatment assignment, not the outcome.",
+          cex = 0.66, font = 2)
+```
+
+## Why a Single Score Can Help
+
+The remarkable property of the propensity score is that it is a **balancing score**. For the true score \(e(X)\),
+
+$$
+T \perp X \mid e(X).
+$$
+
+This means that, within a narrow band of the propensity score, the distribution of measured covariates should be similar between treated and untreated participants. The statement is about measured \(X\), not about unmeasured confounders.
+
+::: {.concept-box}
+::: {.concept-title}
+Balancing Score Result
+:::
+::: {.concept-body}
+Because \(e(X)=P(T=1\mid X)\), conditioning on \(X\) and on \(e(X)\) gives
+\[
+P(T=1\mid X,e(X)) = e(X).
+\]
+Also,
+\[
+P(T=1\mid e(X)) = e(X).
+\]
+Therefore, once \(e(X)\) is fixed, knowing the full measured covariate vector \(X\) does not further change the treatment probability. That is the sense in which \(T\) is independent of measured \(X\) within levels of the propensity score.
+:::
+:::
+
+```{r balancing-score-picture, echo=FALSE, fig.width=8.8, fig.height=4.8}
+start_picture()
+
+draw_box(0.50, 0.92, 0.68, 0.09,
+         "Balancing-score idea: compare people with similar e(X)",
+         fill = "#E8E8E8", cex = 0.64, font = 2)
+
+draw_box(0.15, 0.72, 0.24, 0.15,
+         "Many measured\ncovariates X",
+         fill = "#F1CE63", cex = 0.56, font = 2)
+draw_box(0.41, 0.72, 0.23, 0.15,
+         "Treatment model\ncomputes e(X)",
+         fill = "#DDFBE1", cex = 0.54, font = 2)
+draw_arrow(0.27, 0.72, 0.30, 0.72)
+
+segments(0.58, 0.72, 0.92, 0.72, lwd = 3, col = "#333333")
+segments(c(0.58, 0.75, 0.92), 0.69, c(0.58, 0.75, 0.92), 0.75,
+         lwd = 2, col = "#333333")
+draw_text(0.58, 0.61, "0", cex = 0.52, font = 2)
+draw_text(0.75, 0.61, "0.5", cex = 0.52, font = 2)
+draw_text(0.92, 0.61, "1", cex = 0.52, font = 2)
+draw_text(0.75, 0.84, "estimated chance of smoking", cex = 0.50, font = 2)
+
+rect(0.69, 0.65, 0.81, 0.79,
+     col = adjustcolor("#A6D854", alpha.f = 0.35),
+     border = "#59A14F", lwd = 2)
+draw_text(0.75, 0.54, "one narrow\nscore band", cex = 0.46,
+          font = 2, col = "#387A38")
+draw_arrow(0.52, 0.72, 0.67, 0.72)
+
+points(c(0.70, 0.73, 0.77, 0.80), c(0.36, 0.43, 0.38, 0.46),
+       pch = 1, cex = 1.7, col = "#4E79A7", lwd = 2)
+points(c(0.72, 0.75, 0.79), c(0.30, 0.35, 0.32),
+       pch = 4, cex = 1.6, col = "#F28E2B", lwd = 2)
+draw_text(0.62, 0.43, "T = 0", cex = 0.48, font = 2, col = "#4E79A7")
+draw_text(0.62, 0.31, "T = 1", cex = 0.48, font = 2, col = "#F28E2B")
+
+draw_box(0.25, 0.36, 0.31, 0.16,
+         "Different X patterns\ncan map to similar e(X)",
+         fill = "#FFFFFF", cex = 0.51, font = 2)
+draw_arrow(0.40, 0.36, 0.60, 0.39, col = "#777777", lty = 2)
+
+draw_box(0.75, 0.18, 0.48, 0.15,
+         "Inside the band, smokers and non-smokers\nshould have similar measured-X distributions",
+         fill = "#EAF3FB", cex = 0.49, font = 2)
+draw_arrow(0.75, 0.28, 0.75, 0.25, col = "#333333")
+
+draw_text(0.50, 0.05,
+          "The stratum is a narrow interval of e(X), not a new treatment group.",
+          cex = 0.56, font = 2)
+```
+
+Read the picture from left to right. A high-dimensional covariate vector \(X\) is compressed into one fitted score \(\hat e(X)\). A propensity-score stratum is a narrow interval on that score axis. The balancing claim says that, if the score is correctly specified and the interval is sufficiently narrow, observed smokers and observed non-smokers inside the same band should have similar measured covariate distributions.
+
+### A More Formal Balancing Argument
+
+The balancing score statement can be written more rigorously. Let \(A\) be any set of measured covariate values and suppose we condition on the event \(e(X)=r\), where \(0<r<1\). Then
+
+\[
+\begin{aligned}
+P(X\in A\mid T=1,e(X)=r)
+&=
+\frac{P(T=1\mid X\in A,e(X)=r)P(X\in A\mid e(X)=r)}
+     {P(T=1\mid e(X)=r)} \\
+&=
+\frac{r\,P(X\in A\mid e(X)=r)}{r} \\
+&=
+P(X\in A\mid e(X)=r).
+\end{aligned}
+\]
+
+The same calculation for \(T=0\) gives
+
+\[
+P(X\in A\mid T=0,e(X)=r)
+=
+P(X\in A\mid e(X)=r).
+\]
+
+Thus, within a true propensity-score stratum, the distribution of measured \(X\) is the same in the treated and untreated groups:
+
+\[
+X\perp T\mid e(X).
+\]
+
+This result explains why a one-dimensional score can be useful for design. It does **not** say that unmeasured variables are balanced; only variables included in \(X\), or variables whose imbalance is captured by \(X\), are addressed.
+
+```{r formal-balancing-picture, echo=FALSE, fig.width=8.8, fig.height=4.2}
+start_picture()
+
+draw_box(0.15, 0.72, 0.24, 0.14,
+         "Full covariate vector\nX",
+         fill = "#F1CE63", cex = 0.58, font = 2)
+draw_box(0.42, 0.72, 0.24, 0.14,
+         "True score stratum\ne(X) = r",
+         fill = "#DDFBE1", cex = 0.58, font = 2)
+draw_box(0.72, 0.82, 0.24, 0.12,
+         "T = 1 group\nsame X distribution",
+         fill = "#FCE4C6", cex = 0.52, font = 2)
+draw_box(0.72, 0.60, 0.24, 0.12,
+         "T = 0 group\nsame X distribution",
+         fill = "#EAF3FB", cex = 0.52, font = 2)
+draw_arrow(0.27, 0.72, 0.30, 0.72)
+draw_arrow(0.54, 0.74, 0.60, 0.80, col = "#F28E2B")
+draw_arrow(0.54, 0.70, 0.60, 0.62, col = "#4E79A7")
+
+draw_box(0.50, 0.28, 0.70, 0.16,
+         "Inside a fixed score stratum, treatment assignment no longer carries\nadditional information about measured baseline covariates.",
+         fill = "#E8E8E8", cex = 0.56, font = 2)
+draw_text(0.50, 0.09,
+          "This is a property of the true score. The estimated score is checked by balance diagnostics.",
+          cex = 0.62, font = 2)
+```
+
+## Propensity Scores and Causal Identification
+
+The usual observational-study identification condition is conditional exchangeability:
+
+$$
+\{Y(1),Y(0)\}\perp T\mid X.
+$$
+
+Under positivity, the true propensity score can be used as a lower-dimensional conditioning variable:
+
+$$
+\{Y(1),Y(0)\}\perp T\mid e(X).
+$$
+
+The intuition is that if \(X\) blocks the backdoor paths between smoking and CVD, and \(e(X)\) balances the measured \(X\)'s, then conditioning on the true score can also remove measured confounding. In practice we estimate \(e(X)\), so diagnostics focus on whether the estimated score creates adequate balance and overlap.
+
+```{r identification-picture, echo=FALSE, fig.width=8.8, fig.height=4.4}
+start_picture()
+
+draw_box(0.16, 0.72, 0.25, 0.16,
+         "Causal assumption\nexchangeability given X",
+         fill = "#F1CE63", cex = 0.55, font = 2)
+draw_box(0.50, 0.72, 0.25, 0.16,
+         "Dimension reduction\nuse e(X)",
+         fill = "#DDFBE1", cex = 0.58, font = 2)
+draw_box(0.84, 0.72, 0.25, 0.16,
+         "Estimator\nweight, match,\nor stratify",
+         fill = "#FCE4C6", cex = 0.56, font = 2)
+
+draw_arrow(0.285, 0.72, 0.375, 0.72)
+draw_arrow(0.625, 0.72, 0.715, 0.72)
+
+draw_box(0.28, 0.35, 0.34, 0.16,
+         "Not solved by PS:\nunmeasured confounding",
+         fill = "#FFE0E0", cex = 0.56, font = 2)
+draw_box(0.72, 0.35, 0.34, 0.16,
+         "Diagnosed with PS:\noverlap and balance",
+         fill = "#A0CBE8", cex = 0.56, font = 2)
+draw_text(0.50, 0.13,
+          "The propensity score is a tool for measured covariates. It does not create the causal assumptions.",
+          cex = 0.64, font = 2)
+```
+
+## Load the Classroom NHANES Data
+
+The tutorial uses the same complete-case classroom analytic dataset as the IPW lecture. The lectures deliberately do not use NHANES survey weights here, so the numerical values are for the classroom analytic sample.
+
+```{r load-data}
+data_candidates <- c(
+  file.path("..", "Data", "NHANES_data.csv"),
+  file.path("Data", "NHANES_data.csv"),
+  "C:/Users/seyoo/OneDrive/GitHub_repository/Causal_Inference_Survival_Analysis/Causal_Inference_Lecture/Data/NHANES_data.csv"
+)
+
+data_path <- data_candidates[file.exists(data_candidates)][1]
+if (is.na(data_path)) {
+  stop("Could not find NHANES_data.csv. Check the data path.")
+}
+
+nhanes <- read.csv(data_path, stringsAsFactors = FALSE)
+
+baseline_vars <- c(
+  "age_yr",
+  "gender",
+  "race",
+  "educ_lvl",
+  "inc_to_pov_ratio",
+  "bmi"
+)
+
+analysis_vars <- c("smoker_indicator", "cvd_indicator", baseline_vars)
+
+ps_data <- nhanes[complete.cases(nhanes[, analysis_vars]), analysis_vars]
+ps_data$smoker_indicator <- as.integer(ps_data$smoker_indicator)
+ps_data$cvd_indicator <- as.integer(ps_data$cvd_indicator)
+
+ps_data$smoking_group <- factor(
+  ifelse(ps_data$smoker_indicator == 1, "Smoker", "Non-smoker"),
+  levels = c("Non-smoker", "Smoker")
+)
+
+ps_data$gender_label <- factor(
+  ps_data$gender,
+  levels = c("F", "M"),
+  labels = c("Female", "Male")
+)
+
+ps_data$race_label <- factor(
+  ps_data$race,
+  levels = c(
+    "mex_american",
+    "other_hispanic",
+    "nh_white",
+    "nh_black",
+    "nh_asian"
+  ),
+  labels = c(
+    "Mexican American",
+    "Other Hispanic",
+    "Non-Hispanic White",
+    "Non-Hispanic Black",
+    "Non-Hispanic Asian"
+  )
+)
+
+ps_data$educ_label <- factor(
+  ps_data$educ_lvl,
+  levels = c(
+    "lt_9th_grade",
+    "9_to_12th_grade_no_diploma",
+    "hs_grad_or_ged",
+    "start_college_to_aa",
+    "college_grad_or_above"
+  ),
+  labels = c(
+    "Less than 9th grade",
+    "9-12th grade, no diploma",
+    "High school/GED",
+    "Some college/AA",
+    "College graduate or above"
+  )
+)
+
+nrow(ps_data)
+```
+
+```{r sample-table}
+sample_table <- data.frame(
+  Group = c("Non-smoker", "Smoker", "Total"),
+  N = c(
+    sum(ps_data$smoker_indicator == 0),
+    sum(ps_data$smoker_indicator == 1),
+    nrow(ps_data)
+  ),
+  CVD_percent = round(100 * c(
+    mean(ps_data$cvd_indicator[ps_data$smoker_indicator == 0]),
+    mean(ps_data$cvd_indicator[ps_data$smoker_indicator == 1]),
+    mean(ps_data$cvd_indicator)
+  ), 2)
+)
+
+knitr::kable(sample_table)
+```
+
+## Baseline Imbalance Before Using the Propensity Score
+
+Before estimating a propensity score, we check whether baseline covariates differ between smokers and non-smokers. If they do, then the crude CVD comparison mixes treatment differences with covariate differences.
+
+```{r baseline-summary}
+baseline_summary <- data.frame(
+  Covariate = c("Age", "BMI", "Income-to-poverty ratio", "Male (%)"),
+  Non_smoker = c(
+    round(mean(ps_data$age_yr[ps_data$smoker_indicator == 0]), 2),
+    round(mean(ps_data$bmi[ps_data$smoker_indicator == 0]), 2),
+    round(mean(ps_data$inc_to_pov_ratio[ps_data$smoker_indicator == 0]), 2),
+    round(100 * mean(ps_data$gender_label[ps_data$smoker_indicator == 0] == "Male"), 2)
+  ),
+  Smoker = c(
+    round(mean(ps_data$age_yr[ps_data$smoker_indicator == 1]), 2),
+    round(mean(ps_data$bmi[ps_data$smoker_indicator == 1]), 2),
+    round(mean(ps_data$inc_to_pov_ratio[ps_data$smoker_indicator == 1]), 2),
+    round(100 * mean(ps_data$gender_label[ps_data$smoker_indicator == 1] == "Male"), 2)
+  )
+)
+
+knitr::kable(baseline_summary)
+```
+
+```{r imbalance-picture, echo=FALSE, fig.width=8.8, fig.height=4.8}
+age_non <- density(ps_data$age_yr[ps_data$smoker_indicator == 0])
+age_smoke <- density(ps_data$age_yr[ps_data$smoker_indicator == 1])
+
+old_par <- par(mar = c(5, 5, 4, 1))
+plot(
+  age_non,
+  lwd = 3,
+  col = "#4E79A7",
+  xlab = "Age in years",
+  ylab = "Density",
+  main = "Baseline Age Distribution Before Weighting",
+  xlim = range(ps_data$age_yr),
+  ylim = c(0, max(age_non$y, age_smoke$y) * 1.10)
+)
+lines(age_smoke, lwd = 3, col = "#F28E2B")
+abline(v = mean(ps_data$age_yr[ps_data$smoker_indicator == 0]),
+       col = "#4E79A7", lwd = 2, lty = 2)
+abline(v = mean(ps_data$age_yr[ps_data$smoker_indicator == 1]),
+       col = "#F28E2B", lwd = 2, lty = 2)
+legend(
+  "topright",
+  legend = c("Observed non-smokers", "Observed smokers"),
+  col = c("#4E79A7", "#F28E2B"),
+  lwd = 3,
+  bty = "n"
+)
+par(old_par)
+```
+
+```{r bmi-imbalance-picture, echo=FALSE, fig.width=8.8, fig.height=4.8}
+bmi_non <- density(ps_data$bmi[ps_data$smoker_indicator == 0])
+bmi_smoke <- density(ps_data$bmi[ps_data$smoker_indicator == 1])
+
+old_par <- par(mar = c(5, 5, 4, 1))
+plot(
+  bmi_non,
+  lwd = 3,
+  col = "#4E79A7",
+  xlab = "BMI",
+  ylab = "Density",
+  main = "Baseline BMI Distribution Before Weighting",
+  xlim = range(ps_data$bmi),
+  ylim = c(0, max(bmi_non$y, bmi_smoke$y) * 1.10)
+)
+lines(bmi_smoke, lwd = 3, col = "#F28E2B")
+abline(v = mean(ps_data$bmi[ps_data$smoker_indicator == 0]),
+       col = "#4E79A7", lwd = 2, lty = 2)
+abline(v = mean(ps_data$bmi[ps_data$smoker_indicator == 1]),
+       col = "#F28E2B", lwd = 2, lty = 2)
+legend(
+  "topright",
+  legend = c("Observed non-smokers", "Observed smokers"),
+  col = c("#4E79A7", "#F28E2B"),
+  lwd = 3,
+  bty = "n"
+)
+par(old_par)
+```
+
+For categorical covariates, the analogous object is not a density curve but a vector of category probabilities. The following panels compare the observed category proportions among non-smokers and smokers before weighting. Within each category, longer blue or orange bars mean that category is more common in that observed group.
+
+```{r categorical-imbalance-picture, echo=FALSE, fig.width=9.4, fig.height=8.8}
+wrap_axis_label <- function(x, width = 24) {
+  vapply(
+    as.character(x),
+    function(z) paste(strwrap(z, width = width), collapse = "\n"),
+    character(1)
+  )
+}
+
+category_prop <- function(x, w = rep(1, length(x))) {
+  x <- factor(x)
+  ok <- !is.na(x) & !is.na(w)
+  lv <- levels(x)
+  out <- sapply(lv, function(a) {
+    100 * sum(w[ok & x == a]) / sum(w[ok])
+  })
+  names(out) <- lv
+  out
+}
+
+draw_grouped_category_bars <- function(mat, main, colors, legend_labels,
+                                       add_legend = FALSE,
+                                       xlab = "Percent") {
+  xmax <- max(mat) * 1.20
+  xpos <- seq(0, ceiling(xmax / 10) * 10, by = 10)
+  ypos <- barplot(
+    mat,
+    beside = TRUE,
+    horiz = TRUE,
+    col = colors,
+    border = NA,
+    names.arg = wrap_axis_label(colnames(mat), width = 22),
+    las = 1,
+    cex.names = 0.72,
+    xlim = c(0, xmax),
+    xlab = xlab,
+    main = main,
+    axes = FALSE
+  )
+  abline(v = xpos, col = "#EEEEEE", lwd = 1)
+  barplot(
+    mat,
+    beside = TRUE,
+    horiz = TRUE,
+    col = colors,
+    border = NA,
+    names.arg = wrap_axis_label(colnames(mat), width = 22),
+    las = 1,
+    cex.names = 0.72,
+    xlim = c(0, xmax),
+    xlab = xlab,
+    main = main,
+    axes = FALSE,
+    add = TRUE
+  )
+  axis(1, at = xpos, labels = xpos, las = 1)
+  box(bty = "l")
+  invisible(ypos)
+  if (add_legend) {
+    legend(
+      "topright",
+      legend = legend_labels,
+      fill = colors,
+      border = NA,
+      bty = "n",
+      cex = 0.82
+    )
+  }
+}
+
+draw_categorical_baseline_panel <- function(x, treatment, main,
+                                            add_legend = FALSE) {
+  p0 <- category_prop(x[treatment == 0])
+  p1 <- category_prop(x[treatment == 1])
+  mat <- rbind(
+    "Observed non-smokers" = p0,
+    "Observed smokers" = p1
+  )
+  draw_grouped_category_bars(
+    mat,
+    main = main,
+    colors = c("#4E79A7", "#F28E2B"),
+    legend_labels = rownames(mat),
+    add_legend = add_legend,
+    xlab = "Percent within observed group"
+  )
+}
+
+old_par <- par(mfrow = c(3, 1), mar = c(4.4, 11.5, 2.9, 0.9),
+               oma = c(0.2, 0.2, 2.2, 0.2))
+draw_categorical_baseline_panel(
+  ps_data$gender_label,
+  ps_data$smoker_indicator,
+  "Gender distribution before weighting",
+  add_legend = TRUE
+)
+draw_categorical_baseline_panel(
+  ps_data$race_label,
+  ps_data$smoker_indicator,
+  "Race/ethnicity distribution before weighting"
+)
+draw_categorical_baseline_panel(
+  ps_data$educ_label,
+  ps_data$smoker_indicator,
+  "Education distribution before weighting"
+)
+mtext("Categorical baseline distributions before weighting",
+      outer = TRUE, side = 3, line = 0.8, font = 2, cex = 1.05)
+par(old_par)
+```
+
+These pictures are not about the outcome. They show that the treatment groups can have different baseline covariate distributions before adjustment. Age, BMI, gender, race/ethnicity, and education are only marginal views; imbalance can also occur in combinations of these covariates. The propensity score is designed to help repair this measured imbalance.
+
+## Estimate the Propensity Score
+
+The lecture uses a simple logistic treatment model:
+
+$$
+\operatorname{logit}\{e(X)\}
+=
+\alpha_0+\alpha_1\text{age}+\alpha_2\text{gender}
++\alpha_3\text{race}+\alpha_4\text{education}
++\alpha_5\text{income}+\alpha_6\text{BMI}.
+$$
+
+```{r propensity-model}
+propensity_model <- glm(
+  smoker_indicator ~ age_yr + gender_label + race_label +
+    educ_label + inc_to_pov_ratio + bmi,
+  data = ps_data,
+  family = binomial()
+)
+
+ps_data$e_hat <- predict(propensity_model, type = "response")
+
+summary(ps_data$e_hat)
+```
+
+```{r ps-coef-table}
+ps_coef <- summary(propensity_model)$coefficients
+main_ps_terms <- c("age_yr", "bmi", "inc_to_pov_ratio", "gender_labelMale")
+ps_coef_table <- data.frame(
+  Term = main_ps_terms,
+  Log_odds_coefficient = round(ps_coef[main_ps_terms, "Estimate"], 3),
+  Odds_ratio_for_smoking = round(exp(ps_coef[main_ps_terms, "Estimate"]), 3),
+  P_value = signif(ps_coef[main_ps_terms, "Pr(>|z|)"], 3)
+)
+
+knitr::kable(ps_coef_table)
+```
+
+The fitted value \(\hat e(X_i)\) is each participant's estimated probability of being a smoker given the measured covariates. It is not the probability of CVD.
+
+## Reading the Propensity Score Distribution
+
+```{r ps-distribution-picture, echo=FALSE, fig.width=8.8, fig.height=4.8}
+breaks <- seq(0, 1, by = 0.025)
+hist_non <- hist(
+  ps_data$e_hat[ps_data$smoker_indicator == 0],
+  breaks = breaks,
+  plot = FALSE
+)
+hist_smoke <- hist(
+  ps_data$e_hat[ps_data$smoker_indicator == 1],
+  breaks = breaks,
+  plot = FALSE
+)
+ymax <- max(hist_non$density, hist_smoke$density)
+
+old_par <- par(mar = c(5, 5, 4, 1))
+plot(
+  hist_non$mids,
+  hist_non$density,
+  type = "h",
+  lwd = 7,
+  lend = "butt",
+  col = adjustcolor("#4E79A7", alpha.f = 0.55),
+  ylim = c(0, ymax * 1.22),
+  xlim = c(0, 1),
+  xlab = expression("Estimated propensity score " * hat(e)(X)),
+  ylab = "Density",
+  main = "Propensity Score Distributions by Observed Smoking Group"
+)
+segments(
+  hist_smoke$mids,
+  0,
+  hist_smoke$mids,
+  hist_smoke$density,
+  lwd = 7,
+  lend = "butt",
+  col = adjustcolor("#F28E2B", alpha.f = 0.55)
+)
+legend(
+  "topright",
+  legend = c("Observed non-smokers", "Observed smokers"),
+  col = c("#4E79A7", "#F28E2B"),
+  lwd = 7,
+  bty = "n"
+)
+arrows(0.30, ymax * 1.05, 0.65, ymax * 1.05, code = 3,
+       angle = 90, length = 0.06, lwd = 2)
+text(0.475, ymax * 1.13, "overlap region", cex = 0.8, font = 2)
+par(old_par)
+```
+
+The plot should be read horizontally. Around a given score value, we ask whether both observed smokers and observed non-smokers exist. If both groups appear in a region of the score, then comparisons in that region are supported by data. If one group is absent, the analysis would have to extrapolate.
+
+```{r ps-distribution-guide, echo=FALSE, fig.width=8.8, fig.height=3.8}
+start_picture()
+
+segments(0.10, 0.42, 0.90, 0.42, lwd = 3, col = "#333333")
+segments(c(0.10, 0.50, 0.90), 0.39, c(0.10, 0.50, 0.90), 0.45,
+         lwd = 2, col = "#333333")
+draw_text(0.10, 0.31, "0", cex = 0.68, font = 2)
+draw_text(0.50, 0.31, "0.5", cex = 0.68, font = 2)
+draw_text(0.90, 0.31, "1", cex = 0.68, font = 2)
+draw_text(0.50, 0.20, "Estimated probability of smoking, ehat(X)", cex = 0.66, font = 2)
+
+rect(0.24, 0.54, 0.58, 0.64, col = adjustcolor("#4E79A7", alpha.f = 0.45),
+     border = NA)
+rect(0.40, 0.68, 0.76, 0.78, col = adjustcolor("#F28E2B", alpha.f = 0.45),
+     border = NA)
+draw_box(0.50, 0.88, 0.28, 0.11,
+         "Common support",
+         fill = "#DDFBE1", cex = 0.60, font = 2)
+draw_arrow(0.50, 0.82, 0.50, 0.66, col = "#59A14F")
+
+draw_box(0.18, 0.08, 0.27, 0.11,
+         "Smokers here are rare\nlarge treated weights",
+         fill = "#FFE0E0", cex = 0.50, font = 2)
+draw_box(0.82, 0.08, 0.27, 0.11,
+         "Non-smokers here are rare\nlarge untreated weights",
+         fill = "#FFE0E0", cex = 0.48, font = 2)
+draw_arrow(0.18, 0.15, 0.20, 0.40, col = "#E15759", lty = 2)
+draw_arrow(0.82, 0.15, 0.80, 0.40, col = "#E15759", lty = 2)
+```
+
+## Overlap in the NHANES Covariate Space
+
+The propensity score is one-dimensional, but the original overlap problem lives in the multivariate covariate space. The slide-style plot below shows one two-dimensional slice of that space for our classroom NHANES data: age and BMI. Red x's are observed smokers and black open circles are observed non-smokers.
+
+```{r age-bmi-overlap-scatter, echo=FALSE, fig.width=8.8, fig.height=5.2}
+set.seed(20260705)
+plot_index <- sample(seq_len(nrow(ps_data)), min(2500, nrow(ps_data)))
+plot_data <- ps_data[plot_index, ]
+
+smoke_rows <- plot_data$smoker_indicator == 1
+non_rows <- plot_data$smoker_indicator == 0
+
+age_non_q <- quantile(ps_data$age_yr[ps_data$smoker_indicator == 0],
+                      probs = c(0.05, 0.95))
+age_smoke_q <- quantile(ps_data$age_yr[ps_data$smoker_indicator == 1],
+                        probs = c(0.05, 0.95))
+bmi_non_q <- quantile(ps_data$bmi[ps_data$smoker_indicator == 0],
+                      probs = c(0.05, 0.95))
+bmi_smoke_q <- quantile(ps_data$bmi[ps_data$smoker_indicator == 1],
+                        probs = c(0.05, 0.95))
+
+age_overlap <- c(max(age_non_q[1], age_smoke_q[1]),
+                 min(age_non_q[2], age_smoke_q[2]))
+bmi_overlap <- c(max(bmi_non_q[1], bmi_smoke_q[1]),
+                 min(bmi_non_q[2], bmi_smoke_q[2]))
+
+old_par <- par(mar = c(5, 5, 4, 1))
+plot(
+  plot_data$age_yr[non_rows],
+  plot_data$bmi[non_rows],
+  pch = 1,
+  col = adjustcolor("#222222", alpha.f = 0.45),
+  xlab = "Age in years",
+  ylab = "BMI",
+  main = "Overlap in NHANES Covariate Space: Age and BMI",
+  xlim = range(ps_data$age_yr),
+  ylim = quantile(ps_data$bmi, probs = c(0.01, 0.99))
+)
+points(
+  plot_data$age_yr[smoke_rows],
+  plot_data$bmi[smoke_rows],
+  pch = 4,
+  col = adjustcolor("#E15759", alpha.f = 0.65),
+  cex = 0.85
+)
+rect(
+  age_overlap[1],
+  bmi_overlap[1],
+  age_overlap[2],
+  bmi_overlap[2],
+  border = "#59A14F",
+  lwd = 3,
+  lty = 2
+)
+text(
+  mean(age_overlap),
+  bmi_overlap[2],
+  labels = "central empirical overlap",
+  pos = 3,
+  col = "#387A38",
+  font = 2,
+  cex = 0.85
+)
+legend(
+  "bottomright",
+  legend = c("Smoker (T = 1)", "Non-smoker (T = 0)"),
+  pch = c(4, 1),
+  col = c("#E15759", "#222222"),
+  pt.cex = c(1.0, 1.0),
+  bty = "o",
+  bg = "white"
+)
+par(old_par)
+```
+
+This plot is only a two-covariate projection, so it cannot diagnose full multivariate positivity by itself. Its purpose is conceptual: overlap means that, for a relevant covariate region, both observed treatment states are represented. If a region contains almost only smokers or almost only non-smokers, comparisons there rely heavily on modeling or weighting extrapolation.
+
+```{r age-bmi-strata-overlap}
+ps_data$age_quartile <- cut(
+  ps_data$age_yr,
+  breaks = quantile(ps_data$age_yr, probs = seq(0, 1, by = 0.25)),
+  include.lowest = TRUE
+)
+
+ps_data$bmi_quartile <- cut(
+  ps_data$bmi,
+  breaks = quantile(ps_data$bmi, probs = seq(0, 1, by = 0.25)),
+  include.lowest = TRUE
+)
+
+age_bmi_cells <- aggregate(
+  smoker_indicator ~ age_quartile + bmi_quartile,
+  data = ps_data,
+  FUN = function(z) c(n = length(z), smoker_percent = 100 * mean(z))
+)
+
+age_bmi_cells <- data.frame(
+  age_quartile = age_bmi_cells$age_quartile,
+  bmi_quartile = age_bmi_cells$bmi_quartile,
+  n = age_bmi_cells$smoker_indicator[, "n"],
+  smoker_percent = age_bmi_cells$smoker_indicator[, "smoker_percent"]
+)
+
+age_bmi_cells$non_smoker_percent <- 100 - age_bmi_cells$smoker_percent
+age_bmi_cells$minimum_group_percent <- pmin(
+  age_bmi_cells$smoker_percent,
+  age_bmi_cells$non_smoker_percent
+)
+
+low_overlap_cells <- age_bmi_cells[
+  order(age_bmi_cells$minimum_group_percent),
+  c("age_quartile", "bmi_quartile", "n", "smoker_percent",
+    "non_smoker_percent", "minimum_group_percent")
+]
+
+knitr::kable(
+  head(
+    transform(
+      low_overlap_cells,
+      smoker_percent = round(smoker_percent, 1),
+      non_smoker_percent = round(non_smoker_percent, 1),
+      minimum_group_percent = round(minimum_group_percent, 1)
+    ),
+    8
+  ),
+  caption = "Age-BMI strata with the weakest empirical overlap"
+)
+```
+
+The last column is the smaller of the smoker and non-smoker percentages inside an age-BMI cell. A small value means one treatment state is rare in that cell. This is a finite-sample diagnostic for practical overlap; it is not a formal proof or disproof of positivity.
+
+```{r age-bmi-cell-heatmap, echo=FALSE, fig.width=7.2, fig.height=5.8}
+age_levels <- levels(ps_data$age_quartile)
+bmi_levels <- levels(ps_data$bmi_quartile)
+
+heat_mat <- matrix(
+  NA_real_,
+  nrow = length(bmi_levels),
+  ncol = length(age_levels),
+  dimnames = list(bmi_levels, age_levels)
+)
+
+for (rr in seq_len(nrow(age_bmi_cells))) {
+  heat_mat[
+    as.character(age_bmi_cells$bmi_quartile[rr]),
+    as.character(age_bmi_cells$age_quartile[rr])
+  ] <- age_bmi_cells$minimum_group_percent[rr]
+}
+
+old_par <- par(mar = c(7.5, 7.5, 4, 1))
+image(
+  x = seq_along(age_levels),
+  y = seq_along(bmi_levels),
+  z = t(heat_mat),
+  col = colorRampPalette(c("#FFE0E0", "#FFF6C7", "#DDFBE1"))(100),
+  xlab = "Age quartile",
+  ylab = "BMI quartile",
+  main = "Practical Overlap by Age-BMI Stratum",
+  xaxt = "n",
+  yaxt = "n"
+)
+axis(1, at = seq_along(age_levels), labels = paste0("A", seq_along(age_levels)))
+axis(2, at = seq_along(bmi_levels), labels = paste0("B", seq_along(bmi_levels)), las = 1)
+for (i in seq_along(age_levels)) {
+  for (j in seq_along(bmi_levels)) {
+    text(i, j, labels = paste0(round(heat_mat[j, i], 0), "%"), cex = 0.85)
+  }
+}
+mtext("Cell value = min{% smokers, % non-smokers}", side = 3, line = 0.4, cex = 0.85)
+par(old_par)
+```
+
+## Positivity and Extreme Scores
+
+The positivity condition for the ATE target is
+
+$$
+0<P(T=1\mid X=x)<1
+$$
+
+for covariate values \(x\) in the target population. In propensity-score notation,
+
+$$
+0<e(x)<1.
+$$
+
+This condition has a practical version: the estimated scores should not be too close to 0 or 1 for participants who matter to the target population.
+
+```{r weight-curve-picture, echo=FALSE, fig.width=8.8, fig.height=4.8}
+e_grid <- seq(0.02, 0.98, length.out = 400)
+treated_weight <- 1 / e_grid
+untreated_weight <- 1 / (1 - e_grid)
+
+old_par <- par(mar = c(5, 5, 4, 1))
+plot(
+  e_grid,
+  treated_weight,
+  type = "l",
+  lwd = 3,
+  col = "#F28E2B",
+  ylim = c(0, 20),
+  xlab = expression("Propensity score " * e(X)),
+  ylab = "ATE IPW weight",
+  main = "Weights Explode Near Positivity Problems"
+)
+lines(e_grid, untreated_weight, lwd = 3, col = "#4E79A7")
+abline(v = c(0.1, 0.9), lty = 2, col = "#999999")
+legend(
+  "top",
+  legend = c("Smoker weight: 1/e(X)", "Non-smoker weight: 1/{1-e(X)}"),
+  col = c("#F28E2B", "#4E79A7"),
+  lwd = 3,
+  bty = "n"
+)
+text(0.13, 16, "rare smoker\npatterns", cex = 0.8, col = "#F28E2B")
+text(0.84, 16, "rare non-smoker\npatterns", cex = 0.8, col = "#4E79A7")
+par(old_par)
+```
+
+The inverse probability weights are large exactly when a participant received a treatment that the model regarded as unlikely for their covariates. Such participants are influential because they represent many covariate-similar people who did not receive that treatment.
+
+## From Propensity Score to IPW
+
+For the ATE-style marginal risks used in the IPW lecture, the population identities are
+
+$$
+E\left\{\frac{TY}{e(X)}\right\}=E\{Y(1)\},
+\qquad
+E\left\{\frac{(1-T)Y}{1-e(X)}\right\}=E\{Y(0)\}.
+$$
+
+The weights are inverse probabilities of the treatment that was actually observed:
+
+$$
+w_i^{ATE}
+=
+\frac{T_i}{e(X_i)}
++
+\frac{1-T_i}{1-e(X_i)}.
+$$
+
+```{r pseudo-population-picture, echo=FALSE, fig.width=8.8, fig.height=4.6}
+start_picture()
+
+draw_box(0.18, 0.76, 0.28, 0.15,
+         "Observed sample\nunequal covariate mix",
+         fill = "#F1CE63", cex = 0.58, font = 2)
+draw_box(0.50, 0.76, 0.28, 0.15,
+         "Propensity weights\ninverse of observed chance",
+         fill = "#DDFBE1", cex = 0.56, font = 2)
+draw_box(0.82, 0.76, 0.28, 0.15,
+         "Weighted pseudo-population\nbalanced measured X",
+         fill = "#A0CBE8", cex = 0.53, font = 2)
+draw_arrow(0.32, 0.76, 0.36, 0.76)
+draw_arrow(0.64, 0.76, 0.68, 0.76)
+
+points(c(0.11, 0.15, 0.19, 0.23, 0.27), c(0.45, 0.38, 0.48, 0.33, 0.52),
+       pch = 16, cex = c(1.2, 2.0, 1.1, 1.7, 1.3),
+       col = "#4E79A7")
+points(c(0.12, 0.17, 0.22, 0.28), c(0.22, 0.27, 0.18, 0.25),
+       pch = 16, cex = c(1.6, 1.2, 2.1, 1.4),
+       col = "#F28E2B")
+
+draw_text(0.18, 0.08, "Before weighting:\nblue and orange groups\ncan occupy different X regions",
+          cex = 0.48, font = 2)
+
+points(c(0.72, 0.77, 0.82, 0.87, 0.92), c(0.45, 0.38, 0.48, 0.33, 0.52),
+       pch = 16, cex = c(1.4, 1.4, 1.4, 1.4, 1.4),
+       col = "#4E79A7")
+points(c(0.72, 0.77, 0.82, 0.87, 0.92), c(0.22, 0.27, 0.18, 0.25, 0.31),
+       pch = 16, cex = c(1.4, 1.4, 1.4, 1.4, 1.4),
+       col = "#F28E2B")
+draw_text(0.82, 0.08, "After weighting:\nweighted distributions of measured X\nare closer",
+          cex = 0.48, font = 2)
+```
+
+```{r compute-weights}
+ps_data$ate_weight <- ifelse(
+  ps_data$smoker_indicator == 1,
+  1 / ps_data$e_hat,
+  1 / (1 - ps_data$e_hat)
+)
+
+weight_summary <- data.frame(
+  Group = c("Non-smoker", "Smoker", "Overall"),
+  Mean = round(c(
+    mean(ps_data$ate_weight[ps_data$smoker_indicator == 0]),
+    mean(ps_data$ate_weight[ps_data$smoker_indicator == 1]),
+    mean(ps_data$ate_weight)
+  ), 2),
+  Median = round(c(
+    median(ps_data$ate_weight[ps_data$smoker_indicator == 0]),
+    median(ps_data$ate_weight[ps_data$smoker_indicator == 1]),
+    median(ps_data$ate_weight)
+  ), 2),
+  Maximum = round(c(
+    max(ps_data$ate_weight[ps_data$smoker_indicator == 0]),
+    max(ps_data$ate_weight[ps_data$smoker_indicator == 1]),
+    max(ps_data$ate_weight)
+  ), 2)
+)
+
+knitr::kable(weight_summary)
+```
+
+The next displays mirror the pseudo-population picture in the slides, but use the classroom NHANES data. Because the full \(X\) is multivariate, we first look at one-dimensional slices of it: age and BMI. The same weighting idea applies jointly to all measured covariates in the propensity-score model.
+
+```{r age-pseudo-population-distribution, echo=FALSE, fig.width=9.6, fig.height=6.2}
+weighted_hist_density <- function(x, w, breaks) {
+  bin <- findInterval(x, breaks, rightmost.closed = TRUE)
+  keep <- bin >= 1 & bin < length(breaks) & !is.na(x) & !is.na(w)
+  counts <- tapply(w[keep], bin[keep], sum)
+  out <- numeric(length(breaks) - 1)
+  out[as.integer(names(counts))] <- as.numeric(counts)
+  out / (sum(w[keep]) * diff(breaks))
+}
+
+draw_weighted_hist <- function(x, w, breaks, fill, border, main,
+                               xlab = "Age in years", ylim = NULL) {
+  dens <- weighted_hist_density(x, w, breaks)
+  if (is.null(ylim)) {
+    ylim <- c(0, max(dens) * 1.18)
+  }
+  plot(
+    NA,
+    xlim = range(breaks),
+    ylim = ylim,
+    xlab = xlab,
+    ylab = "Density",
+    main = main,
+    bty = "l",
+    las = 1
+  )
+  rect(
+    breaks[-length(breaks)],
+    0,
+    breaks[-1],
+    dens,
+    col = adjustcolor(fill, alpha.f = 0.58),
+    border = NA
+  )
+  lines(
+    rep(breaks, each = 2)[-c(1, 2 * length(breaks))],
+    rep(dens, each = 2),
+    col = border,
+    lwd = 2
+  )
+  abline(v = weighted_mean(x, w), col = border, lwd = 2, lty = 2)
+  box(col = border, lwd = 2)
+}
+
+age_breaks <- pretty(ps_data$age_yr, n = 18)
+smoke <- ps_data$smoker_indicator == 1
+nonsmoke <- ps_data$smoker_indicator == 0
+
+dens_max <- max(
+  weighted_hist_density(ps_data$age_yr[smoke], rep(1, sum(smoke)), age_breaks),
+  weighted_hist_density(ps_data$age_yr, rep(1, nrow(ps_data)), age_breaks),
+  weighted_hist_density(ps_data$age_yr[nonsmoke], rep(1, sum(nonsmoke)), age_breaks),
+  weighted_hist_density(ps_data$age_yr[smoke], ps_data$ate_weight[smoke], age_breaks),
+  weighted_hist_density(ps_data$age_yr[nonsmoke], ps_data$ate_weight[nonsmoke], age_breaks)
+) * 1.18
+
+old_par <- par(mfrow = c(2, 3), mar = c(3.2, 3.7, 3.0, 0.8),
+               oma = c(0.4, 0.4, 2.4, 0.2))
+
+draw_weighted_hist(ps_data$age_yr[smoke], rep(1, sum(smoke)), age_breaks,
+                   fill = "#F28E2B", border = "#E15759",
+                   main = "Observed age | smoker", ylim = c(0, dens_max))
+draw_weighted_hist(ps_data$age_yr, rep(1, nrow(ps_data)), age_breaks,
+                   fill = "#BDBDBD", border = "#7A7A7A",
+                   main = "Target age distribution", ylim = c(0, dens_max))
+draw_weighted_hist(ps_data$age_yr[nonsmoke], rep(1, sum(nonsmoke)), age_breaks,
+                   fill = "#4E79A7", border = "#4E79A7",
+                   main = "Observed age | non-smoker", ylim = c(0, dens_max))
+
+draw_weighted_hist(ps_data$age_yr[smoke], ps_data$ate_weight[smoke], age_breaks,
+                   fill = "#F28E2B", border = "#E15759",
+                   main = "IPW-weighted age | smoker", ylim = c(0, dens_max))
+draw_weighted_hist(ps_data$age_yr, rep(1, nrow(ps_data)), age_breaks,
+                   fill = "#BDBDBD", border = "#7A7A7A",
+                   main = "Target age distribution", ylim = c(0, dens_max))
+draw_weighted_hist(ps_data$age_yr[nonsmoke], ps_data$ate_weight[nonsmoke], age_breaks,
+                   fill = "#4E79A7", border = "#4E79A7",
+                   main = "IPW-weighted age | non-smoker", ylim = c(0, dens_max))
+
+mtext("IPW tries to make each treatment-specific age distribution resemble the same target population",
+      outer = TRUE, side = 3, line = 0.7, font = 2, cex = 1.05)
+par(old_par)
+```
+
+```{r bmi-pseudo-population-distribution, echo=FALSE, fig.width=9.6, fig.height=6.2}
+bmi_breaks <- pretty(ps_data$bmi, n = 18)
+
+bmi_dens_max <- max(
+  weighted_hist_density(ps_data$bmi[smoke], rep(1, sum(smoke)), bmi_breaks),
+  weighted_hist_density(ps_data$bmi, rep(1, nrow(ps_data)), bmi_breaks),
+  weighted_hist_density(ps_data$bmi[nonsmoke], rep(1, sum(nonsmoke)), bmi_breaks),
+  weighted_hist_density(ps_data$bmi[smoke], ps_data$ate_weight[smoke], bmi_breaks),
+  weighted_hist_density(ps_data$bmi[nonsmoke], ps_data$ate_weight[nonsmoke], bmi_breaks)
+) * 1.18
+
+old_par <- par(mfrow = c(2, 3), mar = c(3.2, 3.7, 3.0, 0.8),
+               oma = c(0.4, 0.4, 2.4, 0.2))
+
+draw_weighted_hist(ps_data$bmi[smoke], rep(1, sum(smoke)), bmi_breaks,
+                   fill = "#F28E2B", border = "#E15759",
+                   main = "Observed BMI | smoker", xlab = "BMI",
+                   ylim = c(0, bmi_dens_max))
+draw_weighted_hist(ps_data$bmi, rep(1, nrow(ps_data)), bmi_breaks,
+                   fill = "#BDBDBD", border = "#7A7A7A",
+                   main = "Target BMI distribution", xlab = "BMI",
+                   ylim = c(0, bmi_dens_max))
+draw_weighted_hist(ps_data$bmi[nonsmoke], rep(1, sum(nonsmoke)), bmi_breaks,
+                   fill = "#4E79A7", border = "#4E79A7",
+                   main = "Observed BMI | non-smoker", xlab = "BMI",
+                   ylim = c(0, bmi_dens_max))
+
+draw_weighted_hist(ps_data$bmi[smoke], ps_data$ate_weight[smoke], bmi_breaks,
+                   fill = "#F28E2B", border = "#E15759",
+                   main = "IPW-weighted BMI | smoker", xlab = "BMI",
+                   ylim = c(0, bmi_dens_max))
+draw_weighted_hist(ps_data$bmi, rep(1, nrow(ps_data)), bmi_breaks,
+                   fill = "#BDBDBD", border = "#7A7A7A",
+                   main = "Target BMI distribution", xlab = "BMI",
+                   ylim = c(0, bmi_dens_max))
+draw_weighted_hist(ps_data$bmi[nonsmoke], ps_data$ate_weight[nonsmoke], bmi_breaks,
+                   fill = "#4E79A7", border = "#4E79A7",
+                   main = "IPW-weighted BMI | non-smoker", xlab = "BMI",
+                   ylim = c(0, bmi_dens_max))
+
+mtext("IPW tries to make each treatment-specific BMI distribution resemble the same target population",
+      outer = TRUE, side = 3, line = 0.7, font = 2, cex = 1.05)
+par(old_par)
+```
+
+In each display, the top row shows the observed treatment-specific distribution, the middle gray panel shows the analytic-sample target distribution, and the bottom row shows the weighted treatment-specific distribution after applying the ATE inverse-probability weights. If the propensity-score model is adequate, the weighted smoker and weighted non-smoker distributions should move toward the same target distribution:
+
+$$
+\frac{\sum_{i=1}^n T_i\hat e(X_i)^{-1} I(X_i\in A)}
+     {\sum_{i=1}^n T_i\hat e(X_i)^{-1}}
+\approx
+\frac{1}{n}\sum_{i=1}^n I(X_i\in A),
+$$
+
+and
+
+$$
+\frac{\sum_{i=1}^n (1-T_i)\{1-\hat e(X_i)\}^{-1} I(X_i\in A)}
+     {\sum_{i=1}^n (1-T_i)\{1-\hat e(X_i)\}^{-1}}
+\approx
+\frac{1}{n}\sum_{i=1}^n I(X_i\in A).
+$$
+
+For categorical covariates, take \(A=\{C=c\}\), where \(C\) is a category-valued baseline variable. The plot below shows the same target-distribution logic for gender, race/ethnicity, and education. The gray bars are the full analytic-sample target proportions; the blue and orange bars are the IPW-weighted non-smoker and smoker proportions.
+
+```{r categorical-pseudo-population-distribution, echo=FALSE, fig.width=9.4, fig.height=8.8}
+draw_categorical_ipw_panel <- function(x, treatment, weights, main,
+                                       add_legend = FALSE) {
+  target <- category_prop(x)
+  p0 <- category_prop(x[treatment == 0], weights[treatment == 0])
+  p1 <- category_prop(x[treatment == 1], weights[treatment == 1])
+  mat <- rbind(
+    "Target sample" = target,
+    "Weighted non-smokers" = p0,
+    "Weighted smokers" = p1
+  )
+  draw_grouped_category_bars(
+    mat,
+    main = main,
+    colors = c("#BDBDBD", "#4E79A7", "#F28E2B"),
+    legend_labels = rownames(mat),
+    add_legend = add_legend,
+    xlab = "Percent in category"
+  )
+}
+
+old_par <- par(mfrow = c(3, 1), mar = c(4.4, 11.5, 2.9, 0.9),
+               oma = c(0.2, 0.2, 2.2, 0.2))
+draw_categorical_ipw_panel(
+  ps_data$gender_label,
+  ps_data$smoker_indicator,
+  ps_data$ate_weight,
+  "Gender distribution after IPW",
+  add_legend = TRUE
+)
+draw_categorical_ipw_panel(
+  ps_data$race_label,
+  ps_data$smoker_indicator,
+  ps_data$ate_weight,
+  "Race/ethnicity distribution after IPW"
+)
+draw_categorical_ipw_panel(
+  ps_data$educ_label,
+  ps_data$smoker_indicator,
+  ps_data$ate_weight,
+  "Education distribution after IPW"
+)
+mtext("Categorical pseudo-population checks after weighting",
+      outer = TRUE, side = 3, line = 0.8, font = 2, cex = 1.05)
+par(old_par)
+```
+
+Thus, the weighted pseudo-population is not a new dataset with new people. It is a reweighted empirical distribution in which covariate patterns that were rare within a treatment group receive more influence.
+
+## Diagnosing Balance
+
+The main practical question after estimating a propensity score is not whether the treatment model has a small p-value. The question is whether the score creates balance in measured baseline covariates.
+
+```{r balance-calculation}
+ps_data$male_indicator <- as.integer(ps_data$gender_label == "Male")
+ps_data$white_indicator <- as.integer(ps_data$race_label == "Non-Hispanic White")
+ps_data$college_indicator <- as.integer(ps_data$educ_label == "College graduate or above")
+
+balance_table <- data.frame(
+  Covariate = c(
+    "Age",
+    "BMI",
+    "Income-to-poverty ratio",
+    "Male",
+    "Non-Hispanic White",
+    "College graduate or above"
+  ),
+  Before = c(
+    absolute_smd_numeric(ps_data$age_yr, ps_data$smoker_indicator),
+    absolute_smd_numeric(ps_data$bmi, ps_data$smoker_indicator),
+    absolute_smd_numeric(ps_data$inc_to_pov_ratio, ps_data$smoker_indicator),
+    absolute_smd_binary(ps_data$male_indicator, ps_data$smoker_indicator),
+    absolute_smd_binary(ps_data$white_indicator, ps_data$smoker_indicator),
+    absolute_smd_binary(ps_data$college_indicator, ps_data$smoker_indicator)
+  ),
+  After_IPW = c(
+    absolute_smd_numeric(ps_data$age_yr, ps_data$smoker_indicator, ps_data$ate_weight),
+    absolute_smd_numeric(ps_data$bmi, ps_data$smoker_indicator, ps_data$ate_weight),
+    absolute_smd_numeric(ps_data$inc_to_pov_ratio, ps_data$smoker_indicator, ps_data$ate_weight),
+    absolute_smd_binary(ps_data$male_indicator, ps_data$smoker_indicator, ps_data$ate_weight),
+    absolute_smd_binary(ps_data$white_indicator, ps_data$smoker_indicator, ps_data$ate_weight),
+    absolute_smd_binary(ps_data$college_indicator, ps_data$smoker_indicator, ps_data$ate_weight)
+  )
+)
+
+balance_table$Before <- round(balance_table$Before, 3)
+balance_table$After_IPW <- round(balance_table$After_IPW, 3)
+
+knitr::kable(balance_table)
+```
+
+```{r love-plot, echo=FALSE, fig.width=8.8, fig.height=5.2}
+plot_table <- balance_table[order(balance_table$Before), ]
+y_pos <- seq_len(nrow(plot_table))
+xmax <- max(plot_table$Before, plot_table$After_IPW, 0.1) * 1.20
+
+old_par <- par(mar = c(5, 7.5, 4, 1))
+plot(
+  plot_table$Before,
+  y_pos,
+  pch = 19,
+  cex = 1.5,
+  col = "#E15759",
+  xlim = c(0, xmax),
+  ylim = c(0.5, length(y_pos) + 0.5),
+  yaxt = "n",
+  xlab = "Absolute standardized mean difference",
+  ylab = "",
+  main = "Measured Covariate Balance Before and After IPW"
+)
+points(plot_table$After_IPW, y_pos, pch = 19, cex = 1.5, col = "#4E79A7")
+segments(plot_table$Before, y_pos, plot_table$After_IPW, y_pos,
+         col = "#999999", lwd = 2)
+axis(2, at = y_pos, labels = plot_table$Covariate, las = 1)
+abline(v = 0.1, col = "#999999", lty = 2, lwd = 2)
+legend(
+  "bottomright",
+  legend = c("Before weighting", "After IPW", "0.1 reference"),
+  col = c("#E15759", "#4E79A7", "#999999"),
+  pch = c(19, 19, NA),
+  lty = c(NA, NA, 2),
+  lwd = c(NA, NA, 2),
+  bty = "n"
+)
+par(old_par)
+```
+
+This balance plot is one of the most important propensity score diagnostics. Good balance does not prove the causal assumptions, but poor balance shows that the estimated score has not yet made the observed treatment groups comparable on measured covariates.
+
+## Propensity Score Stratification
+
+Another way to understand the propensity score is through stratification. Split participants into strata with similar \(\hat e(X)\), then compare smokers and non-smokers within each stratum.
+
+```{r ps-strata}
+ps_data$ps_quintile <- cut(
+  ps_data$e_hat,
+  breaks = quantile(ps_data$e_hat, probs = seq(0, 1, by = 0.2)),
+  include.lowest = TRUE
+)
+
+strata_table <- aggregate(
+  cbind(age_yr, bmi, inc_to_pov_ratio) ~ ps_quintile + smoking_group,
+  data = ps_data,
+  FUN = mean
+)
+
+strata_counts <- as.data.frame(table(ps_data$ps_quintile, ps_data$smoking_group))
+names(strata_counts) <- c("ps_quintile", "smoking_group", "N")
+strata_table <- merge(strata_table, strata_counts,
+                      by = c("ps_quintile", "smoking_group"))
+
+knitr::kable(
+  data.frame(
+    PS_quintile = strata_table$ps_quintile,
+    Group = strata_table$smoking_group,
+    N = strata_table$N,
+    Mean_age = round(strata_table$age_yr, 1),
+    Mean_BMI = round(strata_table$bmi, 1),
+    Mean_income_to_poverty = round(strata_table$inc_to_pov_ratio, 2)
+  )
+)
+```
+
+```{r stratification-continuous-picture, echo=FALSE, fig.width=9.4, fig.height=8.0}
+quintile_labels <- levels(ps_data$ps_quintile)
+quintile_mid <- seq_along(quintile_labels)
+
+stratum_means <- function(variable) {
+  out <- aggregate(
+    ps_data[[variable]],
+    by = list(
+      ps_quintile = ps_data$ps_quintile,
+      smoking_group = ps_data$smoking_group
+    ),
+    FUN = mean
+  )
+  names(out)[3] <- "value"
+  wide <- tapply(out$value, list(out$ps_quintile, out$smoking_group), identity)
+  wide[quintile_labels, c("Non-smoker", "Smoker")]
+}
+
+plot_stratum_means <- function(variable, ylab, main, add_legend = FALSE) {
+  wide <- stratum_means(variable)
+  y_non <- wide[, "Non-smoker"]
+  y_smoke <- wide[, "Smoker"]
+  y_range <- range(c(y_non, y_smoke), na.rm = TRUE)
+  y_pad <- diff(y_range) * 0.18
+  if (!is.finite(y_pad) || y_pad == 0) y_pad <- 0.5
+
+  plot(
+    quintile_mid,
+    y_non,
+    type = "b",
+    pch = 19,
+    lwd = 3,
+    col = "#4E79A7",
+    ylim = y_range + c(-y_pad, y_pad),
+    xaxt = "n",
+    xlab = "Propensity score quintile",
+    ylab = ylab,
+    main = main
+  )
+  lines(quintile_mid, y_smoke, type = "b", pch = 19, lwd = 3, col = "#F28E2B")
+  for (qq in seq_along(quintile_mid)) {
+    segments(
+      quintile_mid[qq],
+      y_non[qq],
+      quintile_mid[qq],
+      y_smoke[qq],
+      col = "#BDBDBD",
+      lwd = 2
+    )
+  }
+  axis(1, at = quintile_mid, labels = paste0("Q", quintile_mid))
+  if (add_legend) {
+    legend(
+      "topleft",
+      legend = c("Non-smokers", "Smokers", "within-quintile gap"),
+      col = c("#4E79A7", "#F28E2B", "#BDBDBD"),
+      lwd = c(3, 3, 2),
+      pch = c(19, 19, NA),
+      bty = "n",
+      cex = 0.85
+    )
+  }
+}
+
+old_par <- par(mfrow = c(3, 1), mar = c(4.5, 5.2, 3.0, 1.0),
+               oma = c(0.2, 0.2, 2.4, 0.2))
+plot_stratum_means(
+  "age_yr",
+  ylab = "Mean age",
+  main = "Age within propensity-score quintiles",
+  add_legend = TRUE
+)
+plot_stratum_means(
+  "bmi",
+  ylab = "Mean BMI",
+  main = "BMI within propensity-score quintiles"
+)
+plot_stratum_means(
+  "inc_to_pov_ratio",
+  ylab = "Mean income-to-poverty ratio",
+  main = "Income-to-poverty ratio within propensity-score quintiles"
+)
+mtext("Within propensity-score strata, continuous covariate means should look closer",
+      outer = TRUE, side = 3, line = 0.8, font = 2, cex = 1.05)
+par(old_par)
+```
+
+Each panel reads vertically within a quintile. The blue and orange points are not meant to be identical across different quintiles; higher propensity-score quintiles can legitimately contain older or higher-risk participants. The diagnostic question is whether, **inside the same quintile**, smokers and non-smokers have similar covariate means. The short gray vertical segments mark the remaining within-quintile differences.
+
+```{r stratification-categorical-picture, echo=FALSE, fig.width=9.4, fig.height=8.0}
+stratum_percent <- function(indicator) {
+  out <- aggregate(
+    as.numeric(indicator),
+    by = list(
+      ps_quintile = ps_data$ps_quintile,
+      smoking_group = ps_data$smoking_group
+    ),
+    FUN = function(z) 100 * mean(z, na.rm = TRUE)
+  )
+  names(out)[3] <- "percent"
+  wide <- tapply(out$percent, list(out$ps_quintile, out$smoking_group), identity)
+  wide[quintile_labels, c("Non-smoker", "Smoker")]
+}
+
+plot_stratum_percent <- function(indicator, ylab, main, add_legend = FALSE) {
+  wide <- stratum_percent(indicator)
+  y_non <- wide[, "Non-smoker"]
+  y_smoke <- wide[, "Smoker"]
+  y_range <- range(c(y_non, y_smoke), na.rm = TRUE)
+  y_pad <- max(3, diff(y_range) * 0.18)
+
+  plot(
+    quintile_mid,
+    y_non,
+    type = "b",
+    pch = 19,
+    lwd = 3,
+    col = "#4E79A7",
+    ylim = c(max(0, y_range[1] - y_pad), min(100, y_range[2] + y_pad)),
+    xaxt = "n",
+    xlab = "Propensity score quintile",
+    ylab = ylab,
+    main = main
+  )
+  lines(quintile_mid, y_smoke, type = "b", pch = 19, lwd = 3, col = "#F28E2B")
+  for (qq in seq_along(quintile_mid)) {
+    segments(
+      quintile_mid[qq],
+      y_non[qq],
+      quintile_mid[qq],
+      y_smoke[qq],
+      col = "#BDBDBD",
+      lwd = 2
+    )
+  }
+  axis(1, at = quintile_mid, labels = paste0("Q", quintile_mid))
+  if (add_legend) {
+    legend(
+      "topleft",
+      legend = c("Non-smokers", "Smokers", "within-quintile gap"),
+      col = c("#4E79A7", "#F28E2B", "#BDBDBD"),
+      lwd = c(3, 3, 2),
+      pch = c(19, 19, NA),
+      bty = "n",
+      cex = 0.85
+    )
+  }
+}
+
+old_par <- par(mfrow = c(3, 1), mar = c(4.5, 5.2, 3.0, 1.0),
+               oma = c(0.2, 0.2, 2.4, 0.2))
+plot_stratum_percent(
+  ps_data$male_indicator,
+  ylab = "Percent male",
+  main = "Gender composition within propensity-score quintiles",
+  add_legend = TRUE
+)
+plot_stratum_percent(
+  ps_data$white_indicator,
+  ylab = "Percent non-Hispanic White",
+  main = "Race/ethnicity composition within propensity-score quintiles"
+)
+plot_stratum_percent(
+  ps_data$college_indicator,
+  ylab = "Percent college graduate or above",
+  main = "Education composition within propensity-score quintiles"
+)
+mtext("The same within-stratum comparison can be made for categorical covariates",
+      outer = TRUE, side = 3, line = 0.8, font = 2, cex = 1.05)
+par(old_par)
+```
+
+Stratification makes the balancing idea tangible: instead of comparing all smokers with all non-smokers, we compare people with similar estimated chances of smoking. The price is that balance is checked stratum by stratum and may still be imperfect, especially if a quintile contains few participants from one treatment group.
+
+## What the Propensity Score Is Not
+
+::: {.concept-box}
+::: {.concept-title}
+Common Misinterpretations
+:::
+::: {.concept-body}
+1. The propensity score is not an outcome risk. It predicts smoking, not CVD.
+2. A high propensity score does not mean the participant should smoke. It means their measured covariates resemble those of observed smokers.
+3. A good treatment model does not by itself prove no unmeasured confounding.
+4. A propensity score model should use pre-treatment covariates, not variables affected by treatment.
+5. Extreme scores are not harmless. They can create unstable weights and reveal poor overlap.
+:::
+:::
+
+```{r ps-not-outcome-picture, echo=FALSE, fig.width=8.8, fig.height=4.4}
+start_picture()
+
+draw_box(0.18, 0.70, 0.26, 0.16,
+         "Treatment model\nestimate e(X)\nP(smoker | X)",
+         fill = "#F28E2B", cex = 0.55, font = 2)
+draw_box(0.50, 0.70, 0.26, 0.16,
+         "Outcome model\nestimate m(t,X)\nP(CVD | T=t, X)",
+         fill = "#59A14F", cex = 0.55, font = 2)
+draw_box(0.82, 0.70, 0.26, 0.16,
+         "Causal estimand\nE{Y(1)} vs E{Y(0)}",
+         fill = "#F1CE63", cex = 0.55, font = 2)
+draw_arrow(0.31, 0.70, 0.37, 0.70)
+draw_arrow(0.63, 0.70, 0.69, 0.70)
+
+draw_box(0.18, 0.34, 0.26, 0.16,
+         "Use for\nweighting, matching,\nstratification",
+         fill = "#FCE4C6", cex = 0.54, font = 2)
+draw_box(0.50, 0.34, 0.26, 0.16,
+         "Use for\nstandardization\nand DR correction",
+         fill = "#DDFBE1", cex = 0.54, font = 2)
+draw_box(0.82, 0.34, 0.26, 0.16,
+         "Requires\ncausal assumptions\nplus estimation",
+         fill = "#E8E8E8", cex = 0.54, font = 2)
+
+draw_text(0.50, 0.11,
+          "Do not confuse treatment prediction e(X) with outcome prediction m(t,X).",
+          cex = 0.68, font = 2)
+```
+
+## Summary
+
+The propensity score is the treatment probability given measured baseline covariates:
+
+$$
+e(X)=P(T=1\mid X).
+$$
+
+For this lecture, the main ideas are:
+
+1. The propensity score compresses many measured covariates into one scalar treatment probability.
+2. The true propensity score is a balancing score: within levels of \(e(X)\), measured covariates are balanced between treated and untreated groups.
+3. The propensity score is useful only under the causal assumption that the measured covariates are sufficient for exchangeability.
+4. Positivity requires overlap: both smokers and non-smokers must be possible for relevant covariate patterns.
+5. IPW uses inverse propensity-score weights to create a weighted pseudo-population in which measured covariates are more comparable.
+6. Balance and overlap diagnostics are central. Coefficients and p-values from the treatment model are secondary.
+
+The conceptual roadmap is:
+
+$$
+\text{measured baseline }X
+\longrightarrow
+\text{propensity score }e(X)
+\longrightarrow
+\text{balance / overlap diagnostics}
+\longrightarrow
+\text{weighted or matched causal comparison.}
+$$
+
+## References
+
+Rosenbaum, P. R., and Rubin, D. B. (1983). The central role of the propensity score in observational studies for causal effects. *Biometrika*, 70(1), 41-55.
+
+Rosenbaum, P. R., and Rubin, D. B. (1984). Reducing bias in observational studies using subclassification on the propensity score. *Journal of the American Statistical Association*, 79(387), 516-524.
+
+Hernan, M. A., and Robins, J. M. (2020). *Causal Inference: What If*. Boca Raton: Chapman & Hall/CRC.
+
+Austin, P. C. (2011). An introduction to propensity score methods for reducing the effects of confounding in observational studies. *Multivariate Behavioral Research*, 46(3), 399-424.
+
+Stuart, E. A. (2010). Matching methods for causal inference: A review and a look forward. *Statistical Science*, 25(1), 1-21.
+
+Cole, S. R., and Hernan, M. A. (2008). Constructing inverse probability weights for marginal structural models. *American Journal of Epidemiology*, 168(6), 656-664.

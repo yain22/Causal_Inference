@@ -1,0 +1,1237 @@
+---
+title: "Hypothesis Testing for Causal Effects"
+author: "Se Yoon Lee"
+date: "2026-07-06"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    number_sections: true
+    theme: readable
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+```{r picture-helpers, include=FALSE}
+start_picture <- function() {
+  par(mar = c(0, 0, 0, 0), xaxs = "i", yaxs = "i")
+  plot.new()
+  plot.window(xlim = c(0, 1), ylim = c(0, 1))
+}
+
+draw_text <- function(x, y, label, cex = 1, font = 1, col = "#222222") {
+  lines <- strsplit(label, "\n", fixed = TRUE)[[1]]
+  line_height <- 0.055 * cex
+  offsets <- seq((length(lines) - 1) / 2, -(length(lines) - 1) / 2) *
+    line_height
+  text(rep(x, length(lines)), y + offsets, labels = lines,
+       cex = cex, font = font, col = col)
+}
+
+draw_box <- function(x, y, w, h, label, fill = "#FFFFFF",
+                     border = "#333333", lwd = 2, lty = 1,
+                     cex = 1, font = 1, col = "#222222") {
+  rect(x - w / 2, y - h / 2, x + w / 2, y + h / 2,
+       col = fill, border = border, lwd = lwd, lty = lty)
+  draw_text(x, y, label, cex = cex, font = font, col = col)
+}
+
+draw_circle <- function(x, y, r, label, fill = "#FFFFFF",
+                        border = "#333333", lwd = 2, cex = 1,
+                        font = 1, col = "#222222") {
+  symbols(x, y, circles = r, inches = FALSE, add = TRUE,
+          bg = fill, fg = border, lwd = lwd)
+  draw_text(x, y, label, cex = cex, font = font, col = col)
+}
+
+draw_arrow <- function(x0, y0, x1, y1, col = "#333333",
+                       lwd = 2, lty = 1) {
+  arrows(x0, y0, x1, y1, length = 0.08, lwd = lwd,
+         col = col, lty = lty)
+}
+
+weighted_mean <- function(x, w) {
+  ok <- !is.na(x) & !is.na(w)
+  sum(w[ok] * x[ok]) / sum(w[ok])
+}
+
+bound_probability <- function(p, eps = 1e-6) {
+  pmin(pmax(p, eps), 1 - eps)
+}
+
+fit_course_estimators <- function(input_data) {
+  treatment_model <- glm(
+    smoker_indicator ~ age_yr + gender_label + race_label +
+      educ_label + inc_to_pov_ratio + bmi,
+    data = input_data,
+    family = binomial()
+  )
+
+  e_hat <- bound_probability(predict(treatment_model, type = "response"))
+
+  outcome_model <- glm(
+    cvd_indicator ~ smoker_indicator + age_yr + gender_label +
+      race_label + educ_label + inc_to_pov_ratio + bmi,
+    data = input_data,
+    family = binomial()
+  )
+
+  data_if_non_smoker <- input_data
+  data_if_smoker <- input_data
+  data_if_non_smoker$smoker_indicator <- 0
+  data_if_smoker$smoker_indicator <- 1
+
+  m0_hat <- predict(outcome_model, newdata = data_if_non_smoker,
+                    type = "response")
+  m1_hat <- predict(outcome_model, newdata = data_if_smoker,
+                    type = "response")
+
+  smoker_rows <- input_data$smoker_indicator == 1
+  non_smoker_rows <- input_data$smoker_indicator == 0
+  y <- input_data$cvd_indicator
+  t <- input_data$smoker_indicator
+
+  ipw_psi1 <- weighted_mean(y[smoker_rows], 1 / e_hat[smoker_rows])
+  ipw_psi0 <- weighted_mean(y[non_smoker_rows],
+                            1 / (1 - e_hat[non_smoker_rows]))
+
+  or_psi1 <- mean(m1_hat)
+  or_psi0 <- mean(m0_hat)
+
+  dr_psi1 <- mean(m1_hat + t / e_hat * (y - m1_hat))
+  dr_psi0 <- mean(m0_hat + (1 - t) / (1 - e_hat) * (y - m0_hat))
+
+  rbind(
+    IPW = c(
+      psi1 = ipw_psi1,
+      psi0 = ipw_psi0,
+      rd = ipw_psi1 - ipw_psi0,
+      rr = ipw_psi1 / ipw_psi0
+    ),
+    Outcome_regression = c(
+      psi1 = or_psi1,
+      psi0 = or_psi0,
+      rd = or_psi1 - or_psi0,
+      rr = or_psi1 / or_psi0
+    ),
+    Doubly_robust = c(
+      psi1 = dr_psi1,
+      psi0 = dr_psi0,
+      rd = dr_psi1 - dr_psi0,
+      rr = dr_psi1 / dr_psi0
+    )
+  )
+}
+
+safe_fit_adjusted_rd <- function(input_data) {
+  tryCatch(
+    fit_course_estimators(input_data)[, "rd"],
+    error = function(e) {
+      c(IPW = NA_real_,
+        Outcome_regression = NA_real_,
+        Doubly_robust = NA_real_)
+    }
+  )
+}
+```
+
+## Today's Question
+
+Lectures 1-6 built one causal analysis in stages.
+
+| Lecture | Main idea | How this note uses it |
+|:--|:--|:--|
+| Lecture 1 | Simple observed risk difference | Start with the crude association |
+| Lecture 2 | Inverse probability weighting | Test an IPW-adjusted risk difference |
+| Lecture 3 | Outcome regression standardization | Test a standardized risk difference |
+| Lecture 4 | Doubly robust estimation | Test a doubly robust risk difference |
+| Lecture 5 | Bootstrap confidence intervals | Use the bootstrap to estimate uncertainty |
+| Lecture 6 | E-values and sensitivity analysis | Keep statistical evidence separate from causal-validity evidence |
+
+The new question is:
+
+> Once we have a risk-difference estimate, how much statistical evidence is there against no difference?
+
+The causal question stays the same:
+
+$$
+\text{Is CVD risk different under smoking versus non-smoking?}
+$$
+
+The target causal risk difference is
+
+$$
+RD = E\{Y(1)\} - E\{Y(0)\}.
+$$
+
+Here \(Y(1)\) is the potential CVD outcome under smoking and \(Y(0)\) is the potential CVD outcome under non-smoking.
+
+We will again use the classroom NHANES complete-case dataset from Lectures 1-6 and we will again **not use survey weights**. The goal is to understand causal estimands, uncertainty, and hypothesis testing in the same teaching example, not to produce a full NHANES survey analysis.
+
+```{r course-map-picture, echo=FALSE, fig.width=8.8, fig.height=4.2}
+start_picture()
+
+draw_box(0.10, 0.66, 0.16, 0.18, "L1\nCrude\nrisk gap",
+         fill = "#A0CBE8", cex = 0.70, font = 2)
+draw_box(0.26, 0.66, 0.16, 0.18, "L2\nIPW",
+         fill = "#F28E2B", cex = 0.75, font = 2)
+draw_box(0.42, 0.66, 0.16, 0.18, "L3\nOutcome\nregression",
+         fill = "#59A14F", cex = 0.62, font = 2)
+draw_box(0.58, 0.66, 0.16, 0.18, "L4\nDoubly\nrobust",
+         fill = "#B7D7A8", cex = 0.66, font = 2)
+draw_box(0.74, 0.66, 0.16, 0.18, "L5\nBootstrap\nuncertainty",
+         fill = "#F1CE63", cex = 0.62, font = 2)
+draw_box(0.90, 0.66, 0.16, 0.18, "L6\nSensitivity\nanalysis",
+         fill = "#E4E6FF", cex = 0.62, font = 2)
+
+draw_arrow(0.18, 0.66, 0.21, 0.66)
+draw_arrow(0.34, 0.66, 0.37, 0.66)
+draw_arrow(0.50, 0.66, 0.53, 0.66)
+draw_arrow(0.66, 0.66, 0.69, 0.66)
+draw_arrow(0.82, 0.66, 0.85, 0.66)
+
+draw_box(0.50, 0.25, 0.72, 0.20,
+         "This note\nturns estimates and bootstrap uncertainty\ninto confidence intervals and p-values",
+         fill = "#FFE0E0", cex = 0.78, font = 2)
+draw_arrow(0.74, 0.56, 0.57, 0.35, lty = 2)
+draw_arrow(0.58, 0.56, 0.50, 0.35, lty = 2)
+draw_arrow(0.42, 0.56, 0.43, 0.35, lty = 2)
+```
+
+## What Hypothesis Testing Adds
+
+Hypothesis testing does not create a causal estimand and it does not make confounding disappear.
+
+It answers a narrower statistical question:
+
+> If the true target contrast were equal to a chosen null value, would our estimate look unusually far away from that value?
+
+In this course, there are three layers:
+
+| Layer | Question | Main lectures |
+|:--|:--|:--|
+| Causal question | What would happen under smoking versus non-smoking? | Lecture 1 |
+| Identification and estimation | How do we estimate \(E\{Y(1)\}\) and \(E\{Y(0)\}\)? | Lectures 2-4 |
+| Statistical uncertainty | How variable is the estimate across samples? | Lecture 5 and this note |
+| Causal-validity uncertainty | How sensitive is the answer to unmeasured confounding? | Lecture 6 |
+
+So a p-value belongs to the statistical uncertainty layer. A p-value can be small even when the causal assumptions are wrong. A p-value can also be large even when an effect exists but the data are noisy.
+
+```{r layers-picture, echo=FALSE, fig.width=8.8, fig.height=4.0}
+start_picture()
+
+draw_box(0.17, 0.68, 0.24, 0.18,
+         "Causal estimand\nRD = psi1 - psi0",
+         fill = "#F1CE63", cex = 0.62, font = 2)
+draw_box(0.50, 0.68, 0.24, 0.18,
+         "Estimator\ncrude, IPW, OR, DR",
+         fill = "#DDFBE1", cex = 0.62, font = 2)
+draw_box(0.83, 0.68, 0.24, 0.18,
+         "Inference\nSE, CI, p-value",
+         fill = "#FFE0E0", cex = 0.62, font = 2)
+
+draw_arrow(0.29, 0.68, 0.38, 0.68)
+draw_arrow(0.62, 0.68, 0.71, 0.68)
+
+draw_box(0.33, 0.30, 0.32, 0.18,
+         "Identification assumptions\nconsistency, exchangeability,\npositivity",
+         fill = "#FCE4C6", cex = 0.55, font = 2)
+draw_box(0.70, 0.30, 0.32, 0.18,
+         "Sampling approximation\nlarge-sample theory\nor bootstrap",
+         fill = "#A0CBE8", cex = 0.55, font = 2)
+
+draw_arrow(0.32, 0.58, 0.33, 0.39, lty = 2)
+draw_arrow(0.76, 0.58, 0.70, 0.39, lty = 2)
+```
+
+## The Null Hypothesis
+
+For the risk difference, the most common point null hypothesis is
+
+$$
+H_0: RD = 0.
+$$
+
+The two-sided alternative is
+
+$$
+H_A: RD \neq 0.
+$$
+
+In words, the null says that the marginal CVD risk under smoking equals the marginal CVD risk under non-smoking:
+
+$$
+E\{Y(1)\} = E\{Y(0)\}.
+$$
+
+The same idea can be written on other effect scales. For a risk ratio, the no-effect null is
+
+$$
+H_0:
+\frac{E\{Y(1)\}}{E\{Y(0)\}} = 1.
+$$
+
+For a log risk ratio, the same null is
+
+$$
+H_0:
+\log\left(
+\frac{E\{Y(1)\}}{E\{Y(0)\}}
+\right) = 0.
+$$
+
+This note focuses on the risk difference because Lectures 1-5 used risk differences as the main classroom contrast.
+
+## Wald Tests
+
+Suppose an estimator satisfies the large-sample approximation
+
+$$
+\hat\theta \approx N(\theta, SE^2).
+$$
+
+Here \(\theta\) is a generic estimand. In our main analysis, \(\theta\) will be the risk difference \(RD\). To test \(H_0: \theta = \theta_0\), the Wald statistic is
+
+$$
+Z
+=
+\frac{\hat\theta - \theta_0}{\widehat{SE}(\hat\theta)}.
+$$
+
+Under the null hypothesis and regularity conditions,
+
+$$
+Z \approx N(0,1).
+$$
+
+The two-sided p-value is
+
+$$
+p
+=
+2\{1 - \Phi(|Z_{\mathrm{obs}}|)\}.
+$$
+
+```{r wald-picture, echo=FALSE, fig.width=8.8, fig.height=4.6}
+z_grid <- seq(-4, 4, length.out = 500)
+d_grid <- dnorm(z_grid)
+z_obs_demo <- 2.1
+
+old_par <- par(mar = c(5, 5, 4, 1))
+plot(
+  z_grid,
+  d_grid,
+  type = "l",
+  lwd = 3,
+  col = "#4E79A7",
+  xlab = "Z statistic under the null",
+  ylab = "Density",
+  main = "Two-sided Wald Test"
+)
+right <- z_grid >= z_obs_demo
+left <- z_grid <= -z_obs_demo
+polygon(
+  c(z_obs_demo, z_grid[right], max(z_grid[right])),
+  c(0, d_grid[right], 0),
+  col = adjustcolor("#E15759", alpha.f = 0.45),
+  border = NA
+)
+polygon(
+  c(min(z_grid[left]), z_grid[left], -z_obs_demo),
+  c(0, d_grid[left], 0),
+  col = adjustcolor("#E15759", alpha.f = 0.45),
+  border = NA
+)
+lines(z_grid, d_grid, lwd = 3, col = "#4E79A7")
+abline(v = c(-z_obs_demo, z_obs_demo), lwd = 2, lty = 2,
+       col = "#E15759")
+text(0, 0.30, labels = "null reference distribution",
+     cex = 1.0, font = 2)
+text(0, 0.04, labels = "p-value = two shaded tail areas",
+     cex = 0.95, font = 2)
+par(old_par)
+```
+
+The p-value is not \(P(H_0 \mid \text{data})\). It is the probability, computed under the null reference distribution, of obtaining a test statistic at least as extreme as the one observed.
+
+## Confidence Intervals and Tests
+
+For a two-sided 5 percent Wald test, the null value \(\theta_0\) is rejected when
+
+$$
+\left|
+\frac{\hat\theta - \theta_0}
+{\widehat{SE}(\hat\theta)}
+\right|
+> 1.96.
+$$
+
+Equivalently, \(\theta_0\) is rejected if it lies outside the 95 percent Wald confidence interval
+
+$$
+\hat\theta \pm 1.96 \widehat{SE}(\hat\theta).
+$$
+
+Bootstrap percentile intervals use a different construction, but the teaching interpretation is similar: if the 95 percent interval for the risk difference excludes zero, the data are not very compatible with \(RD=0\) under the assumptions behind the analysis.
+
+```{r ci-picture, echo=FALSE, fig.width=8.8, fig.height=3.7}
+start_picture()
+draw_box(0.18, 0.70, 0.24, 0.16,
+         "Estimate\nhat theta",
+         fill = "#E4E6FF", cex = 0.60, font = 2)
+draw_box(0.50, 0.70, 0.24, 0.16,
+         "Uncertainty\nhat SE",
+         fill = "#DDFBE1", cex = 0.60, font = 2)
+draw_box(0.82, 0.70, 0.24, 0.16,
+         "Interval\nhat theta +/- 1.96 SE",
+         fill = "#FFF6C7", cex = 0.50, font = 2)
+draw_arrow(0.30, 0.70, 0.38, 0.70)
+draw_arrow(0.62, 0.70, 0.70, 0.70)
+
+segments(0.25, 0.34, 0.75, 0.34, lwd = 5, col = "#4E79A7")
+points(0.52, 0.34, pch = 19, cex = 1.8, col = "#4E79A7")
+segments(0.50, 0.24, 0.50, 0.44, lwd = 2, lty = 2, col = "#E15759")
+draw_text(0.50, 0.16, "null value 0", cex = 0.72, font = 2,
+          col = "#E15759")
+draw_text(0.50, 0.52,
+          "If 0 is inside the interval, the two-sided 5% test does not reject.",
+          cex = 0.62, font = 2)
+```
+
+Confidence intervals are often more informative than p-values because they show the direction and magnitude of the estimated effect.
+
+## Load and Prepare the Data
+
+We use the same classroom NHANES complete-case analytic sample as the previous lectures.
+
+```{r load-data}
+data_candidates <- c(
+  file.path("..", "Data", "NHANES_data.csv"),
+  file.path("Data", "NHANES_data.csv"),
+  "C:/Users/seyoo/OneDrive/GitHub_repository/Causal_Inference_Survival_Analysis/Causal_Inference_Lecture/Data/NHANES_data.csv"
+)
+
+data_path <- data_candidates[file.exists(data_candidates)][1]
+if (is.na(data_path)) {
+  stop("Could not find NHANES_data.csv. Check the data path.")
+}
+
+nhanes <- read.csv(data_path, stringsAsFactors = FALSE)
+
+baseline_vars <- c(
+  "age_yr",
+  "gender",
+  "race",
+  "educ_lvl",
+  "inc_to_pov_ratio",
+  "bmi"
+)
+
+analysis_vars <- c("smoker_indicator", "cvd_indicator", baseline_vars)
+
+ht_data <- nhanes[complete.cases(nhanes[, analysis_vars]), analysis_vars]
+ht_data$smoker_indicator <- as.integer(ht_data$smoker_indicator)
+ht_data$cvd_indicator <- as.integer(ht_data$cvd_indicator)
+
+ht_data$smoking_group <- factor(
+  ifelse(ht_data$smoker_indicator == 1, "Smoker", "Non-smoker"),
+  levels = c("Non-smoker", "Smoker")
+)
+
+ht_data$gender_label <- factor(
+  ht_data$gender,
+  levels = c("F", "M"),
+  labels = c("Female", "Male")
+)
+
+ht_data$race_label <- factor(
+  ht_data$race,
+  levels = c(
+    "mex_american",
+    "other_hispanic",
+    "nh_white",
+    "nh_black",
+    "nh_asian"
+  ),
+  labels = c(
+    "Mexican American",
+    "Other Hispanic",
+    "Non-Hispanic White",
+    "Non-Hispanic Black",
+    "Non-Hispanic Asian"
+  )
+)
+
+ht_data$educ_label <- factor(
+  ht_data$educ_lvl,
+  levels = c(
+    "lt_9th_grade",
+    "9_to_12th_grade_no_diploma",
+    "hs_grad_or_ged",
+    "start_college_to_aa",
+    "college_grad_or_above"
+  ),
+  labels = c(
+    "Less than 9th grade",
+    "9th-12th, no diploma",
+    "High school or GED",
+    "Some college or AA",
+    "College graduate or above"
+  )
+)
+
+nrow(ht_data)
+```
+
+```{r sample-summary}
+sample_summary <- data.frame(
+  Group = c("Non-smoker", "Smoker", "Total"),
+  N = c(
+    sum(ht_data$smoker_indicator == 0),
+    sum(ht_data$smoker_indicator == 1),
+    nrow(ht_data)
+  ),
+  CVD_percent = round(100 * c(
+    mean(ht_data$cvd_indicator[ht_data$smoker_indicator == 0]),
+    mean(ht_data$cvd_indicator[ht_data$smoker_indicator == 1]),
+    mean(ht_data$cvd_indicator)
+  ), 2)
+)
+
+knitr::kable(sample_summary)
+```
+
+## Rebuild the Lecture 1-4 Estimates
+
+First we rebuild the point estimates from the earlier causal lectures.
+
+```{r point-estimates}
+t1 <- ht_data$smoker_indicator == 1
+t0 <- ht_data$smoker_indicator == 0
+
+n1 <- sum(t1)
+n0 <- sum(t0)
+p1 <- mean(ht_data$cvd_indicator[t1])
+p0 <- mean(ht_data$cvd_indicator[t0])
+
+crude_estimates <- c(
+  psi1 = p1,
+  psi0 = p0,
+  rd = p1 - p0,
+  rr = p1 / p0
+)
+
+adjusted_estimates <- fit_course_estimators(ht_data)
+
+all_estimates <- rbind(
+  Observed_comparison = crude_estimates,
+  adjusted_estimates
+)
+
+estimate_table <- data.frame(
+  Lecture_connection = c(
+    "Lecture 1",
+    "Lecture 2",
+    "Lecture 3",
+    "Lecture 4"
+  ),
+  Method = c(
+    "Observed comparison",
+    "IPW",
+    "Outcome regression",
+    "Doubly robust"
+  ),
+  Non_smoker_risk_percent = round(100 * all_estimates[, "psi0"], 2),
+  Smoker_risk_percent = round(100 * all_estimates[, "psi1"], 2),
+  Risk_difference_pp = round(100 * all_estimates[, "rd"], 2),
+  Risk_ratio = round(all_estimates[, "rr"], 3),
+  row.names = NULL
+)
+
+knitr::kable(
+  estimate_table,
+  col.names = c(
+    "Connection",
+    "Method",
+    "Non-smoker risk (%)",
+    "Smoker risk (%)",
+    "Risk difference (pp)",
+    "Risk ratio"
+  )
+)
+```
+
+Here `pp` means **percentage points**.
+
+These four rows answer related but not identical questions:
+
+1. The observed comparison is the raw association from Lecture 1.
+2. IPW uses the treatment model from Lecture 2.
+3. Outcome regression uses the standardization idea from Lecture 3.
+4. The doubly robust estimator combines the treatment and outcome models from Lecture 4.
+
+## Simple Observed-Risk Test
+
+For the Lecture 1 observed comparison, the usual two-sample standard error for a difference in proportions is
+
+$$
+\widehat{SE}_{\mathrm{crude}}
+=
+\sqrt{
+\frac{\hat p_1(1-\hat p_1)}{n_1}
++
+\frac{\hat p_0(1-\hat p_0)}{n_0}
+}.
+$$
+
+This is an association test, not a fully adjusted causal test.
+
+```{r crude-test}
+rd_crude <- crude_estimates["rd"]
+rr_crude <- crude_estimates["rr"]
+
+se_crude <- sqrt(p1 * (1 - p1) / n1 + p0 * (1 - p0) / n0)
+z_crude <- rd_crude / se_crude
+p_crude <- 2 * pnorm(-abs(z_crude))
+ci_crude <- rd_crude + c(-1, 1) * qnorm(0.975) * se_crude
+
+crude_table <- data.frame(
+  Quantity = c(
+    "Observed non-smoker CVD risk",
+    "Observed smoker CVD risk",
+    "Observed risk difference",
+    "Observed risk ratio",
+    "Standard error for risk difference",
+    "Wald Z statistic for H0: RD = 0",
+    "Two-sided p-value",
+    "95% CI lower",
+    "95% CI upper"
+  ),
+  Value = c(
+    p0,
+    p1,
+    rd_crude,
+    rr_crude,
+    se_crude,
+    z_crude,
+    p_crude,
+    ci_crude[1],
+    ci_crude[2]
+  )
+)
+
+crude_table$Value <- round(crude_table$Value, 4)
+knitr::kable(crude_table)
+```
+
+This test is useful because it is transparent. But it tests the raw smoker-versus-non-smoker comparison. It has a causal interpretation only under a very strong assumption: the smoker and non-smoker groups would have been comparable even without adjustment.
+
+## Bootstrap Tests for Adjusted Estimators
+
+For IPW, outcome regression, and the doubly robust estimator, the standard error should reflect the full procedure:
+
+1. fit the treatment and/or outcome model;
+2. compute the causal risk estimate;
+3. repeat those steps in each bootstrap sample.
+
+That is why Lecture 5 used the bootstrap.
+
+```{r bootstrap-picture, echo=FALSE, fig.width=8.8, fig.height=4.2}
+start_picture()
+draw_box(0.12, 0.68, 0.18, 0.16,
+         "Original\nsample",
+         fill = "#E8E8E8", cex = 0.62, font = 2)
+draw_box(0.34, 0.80, 0.20, 0.14,
+         "Bootstrap\nsample 1",
+         fill = "#DDFBE1", cex = 0.56, font = 2)
+draw_box(0.34, 0.58, 0.20, 0.14,
+         "Bootstrap\nsample 2",
+         fill = "#DDFBE1", cex = 0.56, font = 2)
+draw_box(0.34, 0.36, 0.20, 0.14,
+         "Bootstrap\nsample B",
+         fill = "#DDFBE1", cex = 0.56, font = 2)
+draw_box(0.60, 0.68, 0.20, 0.18,
+         "Refit models\nand recompute\nRD*",
+         fill = "#E4E6FF", cex = 0.54, font = 2)
+draw_box(0.86, 0.68, 0.18, 0.16,
+         "SE, CI,\np-value",
+         fill = "#FFF6C7", cex = 0.56, font = 2)
+
+draw_arrow(0.21, 0.69, 0.24, 0.79)
+draw_arrow(0.21, 0.68, 0.24, 0.58)
+draw_arrow(0.21, 0.66, 0.24, 0.37)
+draw_arrow(0.44, 0.80, 0.50, 0.72)
+draw_arrow(0.44, 0.58, 0.50, 0.66)
+draw_arrow(0.44, 0.36, 0.50, 0.63)
+draw_arrow(0.70, 0.68, 0.77, 0.68)
+draw_text(0.50, 0.12,
+          "The bootstrap repeats the estimator, not just the final arithmetic.",
+          cex = 0.68, font = 2)
+```
+
+For this lecture note, we use `B = 300` bootstrap samples so the file can knit quickly. In a research project, it is common to use more, such as 1000 or 2000.
+
+```{r bootstrap-adjusted}
+set.seed(20260706)
+
+B <- 300
+n <- nrow(ht_data)
+
+bootstrap_rd <- matrix(
+  NA_real_,
+  nrow = B,
+  ncol = nrow(adjusted_estimates)
+)
+
+colnames(bootstrap_rd) <- rownames(adjusted_estimates)
+
+for (b in seq_len(B)) {
+  bootstrap_rows <- sample.int(n, size = n, replace = TRUE)
+  bootstrap_data <- ht_data[bootstrap_rows, ]
+  bootstrap_rd[b, ] <- safe_fit_adjusted_rd(bootstrap_data)
+}
+
+bootstrap_rd <- bootstrap_rd[complete.cases(bootstrap_rd), , drop = FALSE]
+
+number_of_successful_bootstraps <- nrow(bootstrap_rd)
+number_of_successful_bootstraps
+```
+
+```{r adjusted-inference}
+bootstrap_se <- apply(bootstrap_rd, 2, sd)
+
+bootstrap_ci <- t(apply(
+  bootstrap_rd,
+  2,
+  quantile,
+  probs = c(0.025, 0.975),
+  na.rm = TRUE
+))
+
+colnames(bootstrap_ci) <- c("Lower", "Upper")
+
+adjusted_rd <- adjusted_estimates[, "rd"]
+z_adjusted <- adjusted_rd / bootstrap_se[rownames(adjusted_estimates)]
+p_adjusted <- 2 * pnorm(-abs(z_adjusted))
+
+adjusted_inference_table <- data.frame(
+  Method = c("IPW", "Outcome regression", "Doubly robust"),
+  Estimate_pp = round(100 * adjusted_rd, 2),
+  Bootstrap_SE_pp = round(
+    100 * bootstrap_se[rownames(adjusted_estimates)],
+    2
+  ),
+  Z_statistic = round(z_adjusted, 2),
+  P_value = signif(p_adjusted, 3),
+  CI_lower_pp = round(100 * bootstrap_ci[, "Lower"], 2),
+  CI_upper_pp = round(100 * bootstrap_ci[, "Upper"], 2),
+  Conclusion_at_0_05 = ifelse(
+    p_adjusted < 0.05,
+    "Reject H0",
+    "Do not reject H0"
+  ),
+  row.names = NULL
+)
+
+knitr::kable(
+  adjusted_inference_table,
+  col.names = c(
+    "Method",
+    "Estimate (pp)",
+    "Bootstrap SE (pp)",
+    "z",
+    "p-value",
+    "95% CI lower (pp)",
+    "95% CI upper (pp)",
+    "Conclusion at 0.05"
+  )
+)
+```
+
+The bootstrap standard error measures how much the adjusted estimate moves when we repeatedly rebuild the full estimator in resampled datasets.
+
+## Compare All Tests
+
+Now we place the crude analytic test and the three adjusted bootstrap tests in one table.
+
+```{r combined-inference}
+combined_inference <- rbind(
+  data.frame(
+    Method = "Observed comparison",
+    Estimate_pp = 100 * rd_crude,
+    SE_pp = 100 * se_crude,
+    Z_statistic = z_crude,
+    P_value = p_crude,
+    CI_lower_pp = 100 * ci_crude[1],
+    CI_upper_pp = 100 * ci_crude[2],
+    SE_source = "Two-sample proportion formula"
+  ),
+  data.frame(
+    Method = c("IPW", "Outcome regression", "Doubly robust"),
+    Estimate_pp = 100 * adjusted_rd,
+    SE_pp = 100 * bootstrap_se[rownames(adjusted_estimates)],
+    Z_statistic = z_adjusted,
+    P_value = p_adjusted,
+    CI_lower_pp = 100 * bootstrap_ci[, "Lower"],
+    CI_upper_pp = 100 * bootstrap_ci[, "Upper"],
+    SE_source = "Nonparametric bootstrap"
+  )
+)
+
+combined_display <- combined_inference
+combined_display$Estimate_pp <- round(combined_display$Estimate_pp, 2)
+combined_display$SE_pp <- round(combined_display$SE_pp, 2)
+combined_display$Z_statistic <- round(combined_display$Z_statistic, 2)
+combined_display$P_value <- signif(combined_display$P_value, 3)
+combined_display$CI_lower_pp <- round(combined_display$CI_lower_pp, 2)
+combined_display$CI_upper_pp <- round(combined_display$CI_upper_pp, 2)
+
+knitr::kable(
+  combined_display,
+  col.names = c(
+    "Method",
+    "Estimate (pp)",
+    "SE (pp)",
+    "z",
+    "p-value",
+    "95% CI lower (pp)",
+    "95% CI upper (pp)",
+    "SE source"
+  )
+)
+```
+
+```{r ci-comparison-picture, echo=FALSE, fig.width=8.8, fig.height=4.9}
+method_colors <- c("#7A7A7A", "#F28E2B", "#59A14F", "#B7D7A8")
+plot_y <- seq_len(nrow(combined_inference))
+
+old_par <- par(mar = c(5, 9.5, 4.5, 1))
+
+plot(
+  combined_inference$Estimate_pp,
+  plot_y,
+  xlim = range(
+    c(combined_inference$CI_lower_pp,
+      combined_inference$CI_upper_pp,
+      0)
+  ) + c(-0.8, 0.8),
+  ylim = c(0.5, nrow(combined_inference) + 0.5),
+  yaxt = "n",
+  xlab = "Risk difference: smoker minus non-smoker (percentage points)",
+  ylab = "",
+  pch = 19,
+  cex = 1.5,
+  col = method_colors,
+  main = ""
+)
+
+segments(
+  x0 = combined_inference$CI_lower_pp,
+  y0 = plot_y,
+  x1 = combined_inference$CI_upper_pp,
+  y1 = plot_y,
+  lwd = 3,
+  col = method_colors
+)
+
+segments(
+  x0 = combined_inference$CI_lower_pp,
+  y0 = plot_y - 0.10,
+  x1 = combined_inference$CI_lower_pp,
+  y1 = plot_y + 0.10,
+  lwd = 3,
+  col = method_colors
+)
+
+segments(
+  x0 = combined_inference$CI_upper_pp,
+  y0 = plot_y - 0.10,
+  x1 = combined_inference$CI_upper_pp,
+  y1 = plot_y + 0.10,
+  lwd = 3,
+  col = method_colors
+)
+
+abline(v = 0, lwd = 2, lty = 2, col = "#555555")
+
+axis(
+  2,
+  at = plot_y,
+  labels = combined_inference$Method,
+  las = 1
+)
+
+mtext(
+  "Risk-Difference Estimates and 95% Intervals",
+  side = 3,
+  line = 1.3,
+  font = 2,
+  cex = 1.05
+)
+
+text(
+  combined_inference$Estimate_pp,
+  plot_y + 0.22,
+  labels = paste0(round(combined_inference$Estimate_pp, 1), " pp"),
+  cex = 0.82
+)
+
+par(old_par)
+```
+
+The vertical dashed line is \(RD=0\), the null value. Estimates farther from zero relative to their standard errors produce larger absolute \(z\)-statistics and smaller p-values.
+
+## Interpreting the Results
+
+The crude test and the adjusted tests can lead to different numbers because they estimate different contrasts.
+
+The crude comparison tests:
+
+$$
+P(Y=1 \mid T=1) - P(Y=1 \mid T=0) = 0.
+$$
+
+The adjusted analyses test an identified causal contrast under the assumptions from Lectures 2-4:
+
+$$
+E\{Y(1)\} - E\{Y(0)\} = 0.
+$$
+
+Those two are the same only if the crude comparison is already unconfounded. In observational smoking data, that is usually not a comfortable assumption.
+
+A small adjusted p-value means:
+
+> Under the fitted adjustment strategy and its assumptions, the estimated adjusted risk difference is far from zero relative to its estimated sampling uncertainty.
+
+It does **not** mean:
+
+1. the null hypothesis is impossible;
+2. the alternative hypothesis is true with probability \(1-p\);
+3. the effect is scientifically large;
+4. the analysis is free from confounding, measurement error, missing-data bias, or model misspecification.
+
+Conversely, a large p-value does not prove no effect. It may reflect a small effect, a noisy estimator, limited sample size, poor overlap, or an estimand whose standard error is large.
+
+## Link to Lecture 6
+
+Lecture 6 asked a different question:
+
+> How strong would unmeasured confounding have to be to explain away the result?
+
+That is not the same as a p-value.
+
+| Tool | Main question | What it does not solve |
+|:--|:--|:--|
+| p-value | Is the estimate far from the null relative to sampling uncertainty? | Unmeasured confounding |
+| Confidence interval | What range of effect sizes is compatible with sampling uncertainty? | Bias from wrong assumptions |
+| E-value | How strong would unmeasured confounding need to be on the risk-ratio scale? | Random sampling variability by itself |
+
+So the course message is:
+
+> Report statistical uncertainty and causal-validity concerns side by side.
+
+The best causal report does not stop at "p < 0.05." It states the estimand, method, confidence interval, p-value, and key assumptions.
+
+## One-Sided Tests
+
+If the scientific question is directional, such as whether smoking increases CVD risk, the alternative can be written
+
+$$
+H_A: RD > 0.
+$$
+
+The one-sided p-value is
+
+$$
+p_{\mathrm{one-sided}}
+=
+P\{N(0,1) \geq Z_{\mathrm{obs}}\}
+=
+1 - \Phi(Z_{\mathrm{obs}})
+$$
+
+when large positive values are evidence against the null.
+
+A one-sided test should be chosen before seeing the data. Switching from two-sided to one-sided after observing the estimate is not a valid way to reduce a p-value.
+
+## How to Report This Analysis
+
+A concise classroom report should include:
+
+1. **Estimand:** risk difference \(E\{Y(1)\} - E\{Y(0)\}\).
+2. **Method:** crude, IPW, outcome regression, or doubly robust.
+3. **Estimate:** the risk difference in percentage points.
+4. **Uncertainty:** standard error or 95 percent confidence interval.
+5. **Test:** null value, test statistic, and p-value.
+6. **Assumptions:** consistency, conditional exchangeability, positivity, and model adequacy.
+7. **Sensitivity:** what Lecture 6 says about possible unmeasured confounding.
+
+For example, a doubly robust result can be reported as follows.
+
+```{r report-sentence}
+dr_report <- combined_inference[combined_inference$Method == "Doubly robust", ]
+
+cat(
+  "Using the doubly robust estimator, the adjusted risk difference was ",
+  round(dr_report$Estimate_pp, 2),
+  " percentage points, with a 95% interval from ",
+  round(dr_report$CI_lower_pp, 2),
+  " to ",
+  round(dr_report$CI_upper_pp, 2),
+  " percentage points and a two-sided p-value of ",
+  signif(dr_report$P_value, 3),
+  ".",
+  sep = ""
+)
+```
+
+This sentence is only complete if it is followed by the causal assumptions and the sensitivity-analysis caveats.
+
+## Hypothesis Testing Checklist
+
+Before interpreting a hypothesis test in this course, check the following:
+
+1. **Estimand:** Is the test about a crude association or an adjusted causal estimand?
+2. **Null value:** Is the null on the risk-difference, risk-ratio, odds-ratio, or another scale?
+3. **Standard error:** Does the standard error correspond to the full estimator, including nuisance-model refitting when needed?
+4. **Approximation:** Is the normal approximation reasonable, or is a bootstrap/randomization method being used?
+5. **Identification:** Are consistency, exchangeability, and positivity plausible enough for a causal interpretation?
+6. **Magnitude:** Is the estimated effect meaningful, not merely statistically detectable?
+7. **Sensitivity:** What would happen under unmeasured confounding or different modeling choices?
+
+## Key Takeaways
+
+1. Hypothesis testing comes after choosing an estimand and estimator.
+2. A p-value measures compatibility with a null value under a statistical reference model.
+3. For adjusted causal estimators, the bootstrap should repeat the full estimation procedure.
+4. A confidence interval is often more useful than a p-value because it shows effect size and uncertainty.
+5. Statistical significance does not prove causality; causal interpretation still depends on the assumptions from Lectures 1-4.
+6. Lecture 6 sensitivity analysis answers a different question than hypothesis testing.
+
+## Appendix: Math of the Tests Used Here
+
+This appendix collects the formulas behind the calculations in the main text.
+
+### Appendix 1: Observed Risk Difference
+
+The observed risks are
+
+$$
+\hat p_1
+=
+\frac{\sum_{i=1}^{n} T_iY_i}
+       {\sum_{i=1}^{n} T_i}
+$$
+
+and
+
+$$
+\hat p_0
+=
+\frac{\sum_{i=1}^{n} (1-T_i)Y_i}
+       {\sum_{i=1}^{n} (1-T_i)}.
+$$
+
+The observed risk difference is
+
+$$
+\widehat{RD}_{obs}
+=
+\hat p_1 - \hat p_0.
+$$
+
+The standard error used in the Lecture 1-style test is
+
+$$
+\widehat{SE}(\widehat{RD}_{obs})
+=
+\sqrt{
+\frac{\hat p_1(1-\hat p_1)}{n_1}
++
+\frac{\hat p_0(1-\hat p_0)}{n_0}
+}.
+$$
+
+### Appendix 2: IPW Estimator
+
+Let
+
+$$
+e(X_i) = P(T_i = 1 \mid X_i)
+$$
+
+be the propensity score.
+
+The IPW risk under smoking is
+
+$$
+\hat\psi_1^{IPW}
+=
+\frac{
+\sum_{i=1}^{n}
+\dfrac{T_iY_i}{\hat e(X_i)}
+}{
+\sum_{i=1}^{n}
+\dfrac{T_i}{\hat e(X_i)}
+}.
+$$
+
+The IPW risk under non-smoking is
+
+$$
+\hat\psi_0^{IPW}
+=
+\frac{
+\sum_{i=1}^{n}
+\dfrac{(1-T_i)Y_i}{1-\hat e(X_i)}
+}{
+\sum_{i=1}^{n}
+\dfrac{1-T_i}{1-\hat e(X_i)}
+}.
+$$
+
+Then
+
+$$
+\widehat{RD}^{IPW}
+=
+\hat\psi_1^{IPW} - \hat\psi_0^{IPW}.
+$$
+
+### Appendix 3: Outcome Regression Estimator
+
+Let
+
+$$
+m(t, X_i) = E(Y_i \mid T_i=t, X_i).
+$$
+
+After fitting the outcome model, standardization estimates
+
+$$
+\hat\psi_t^{OR}
+=
+\frac{1}{n}
+\sum_{i=1}^{n}
+\hat m(t, X_i),
+\qquad t \in \{0,1\}.
+$$
+
+The outcome-regression risk difference is
+
+$$
+\widehat{RD}^{OR}
+=
+\hat\psi_1^{OR} - \hat\psi_0^{OR}.
+$$
+
+### Appendix 4: Doubly Robust Estimator
+
+The doubly robust risk under smoking is
+
+$$
+\hat\psi_1^{DR}
+=
+\frac{1}{n}
+\sum_{i=1}^{n}
+\left[
+\hat m(1,X_i)
++
+\frac{T_i}{\hat e(X_i)}
+\{Y_i - \hat m(1,X_i)\}
+\right].
+$$
+
+The doubly robust risk under non-smoking is
+
+$$
+\hat\psi_0^{DR}
+=
+\frac{1}{n}
+\sum_{i=1}^{n}
+\left[
+\hat m(0,X_i)
++
+\frac{1-T_i}{1-\hat e(X_i)}
+\{Y_i - \hat m(0,X_i)\}
+\right].
+$$
+
+The doubly robust risk difference is
+
+$$
+\widehat{RD}^{DR}
+=
+\hat\psi_1^{DR} - \hat\psi_0^{DR}.
+$$
+
+### Appendix 5: Bootstrap Standard Error
+
+Let \(\widehat{RD}^{*(1)}, \ldots, \widehat{RD}^{*(B)}\) be the bootstrap estimates.
+
+The bootstrap standard error is
+
+$$
+\widehat{SE}_{boot}
+=
+\sqrt{
+\frac{1}{B-1}
+\sum_{b=1}^{B}
+\left(
+\widehat{RD}^{*(b)}
+-
+\overline{RD}^{*}
+\right)^2
+},
+$$
+
+where
+
+$$
+\overline{RD}^{*}
+=
+\frac{1}{B}
+\sum_{b=1}^{B}
+\widehat{RD}^{*(b)}.
+$$
+
+The Wald statistic using the bootstrap standard error is
+
+$$
+Z_{boot}
+=
+\frac{\widehat{RD}}{\widehat{SE}_{boot}}
+$$
+
+for testing \(H_0: RD=0\).
+
+### Appendix 6: Percentile Bootstrap Confidence Interval
+
+The percentile bootstrap 95 percent confidence interval is
+
+$$
+\left[
+Q_{0.025}\{\widehat{RD}^{*}\},
+Q_{0.975}\{\widehat{RD}^{*}\}
+\right],
+$$
+
+where \(Q_a\{\widehat{RD}^{*}\}\) is the \(a\)-quantile of the bootstrap estimates.
+
+## References
+
+Austin, P. C., & Stuart, E. A. (2015). Moving towards best practice when using inverse probability of treatment weighting using the propensity score to estimate causal treatment effects in observational studies. *Statistics in Medicine*, 34(28), 3661-3679.
+
+Cole, S. R., & Hernan, M. A. (2008). Constructing inverse probability weights for marginal structural models. *American Journal of Epidemiology*, 168(6), 656-664.
+
+Efron, B., & Tibshirani, R. J. (1993). *An Introduction to the Bootstrap*. Chapman & Hall/CRC.
+
+Hernan, M. A., & Robins, J. M. (2020). *Causal Inference: What If*. Chapman & Hall/CRC.
+
+Imbens, G. W., & Rubin, D. B. (2015). *Causal Inference for Statistics, Social, and Biomedical Sciences: An Introduction*. Cambridge University Press.
+
+van der Vaart, A. W. (1998). *Asymptotic Statistics*. Cambridge University Press.

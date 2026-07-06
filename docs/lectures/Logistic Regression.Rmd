@@ -1,0 +1,1239 @@
+---
+title: "Logistic Regression"
+author: "Se Yoon Lee"
+date: "2026-07-05"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    number_sections: true
+    theme: readable
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+<style type="text/css">
+.tutorial-box {
+  margin: 1.3em 0 1.5em 0;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #eeeeee;
+  box-shadow: 8px 8px 12px rgba(0, 0, 0, 0.18);
+}
+.tutorial-title {
+  background: #cfcfcf;
+  padding: 0.55em 0.9em;
+  font-weight: 700;
+  font-size: 1.05em;
+}
+.tutorial-title p {
+  margin: 0;
+}
+.tutorial-body {
+  padding: 1.0em 1.25em 1.1em 1.25em;
+}
+.tutorial-body > p:first-child {
+  margin-top: 0;
+}
+.math-hi {
+  display: inline-block;
+  padding: 0.02em 0.18em;
+  border-radius: 3px;
+}
+.hi-prob {
+  background: #DDFBE1;
+}
+.hi-logit {
+  background: #E4E6FF;
+}
+.hi-target {
+  background: #FFF6C7;
+}
+.hi-warning {
+  background: #FFE0E0;
+}
+</style>
+
+```{r picture-helpers, include=FALSE}
+start_picture <- function() {
+  par(mar = c(0, 0, 0, 0), xaxs = "i", yaxs = "i")
+  plot.new()
+  plot.window(xlim = c(0, 1), ylim = c(0, 1))
+}
+
+draw_text <- function(x, y, label, cex = 1, font = 1, col = "#222222") {
+  lines <- strsplit(label, "\n", fixed = TRUE)[[1]]
+  line_height <- 0.058 * cex
+  offsets <- seq((length(lines) - 1) / 2, -(length(lines) - 1) / 2) *
+    line_height
+  text(rep(x, length(lines)), y + offsets, labels = lines,
+       cex = cex, font = font, col = col)
+}
+
+draw_box <- function(x, y, w, h, label, fill = "#FFFFFF",
+                     border = "#333333", lwd = 2, lty = 1,
+                     cex = 1, font = 1) {
+  rect(x - w / 2, y - h / 2, x + w / 2, y + h / 2,
+       col = fill, border = border, lwd = lwd, lty = lty)
+  draw_text(x, y, label, cex = cex, font = font)
+}
+
+draw_circle <- function(x, y, r, label, fill = "#FFFFFF",
+                        border = "#333333", lwd = 2, cex = 1,
+                        font = 1) {
+  symbols(x, y, circles = r, inches = FALSE, add = TRUE,
+          bg = fill, fg = border, lwd = lwd)
+  draw_text(x, y, label, cex = cex, font = font)
+}
+
+draw_arrow <- function(x0, y0, x1, y1, col = "#333333",
+                       lwd = 2, lty = 1) {
+  arrows(x0, y0, x1, y1, length = 0.08, lwd = lwd, col = col, lty = lty)
+}
+
+expit <- function(x) {
+  1 / (1 + exp(-x))
+}
+
+logit <- function(p) {
+  log(p / (1 - p))
+}
+
+most_common <- function(x) {
+  names(sort(table(x), decreasing = TRUE))[1]
+}
+```
+
+## Why Logistic Regression Appears in the Lectures
+
+The causal inference lectures use logistic regression for two different but related tasks.
+
+1. **Treatment model, or propensity score model:** estimate \(e(X)=P(T=1\mid X)\), the probability of being a smoker given baseline covariates.
+2. **Outcome model:** estimate \(m(t,X)=P(Y=1\mid T=t,X)\), the probability of CVD under a fixed smoking status and baseline covariates.
+
+Both are logistic regressions because both targets are probabilities for binary variables.
+
+```{r two-logistic-roles-picture, echo=FALSE, fig.width=8.8, fig.height=4.8}
+start_picture()
+
+draw_box(0.50, 0.92, 0.62, 0.09,
+         "Logistic regression in the smoking-CVD lectures",
+         fill = "#E8E8E8", cex = 0.78, font = 2)
+
+draw_box(0.23, 0.64, 0.30, 0.18,
+         "Baseline covariates\nX\nage, gender, race,\neducation, income, BMI",
+         fill = "#F1CE63", cex = 0.54, font = 2)
+draw_box(0.58, 0.75, 0.32, 0.16,
+         "Treatment model\nP(T = 1 | X)\npropensity score e(X)",
+         fill = "#F28E2B", cex = 0.58, font = 2)
+draw_box(0.58, 0.45, 0.32, 0.16,
+         "Outcome model\nP(Y = 1 | T, X)\nCVD risk m(t, X)",
+         fill = "#59A14F", cex = 0.58, font = 2)
+draw_box(0.86, 0.45, 0.18, 0.16,
+         "Outcome\nY = CVD",
+         fill = "#E15759", cex = 0.62, font = 2)
+draw_box(0.86, 0.75, 0.18, 0.16,
+         "Treatment\nT = smoking",
+         fill = "#A0CBE8", cex = 0.62, font = 2)
+
+draw_arrow(0.38, 0.68, 0.42, 0.73)
+draw_arrow(0.38, 0.60, 0.42, 0.49)
+draw_arrow(0.74, 0.75, 0.77, 0.75)
+draw_arrow(0.74, 0.45, 0.77, 0.45)
+draw_arrow(0.86, 0.67, 0.86, 0.53, col = "#F28E2B")
+
+draw_text(0.50, 0.18,
+          "The same mathematical tool estimates two nuisance functions:\nwho smokes, and who has CVD under each smoking status.",
+          cex = 0.70, font = 2)
+```
+
+::: {.tutorial-box}
+::: {.tutorial-title}
+Tutorial Goal
+:::
+::: {.tutorial-body}
+This note explains logistic regression as a probability model, connects its coefficients to odds ratios, and shows how the fitted model is used in the lectures for propensity scores and outcome-regression standardization. The focus is the classroom NHANES complete-case analysis; NHANES survey weights are not used here.
+:::
+:::
+
+## Binary Outcomes Need Probability Models
+
+For a binary outcome \(Y\in\{0,1\}\), the conditional mean is a probability:
+
+$$
+E(Y\mid X=x)=P(Y=1\mid X=x).
+$$
+
+If the outcome is CVD, then \(Y=1\) means that CVD was reported before the interview and \(Y=0\) means it was not. A regression model for this outcome must return values between 0 and 1.
+
+A plain linear model,
+
+$$
+P(Y=1\mid X=x)\approx \alpha+\beta x,
+$$
+
+can predict probabilities below 0 or above 1. Logistic regression avoids this by modeling the log odds, which can take any real value, and then mapping back to a probability.
+
+```{r probability-map-picture, echo=FALSE, fig.width=8.8, fig.height=3.8}
+start_picture()
+
+draw_box(0.18, 0.60, 0.28, 0.22,
+         "Linear predictor\neta = beta0 + beta'X\nany real number",
+         fill = "#E4E6FF", cex = 0.58, font = 2)
+draw_box(0.50, 0.60, 0.24, 0.22,
+         "Inverse logit\nexpit(eta)\n= 1/(1+exp(-eta))",
+         fill = "#FFFFFF", cex = 0.54, font = 2)
+draw_box(0.82, 0.60, 0.26, 0.22,
+         "Probability\np = P(Y=1 | X)\nbetween 0 and 1",
+         fill = "#DDFBE1", cex = 0.58, font = 2)
+
+draw_arrow(0.32, 0.60, 0.38, 0.60)
+draw_arrow(0.62, 0.60, 0.68, 0.60)
+
+draw_text(0.50, 0.25,
+          "Logistic regression keeps the linear model on the log-odds scale,\nthen converts it back to the probability scale.",
+          cex = 0.72, font = 2)
+```
+
+## Odds, Log Odds, and the Logistic Curve
+
+For a probability \(p\), the odds are
+
+$$
+\text{odds}=\frac{p}{1-p}.
+$$
+
+The logit transform is the log odds:
+
+$$
+\operatorname{logit}(p)=\log\left(\frac{p}{1-p}\right).
+$$
+
+The inverse transform is the logistic, or expit, function:
+
+$$
+p
+=
+\operatorname{expit}(\eta)
+=
+\frac{\exp(\eta)}{1+\exp(\eta)}
+=
+\frac{1}{1+\exp(-\eta)}.
+$$
+
+```{r odds-table}
+prob_grid <- c(0.01, 0.05, 0.10, 0.25, 0.50, 0.75, 0.90)
+
+odds_table <- data.frame(
+  Probability = prob_grid,
+  Odds = round(prob_grid / (1 - prob_grid), 3),
+  Log_odds = round(logit(prob_grid), 3)
+)
+
+knitr::kable(odds_table)
+```
+
+The probability scale is bounded, while the log-odds scale is unbounded. This is why logistic regression can use a linear predictor without producing impossible probabilities.
+
+```{r logistic-curve-picture, echo=FALSE, fig.width=8.8, fig.height=4.8}
+eta_grid <- seq(-6, 6, length.out = 400)
+
+old_par <- par(mar = c(5, 5, 4, 2))
+plot(
+  eta_grid, expit(eta_grid),
+  type = "l", lwd = 3, col = "#4E79A7",
+  xlab = expression("linear predictor " * eta),
+  ylab = "probability",
+  main = "The Logistic Link Converts Log Odds to Probability",
+  ylim = c(0, 1)
+)
+abline(h = c(0, 0.5, 1), lty = c(3, 2, 3), col = "#999999")
+abline(v = 0, lty = 2, col = "#999999")
+text(-4.6, 0.13, "low probability", col = "#4E79A7", cex = 0.9)
+text(3.8, 0.88, "high probability", col = "#4E79A7", cex = 0.9)
+points(0, 0.5, pch = 19, col = "#E15759", cex = 1.3)
+text(0.9, 0.50, "eta = 0 gives p = 0.5", col = "#E15759", cex = 0.9)
+par(old_par)
+```
+
+## The Logistic Regression Model
+
+A logistic regression model has the form
+
+$$
+\operatorname{logit}\{P(Y=1\mid X)\}
+=
+\beta_0+\beta_1X_1+\cdots+\beta_pX_p.
+$$
+
+Equivalently,
+
+$$
+P(Y=1\mid X)
+=
+\operatorname{expit}(\beta_0+\beta_1X_1+\cdots+\beta_pX_p).
+$$
+
+The coefficient \(\beta_j\) is a change in conditional log odds. Its exponential, \(\exp(\beta_j)\), is a conditional odds ratio for a one-unit increase in \(X_j\), holding the other model covariates fixed.
+
+::: {.tutorial-box}
+::: {.tutorial-title}
+Important Distinction
+:::
+::: {.tutorial-body}
+A logistic regression coefficient is not automatically a marginal causal effect. In the lectures, logistic regression is mainly used to estimate nuisance functions: \(e(X)\) for IPW and \(m(t,X)\) for outcome regression. The causal targets are marginal risks such as \(E\{Y(1)\}\), \(E\{Y(0)\}\), risk differences, and risk ratios after standardization or weighting.
+:::
+:::
+
+```{r coefficient-shift-picture, echo=FALSE, fig.width=8.8, fig.height=4.8}
+x_grid <- seq(-4, 4, length.out = 400)
+
+old_par <- par(mar = c(5, 5, 4, 1))
+plot(
+  x_grid, expit(-1.5 + 0.8 * x_grid),
+  type = "l", lwd = 3, col = "#4E79A7",
+  ylim = c(0, 1),
+  xlab = "covariate value",
+  ylab = "predicted probability",
+  main = "A Linear Shift on the Log-Odds Scale Becomes a Curved Probability Shift"
+)
+lines(x_grid, expit(-0.7 + 0.8 * x_grid), lwd = 3, col = "#F28E2B")
+legend(
+  "topleft",
+  legend = c("lower intercept", "higher intercept"),
+  col = c("#4E79A7", "#F28E2B"),
+  lwd = 3,
+  bty = "n"
+)
+par(old_par)
+```
+
+## Load the Classroom NHANES Data
+
+The tutorial uses the same classroom NHANES variables as Lectures 1-6:
+
+| Symbol | Dataset variable | Meaning |
+|:--|:--|:--|
+| \(Y\) | `cvd_indicator` | CVD indicator |
+| \(T\) | `smoker_indicator` | Lifetime smoker indicator |
+| \(X\) | baseline variables | age, gender, race, education, income-to-poverty ratio, BMI |
+
+```{r load-data}
+data_candidates <- c(
+  file.path("..", "Data", "NHANES_data.csv"),
+  file.path("Data", "NHANES_data.csv"),
+  "C:/Users/seyoo/OneDrive/GitHub_repository/Causal_Inference_Survival_Analysis/Causal_Inference_Lecture/Data/NHANES_data.csv"
+)
+
+data_path <- data_candidates[file.exists(data_candidates)][1]
+if (is.na(data_path)) {
+  stop("Could not find NHANES_data.csv. Check the data path.")
+}
+
+nhanes <- read.csv(data_path, stringsAsFactors = FALSE)
+
+baseline_vars <- c(
+  "age_yr",
+  "gender",
+  "race",
+  "educ_lvl",
+  "inc_to_pov_ratio",
+  "bmi"
+)
+
+analysis_vars <- c("smoker_indicator", "cvd_indicator", baseline_vars)
+
+tutorial_data <- nhanes[complete.cases(nhanes[, analysis_vars]), analysis_vars]
+
+tutorial_data$smoker_indicator <- as.integer(tutorial_data$smoker_indicator)
+tutorial_data$cvd_indicator <- as.integer(tutorial_data$cvd_indicator)
+
+tutorial_data$smoking_group <- ifelse(
+  tutorial_data$smoker_indicator == 1,
+  "Smoker",
+  "Non-smoker"
+)
+tutorial_data$smoking_group <- factor(
+  tutorial_data$smoking_group,
+  levels = c("Non-smoker", "Smoker")
+)
+
+tutorial_data$gender_label <- factor(
+  tutorial_data$gender,
+  levels = c("F", "M"),
+  labels = c("Female", "Male")
+)
+
+tutorial_data$race_label <- factor(
+  tutorial_data$race,
+  levels = c(
+    "mex_american",
+    "other_hispanic",
+    "nh_white",
+    "nh_black",
+    "nh_asian"
+  ),
+  labels = c(
+    "Mexican American",
+    "Other Hispanic",
+    "Non-Hispanic White",
+    "Non-Hispanic Black",
+    "Non-Hispanic Asian"
+  )
+)
+
+tutorial_data$educ_label <- factor(
+  tutorial_data$educ_lvl,
+  levels = c(
+    "lt_9th_grade",
+    "9_to_12th_grade_no_diploma",
+    "hs_grad_or_ged",
+    "start_college_to_aa",
+    "college_grad_or_above"
+  ),
+  labels = c(
+    "Less than 9th grade",
+    "9th-12th, no diploma",
+    "High school or GED",
+    "Some college or AA",
+    "College graduate or above"
+  )
+)
+
+nrow(tutorial_data)
+```
+
+```{r sample-summary}
+sample_summary <- data.frame(
+  Quantity = c(
+    "Complete-case sample size",
+    "Number of smokers",
+    "Number of non-smokers",
+    "Number with CVD",
+    "Observed smoker risk (%)",
+    "Observed non-smoker risk (%)"
+  ),
+  Value = c(
+    nrow(tutorial_data),
+    sum(tutorial_data$smoker_indicator == 1),
+    sum(tutorial_data$smoker_indicator == 0),
+    sum(tutorial_data$cvd_indicator == 1),
+    round(100 * mean(tutorial_data$cvd_indicator[tutorial_data$smoker_indicator == 1]), 2),
+    round(100 * mean(tutorial_data$cvd_indicator[tutorial_data$smoker_indicator == 0]), 2)
+  )
+)
+
+knitr::kable(sample_summary)
+```
+
+## A One-Predictor Logistic Regression: Age and CVD
+
+Before using the full lecture model, it helps to see one simple logistic regression:
+
+$$
+\operatorname{logit}\{P(\text{CVD}=1\mid \text{age})\}
+=
+\beta_0+\beta_1\text{age}.
+$$
+
+```{r age-model}
+age_model <- glm(
+  cvd_indicator ~ age_yr,
+  data = tutorial_data,
+  family = binomial()
+)
+
+summary(age_model)
+```
+
+```{r age-cvd-picture, echo=FALSE, fig.width=8.8, fig.height=5.2}
+set.seed(20260705)
+plot_index <- sample(seq_len(nrow(tutorial_data)), min(2000, nrow(tutorial_data)))
+
+age_grid <- seq(
+  min(tutorial_data$age_yr),
+  max(tutorial_data$age_yr),
+  length.out = 200
+)
+age_pred <- predict(
+  age_model,
+  newdata = data.frame(age_yr = age_grid),
+  type = "response"
+)
+
+age_breaks <- seq(
+  floor(min(tutorial_data$age_yr) / 5) * 5,
+  ceiling(max(tutorial_data$age_yr) / 5) * 5,
+  by = 5
+)
+age_bin <- cut(tutorial_data$age_yr, breaks = age_breaks, include.lowest = TRUE)
+binned_risk <- aggregate(tutorial_data$cvd_indicator, list(age_bin), mean)
+names(binned_risk) <- c("age_bin", "risk")
+binned_risk$n <- as.integer(table(age_bin)[as.character(binned_risk$age_bin)])
+binned_risk$age_mid <- as.numeric(tapply(tutorial_data$age_yr, age_bin, mean)[
+  as.character(binned_risk$age_bin)
+])
+
+old_par <- par(mar = c(5, 5, 4, 1))
+plot(
+  tutorial_data$age_yr[plot_index],
+  jitter(tutorial_data$cvd_indicator[plot_index], amount = 0.04),
+  pch = 16,
+  col = adjustcolor("#999999", alpha.f = 0.25),
+  xlab = "Age in years",
+  ylab = "CVD indicator / risk",
+  main = "Logistic Regression Smooths Binary Outcomes into a Risk Curve",
+  ylim = c(-0.05, 1.05)
+)
+lines(age_grid, age_pred, col = "#4E79A7", lwd = 3)
+points(
+  binned_risk$age_mid,
+  binned_risk$risk,
+  pch = 19,
+  cex = pmax(0.8, sqrt(binned_risk$n) / 9),
+  col = "#E15759"
+)
+legend(
+  "topleft",
+  legend = c("sampled binary outcomes", "logistic fitted risk", "binned empirical risk"),
+  col = c("#999999", "#4E79A7", "#E15759"),
+  lwd = c(NA, 3, NA),
+  pch = c(16, NA, 19),
+  bty = "n"
+)
+par(old_par)
+```
+
+The gray points are individual binary outcomes. Each participant contributes a 0 or a 1, so the raw data live on two horizontal bands. The red points compress those binary outcomes into local empirical risks within age bins. The blue curve is the logistic model's estimate of
+\[
+P(\text{CVD}=1\mid \text{age}),
+\]
+so it should be read as a **conditional mean curve**, not as a deterministic prediction of who will have CVD. At age \(a\), the curve answers: among participants with similar age \(a\), what fraction would the fitted model expect to have CVD?
+
+::: {.tutorial-box}
+::: {.tutorial-title}
+How to Read the Age-Risk Plot
+:::
+::: {.tutorial-body}
+The plot moves through three levels of aggregation. First, the gray points show individual binary outcomes. Second, the red points show empirical averages within age ranges. Third, the blue logistic curve smooths those empirical averages by imposing a linear relation on the log-odds scale. The curve is useful because causal estimators need predicted probabilities, but the curve is still a working statistical model.
+:::
+:::
+
+```{r age-risk-reading-guide, echo=FALSE, fig.width=8.8, fig.height=3.8}
+start_picture()
+
+draw_box(0.14, 0.62, 0.22, 0.22,
+         "Individual data\nY_i = 0 or 1",
+         fill = "#E8E8E8", cex = 0.66, font = 2)
+draw_box(0.39, 0.62, 0.24, 0.22,
+         "Age-bin average\nmean(Y | age bin)",
+         fill = "#F4B8B8", cex = 0.63, font = 2)
+draw_box(0.66, 0.62, 0.25, 0.22,
+         "Logistic smoothing\nlinear in log-odds",
+         fill = "#CFE1F2", cex = 0.63, font = 2)
+draw_box(0.89, 0.62, 0.17, 0.22,
+         "Risk curve\nP(Y=1 | age)",
+         fill = "#DDFBE1", cex = 0.63, font = 2)
+
+draw_arrow(0.25, 0.62, 0.27, 0.62)
+draw_arrow(0.51, 0.62, 0.53, 0.62)
+draw_arrow(0.79, 0.62, 0.805, 0.62)
+
+segments(0.08, 0.20, 0.21, 0.20, lwd = 2, col = "#777777")
+segments(0.08, 0.34, 0.21, 0.34, lwd = 2, col = "#777777")
+points(c(0.10, 0.13, 0.17, 0.20), c(0.20, 0.34, 0.20, 0.20),
+       pch = 16, col = adjustcolor("#777777", alpha.f = 0.70), cex = 1.4)
+points(0.39, 0.27, pch = 19, col = "#E15759", cex = 2.6)
+curve_y <- expit(seq(-3.2, -0.4, length.out = 80))
+curve_x <- seq(0.56, 0.76, length.out = 80)
+lines(curve_x, 0.14 + 0.32 * curve_y, lwd = 3, col = "#4E79A7")
+draw_text(0.50, 0.10,
+          "A logistic regression turns many 0/1 observations into an estimated conditional probability.",
+          cex = 0.66, font = 2)
+```
+
+## Interpreting Coefficients
+
+The age coefficient is a log-odds coefficient. Exponentiating it gives an odds ratio.
+
+```{r age-coefficient-interpretation}
+age_beta <- coef(age_model)["age_yr"]
+age_or <- exp(age_beta)
+age_or_10 <- exp(10 * age_beta)
+
+age_interpretation <- data.frame(
+  Quantity = c(
+    "Age coefficient",
+    "Odds ratio for one additional year",
+    "Odds ratio for ten additional years"
+  ),
+  Value = round(c(age_beta, age_or, age_or_10), 3)
+)
+
+knitr::kable(age_interpretation)
+```
+
+For a one-year increase in age, the model multiplies the conditional odds of CVD by `r round(age_or, 3)`. For a ten-year increase, it multiplies the conditional odds by `r round(age_or_10, 3)`.
+
+::: {.tutorial-box}
+::: {.tutorial-title}
+Odds Ratio Versus Risk Ratio
+:::
+::: {.tutorial-body}
+An odds ratio is not the same as a risk ratio. When the outcome is rare, they can be close. When the outcome is not rare, they can differ substantially. The causal lectures therefore report marginal risks, risk differences, and risk ratios after standardization or weighting, rather than treating the logistic coefficient itself as the final causal estimand.
+:::
+:::
+
+## The Outcome Regression Model Used in the Lecture
+
+Lecture 3 used logistic regression to estimate the conditional CVD risk:
+
+$$
+m(t,X)=P(Y=1\mid T=t,X).
+$$
+
+The working model was:
+
+$$
+\operatorname{logit}\{P(Y=1\mid T,X)\}
+=
+\beta_0+\beta_1T+\beta_2\text{age}+\cdots.
+$$
+
+```{r outcome-model}
+outcome_model <- glm(
+  cvd_indicator ~ smoker_indicator + age_yr + gender_label +
+    race_label + educ_label + inc_to_pov_ratio + bmi,
+  data = tutorial_data,
+  family = binomial()
+)
+
+outcome_coef <- summary(outcome_model)$coefficients
+
+main_terms <- c("smoker_indicator", "age_yr", "bmi", "inc_to_pov_ratio")
+
+outcome_or_table <- data.frame(
+  Term = main_terms,
+  Log_odds_coefficient = round(outcome_coef[main_terms, "Estimate"], 3),
+  Conditional_odds_ratio = round(exp(outcome_coef[main_terms, "Estimate"]), 3),
+  P_value = signif(outcome_coef[main_terms, "Pr(>|z|)"], 3)
+)
+
+knitr::kable(outcome_or_table)
+```
+
+The coefficient for `smoker_indicator` compares smokers and non-smokers **conditional on the model covariates**. The standardized risk comparison below is a different object: it averages predicted risks over the same empirical covariate distribution.
+
+```{r predicted-age-curves, echo=FALSE, fig.width=8.8, fig.height=5}
+reference_gender <- most_common(tutorial_data$gender_label)
+reference_race <- most_common(tutorial_data$race_label)
+reference_educ <- most_common(tutorial_data$educ_label)
+reference_bmi <- median(tutorial_data$bmi)
+reference_pir <- median(tutorial_data$inc_to_pov_ratio)
+
+age_grid2 <- seq(
+  quantile(tutorial_data$age_yr, 0.02),
+  quantile(tutorial_data$age_yr, 0.98),
+  length.out = 200
+)
+
+curve_non <- data.frame(
+  smoker_indicator = 0,
+  age_yr = age_grid2,
+  gender_label = factor(reference_gender, levels = levels(tutorial_data$gender_label)),
+  race_label = factor(reference_race, levels = levels(tutorial_data$race_label)),
+  educ_label = factor(reference_educ, levels = levels(tutorial_data$educ_label)),
+  inc_to_pov_ratio = reference_pir,
+  bmi = reference_bmi
+)
+
+curve_smoke <- curve_non
+curve_smoke$smoker_indicator <- 1
+
+curve_non$predicted_risk <- predict(outcome_model, newdata = curve_non, type = "response")
+curve_smoke$predicted_risk <- predict(outcome_model, newdata = curve_smoke, type = "response")
+
+old_par <- par(mar = c(5, 5, 4, 1))
+plot(
+  curve_non$age_yr,
+  curve_non$predicted_risk,
+  type = "l",
+  lwd = 3,
+  col = "#4E79A7",
+  ylim = range(c(curve_non$predicted_risk, curve_smoke$predicted_risk)),
+  xlab = "Age in years",
+  ylab = "Predicted CVD risk",
+  main = "Outcome Logistic Model: Predicted Risk by Age and Smoking"
+)
+lines(curve_smoke$age_yr, curve_smoke$predicted_risk, lwd = 3, col = "#F28E2B")
+legend(
+  "topleft",
+  legend = c("Set smoking T = 0", "Set smoking T = 1"),
+  col = c("#4E79A7", "#F28E2B"),
+  lwd = 3,
+  bty = "n"
+)
+par(old_par)
+```
+
+The curves hold the other covariates fixed at reference values. This picture is useful for understanding the fitted model, but the lecture's causal estimand is marginal over the whole classroom covariate distribution.
+
+## From Logistic Model to Standardized Risks
+
+Outcome-regression standardization uses the fitted logistic model in two counterfactual prediction steps:
+
+1. Copy the analytic sample and set everyone to \(T=0\).
+2. Copy the analytic sample and set everyone to \(T=1\).
+3. Predict each person's risk in both copied datasets.
+4. Average the predicted risks over the same empirical covariate distribution.
+
+```{r standardization-picture, echo=FALSE, fig.width=8.8, fig.height=4.8}
+start_picture()
+
+draw_box(0.16, 0.58, 0.24, 0.20,
+         "Original sample\nobserved X_i",
+         fill = "#F1CE63", cex = 0.72, font = 2)
+draw_box(0.46, 0.76, 0.28, 0.16,
+         "Counterfactual copy\nset everyone T = 0",
+         fill = "#A0CBE8", cex = 0.64, font = 2)
+draw_box(0.46, 0.40, 0.28, 0.16,
+         "Counterfactual copy\nset everyone T = 1",
+         fill = "#F28E2B", cex = 0.64, font = 2)
+draw_box(0.77, 0.76, 0.26, 0.16,
+         "Predict\nmhat(0, X_i)",
+         fill = "#FFFFFF", cex = 0.68, font = 2)
+draw_box(0.77, 0.40, 0.26, 0.16,
+         "Predict\nmhat(1, X_i)",
+         fill = "#FFFFFF", cex = 0.68, font = 2)
+draw_box(0.50, 0.15, 0.58, 0.12,
+         "Average each column of predictions\npsi0 hat and psi1 hat",
+         fill = "#DDFBE1", cex = 0.68, font = 2)
+
+draw_arrow(0.28, 0.62, 0.34, 0.72)
+draw_arrow(0.28, 0.54, 0.34, 0.44)
+draw_arrow(0.60, 0.76, 0.64, 0.76)
+draw_arrow(0.60, 0.40, 0.64, 0.40)
+draw_arrow(0.77, 0.68, 0.61, 0.22)
+draw_arrow(0.77, 0.32, 0.61, 0.18)
+```
+
+```{r standardization-estimates}
+data_if_non_smoker <- tutorial_data
+data_if_non_smoker$smoker_indicator <- 0
+
+data_if_smoker <- tutorial_data
+data_if_smoker$smoker_indicator <- 1
+
+predicted_risk_if_non_smoker <- predict(
+  outcome_model,
+  newdata = data_if_non_smoker,
+  type = "response"
+)
+
+predicted_risk_if_smoker <- predict(
+  outcome_model,
+  newdata = data_if_smoker,
+  type = "response"
+)
+
+or_risk_non_smoker <- mean(predicted_risk_if_non_smoker)
+or_risk_smoker <- mean(predicted_risk_if_smoker)
+or_risk_difference <- or_risk_smoker - or_risk_non_smoker
+or_risk_ratio <- or_risk_smoker / or_risk_non_smoker
+
+standardized_table <- data.frame(
+  Quantity = c(
+    "Standardized risk if non-smoker (%)",
+    "Standardized risk if smoker (%)",
+    "Risk difference (percentage points)",
+    "Risk ratio"
+  ),
+  Value = c(
+    round(100 * or_risk_non_smoker, 2),
+    round(100 * or_risk_smoker, 2),
+    round(100 * or_risk_difference, 2),
+    round(or_risk_ratio, 3)
+  )
+)
+
+knitr::kable(standardized_table)
+```
+
+```{r standardized-risk-distributions, echo=FALSE, fig.width=8.8, fig.height=4.8}
+old_par <- par(mar = c(5, 5, 4, 1))
+dens_non_smoker <- density(predicted_risk_if_non_smoker)
+dens_smoker <- density(predicted_risk_if_smoker)
+ymax_counterfactual <- max(dens_non_smoker$y, dens_smoker$y)
+
+plot(
+  dens_non_smoker,
+  col = "#4E79A7",
+  lwd = 3,
+  xlim = range(c(predicted_risk_if_non_smoker, predicted_risk_if_smoker)),
+  ylim = c(0, ymax_counterfactual * 1.20),
+  xlab = "Predicted CVD risk",
+  ylab = "Density",
+  main = "Standardized Risks: Average Predictions Over the Same Analytic Sample"
+)
+lines(dens_smoker, col = "#F28E2B", lwd = 3)
+abline(v = or_risk_non_smoker, col = "#4E79A7", lwd = 2, lty = 2)
+abline(v = or_risk_smoker, col = "#F28E2B", lwd = 2, lty = 2)
+text(
+  or_risk_non_smoker,
+  ymax_counterfactual * 1.08,
+  labels = bquote(hat(psi)[0]^OR == .(round(or_risk_non_smoker, 3))),
+  col = "#4E79A7",
+  cex = 0.85,
+  pos = 2,
+  xpd = NA
+)
+text(
+  or_risk_smoker,
+  ymax_counterfactual * 1.08,
+  labels = bquote(hat(psi)[1]^OR == .(round(or_risk_smoker, 3))),
+  col = "#F28E2B",
+  cex = 0.85,
+  pos = 4,
+  xpd = NA
+)
+arrows(
+  or_risk_non_smoker,
+  ymax_counterfactual * 0.92,
+  or_risk_smoker,
+  ymax_counterfactual * 0.92,
+  code = 3,
+  angle = 90,
+  length = 0.06,
+  lwd = 2,
+  col = "#333333"
+)
+text(
+  mean(c(or_risk_non_smoker, or_risk_smoker)),
+  ymax_counterfactual * 0.99,
+  labels = paste0("standardized risk difference = ",
+                  round(100 * or_risk_difference, 2), " pp"),
+  cex = 0.75,
+  font = 2
+)
+legend(
+  "topright",
+  legend = c("Set T = 0", "Set T = 1"),
+  col = c("#4E79A7", "#F28E2B"),
+  lwd = 3,
+  bty = "n"
+)
+par(old_par)
+```
+
+The density plot is not showing the observed CVD outcome. It is showing two **columns of fitted counterfactual risks**. Every participant is predicted twice using the same covariates \(X_i\): once as if \(T_i=0\), giving \(\hat m(0,X_i)\), and once as if \(T_i=1\), giving \(\hat m(1,X_i)\). The solid curves show the distribution of those person-specific predicted risks across the analytic sample.
+
+The dashed vertical lines are **not** modes, medians, or cutpoints. They are the averages of the two prediction columns:
+\[
+\hat\psi_0^{OR}=\frac{1}{n}\sum_{i=1}^n \hat m(0,X_i),
+\qquad
+\hat\psi_1^{OR}=\frac{1}{n}\sum_{i=1}^n \hat m(1,X_i).
+\]
+Here the sum is over **all analytic-sample participants** because the target is the analytic-sample marginal risk,
+\[
+\psi_t = E_X\{m(t,X)\},
+\]
+where the outer expectation is over the target covariate distribution \(P_X\), not over the smoker-specific distribution \(P_{X\mid T=1}\) or the non-smoker-specific distribution \(P_{X\mid T=0}\). Its empirical plug-in version replaces \(P_X\) by the empirical distribution of all observed \(X_i\)'s.
+
+The blue dashed line is therefore the average predicted risk if everyone in the analytic sample were set to non-smoking; the orange dashed line is the average predicted risk if everyone in the analytic sample were set to smoking. Their horizontal distance is the standardized risk difference,
+\[
+\hat\Delta^{OR}
+=
+\hat\psi_1^{OR}-\hat\psi_0^{OR}.
+\]
+Thus, standardization turns conditional probabilities into marginal risks by averaging both columns over the **same target empirical covariate distribution**.
+
+If instead one averaged only within the observed group,
+\[
+\frac{1}{n_t}\sum_{i:T_i=t}\hat m(t,X_i),
+\]
+then the averaging distribution would be \(P_{X\mid T=t}\). That is a different object: it describes the fitted mean risk within the covariate distribution of the observed group \(T=t\). It is not the analytic-sample marginal counterfactual risk unless the group covariate distribution happens to equal the full analytic-sample covariate distribution. For an ATT target, for example, one would intentionally average over the treated covariate distribution, such as
+\[
+\hat\psi_0^{ATT,OR}
+=
+\frac{1}{n_1}\sum_{i:T_i=1}\hat m(0,X_i),
+\]
+but that is a different estimand from the marginal risk comparison used in this tutorial.
+
+```{r dashed-lines-meaning-guide, echo=FALSE, fig.width=8.8, fig.height=3.8}
+start_picture()
+
+draw_box(0.18, 0.72, 0.25, 0.14,
+         "Column 0 for all i\nmhat(0, X_1), ..., mhat(0, X_n)",
+         fill = "#EAF3FB", cex = 0.49, font = 2)
+draw_box(0.18, 0.47, 0.25, 0.14,
+         "Column 1 for all i\nmhat(1, X_1), ..., mhat(1, X_n)",
+         fill = "#FCE4C6", cex = 0.49, font = 2)
+draw_box(0.49, 0.72, 0.24, 0.14,
+         "Average over all X_i\npsi0^OR hat",
+         fill = "#DDFBE1", cex = 0.55, font = 2)
+draw_box(0.49, 0.47, 0.24, 0.14,
+         "Average over all X_i\npsi1^OR hat",
+         fill = "#DDFBE1", cex = 0.55, font = 2)
+
+draw_arrow(0.31, 0.72, 0.37, 0.72, col = "#4E79A7")
+draw_arrow(0.31, 0.47, 0.37, 0.47, col = "#F28E2B")
+
+segments(0.71, 0.24, 0.71, 0.88, col = "#4E79A7", lwd = 3, lty = 2)
+segments(0.84, 0.24, 0.84, 0.88, col = "#F28E2B", lwd = 3, lty = 2)
+draw_text(0.71, 0.16, "psi0^OR hat", cex = 0.52, font = 2, col = "#4E79A7")
+draw_text(0.84, 0.16, "psi1^OR hat", cex = 0.52, font = 2, col = "#F28E2B")
+arrows(0.71, 0.80, 0.84, 0.80, code = 3, angle = 90,
+       length = 0.06, lwd = 2)
+draw_text(0.775, 0.91,
+          "horizontal gap\n= standardized RD",
+          cex = 0.50, font = 2)
+draw_text(0.50, 0.08,
+          "Dashed lines use the full analytic-sample X distribution because the target is marginal risk.",
+          cex = 0.63, font = 2)
+```
+
+```{r target-distribution-guide, echo=FALSE, fig.width=8.8, fig.height=4.2}
+start_picture()
+
+draw_box(0.50, 0.91, 0.64, 0.10,
+         "The estimand chooses the averaging distribution",
+         fill = "#E8E8E8", cex = 0.72, font = 2)
+
+draw_box(0.18, 0.67, 0.27, 0.17,
+         "Marginal risk / ATE\nTarget: all analytic X_i\n(used here)",
+         fill = "#DDFBE1", cex = 0.55, font = 2)
+draw_box(0.50, 0.67, 0.27, 0.17,
+         "ATT target\nTarget: X_i among smokers\nT_i = 1 only",
+         fill = "#FCE4C6", cex = 0.55, font = 2)
+draw_box(0.82, 0.67, 0.27, 0.17,
+         "ATC target\nTarget: X_i among non-smokers\nT_i = 0 only",
+         fill = "#EAF3FB", cex = 0.55, font = 2)
+
+draw_box(0.18, 0.36, 0.28, 0.18,
+         "1/n sum over all i\nmhat(t, X_i)",
+         fill = "#FFFFFF", cex = 0.58, font = 2)
+draw_box(0.50, 0.36, 0.28, 0.18,
+         "1/n1 sum over T_i=1\nmhat(t, X_i)",
+         fill = "#FFFFFF", cex = 0.58, font = 2)
+draw_box(0.82, 0.36, 0.28, 0.18,
+         "1/n0 sum over T_i=0\nmhat(t, X_i)",
+         fill = "#FFFFFF", cex = 0.58, font = 2)
+
+draw_arrow(0.18, 0.58, 0.18, 0.46, col = "#59A14F")
+draw_arrow(0.50, 0.58, 0.50, 0.46, col = "#F28E2B")
+draw_arrow(0.82, 0.58, 0.82, 0.46, col = "#4E79A7")
+
+draw_text(0.50, 0.12,
+          "The lecture figure is in the left column: same full-sample X distribution for both t = 0 and t = 1.",
+          cex = 0.62, font = 2)
+```
+
+```{r counterfactual-columns-guide, echo=FALSE, fig.width=8.8, fig.height=4.2}
+start_picture()
+
+draw_box(0.16, 0.78, 0.23, 0.13,
+         "Same participants\nsame X_i",
+         fill = "#F1CE63", cex = 0.62, font = 2)
+draw_box(0.42, 0.78, 0.23, 0.13,
+         "Set T = 0\npredict mhat(0, X_i)",
+         fill = "#A0CBE8", cex = 0.58, font = 2)
+draw_box(0.68, 0.78, 0.23, 0.13,
+         "Set T = 1\npredict mhat(1, X_i)",
+         fill = "#F28E2B", cex = 0.58, font = 2)
+
+draw_arrow(0.275, 0.78, 0.305, 0.78)
+draw_arrow(0.535, 0.78, 0.565, 0.78)
+
+row_y <- c(0.58, 0.47, 0.36, 0.25)
+row_lab <- c("person 1", "person 2", "person 3", "...")
+for (j in seq_along(row_y)) {
+  draw_box(0.16, row_y[j], 0.18, 0.075, row_lab[j],
+           fill = "#FFFFFF", cex = 0.52)
+  draw_box(0.42, row_y[j], 0.18, 0.075,
+           ifelse(j == 4, "...", paste0("p0_", j)),
+           fill = "#EAF3FB", cex = 0.52, font = 2)
+  draw_box(0.68, row_y[j], 0.18, 0.075,
+           ifelse(j == 4, "...", paste0("p1_", j)),
+           fill = "#FCE4C6", cex = 0.52, font = 2)
+}
+
+draw_box(0.42, 0.09, 0.22, 0.10,
+         "Average column\npsi0 hat",
+         fill = "#DDFBE1", cex = 0.56, font = 2)
+draw_box(0.68, 0.09, 0.22, 0.10,
+         "Average column\npsi1 hat",
+         fill = "#DDFBE1", cex = 0.56, font = 2)
+draw_arrow(0.42, 0.21, 0.42, 0.15)
+draw_arrow(0.68, 0.21, 0.68, 0.15)
+draw_text(0.84, 0.34,
+          "Same X distribution\nfor both columns",
+          cex = 0.58, font = 2)
+```
+
+## Logistic Regression for Propensity Scores
+
+Lecture 2 used logistic regression for a different binary outcome: smoking status.
+
+$$
+e(X)=P(T=1\mid X).
+$$
+
+The fitted values from this model are propensity scores. They are probabilities, so they must lie between 0 and 1.
+
+```{r propensity-model}
+propensity_model <- glm(
+  smoker_indicator ~ age_yr + gender_label + race_label +
+    educ_label + inc_to_pov_ratio + bmi,
+  data = tutorial_data,
+  family = binomial()
+)
+
+tutorial_data$propensity_score <- predict(propensity_model, type = "response")
+
+summary(tutorial_data$propensity_score)
+```
+
+```{r propensity-score-picture, echo=FALSE, fig.width=8.8, fig.height=4.8}
+breaks <- seq(0, 1, by = 0.025)
+hist_non <- hist(
+  tutorial_data$propensity_score[tutorial_data$smoker_indicator == 0],
+  breaks = breaks,
+  plot = FALSE
+)
+hist_smoke <- hist(
+  tutorial_data$propensity_score[tutorial_data$smoker_indicator == 1],
+  breaks = breaks,
+  plot = FALSE
+)
+
+ymax <- max(hist_non$density, hist_smoke$density)
+
+old_par <- par(mar = c(5, 5, 4, 1))
+plot(
+  hist_non$mids,
+  hist_non$density,
+  type = "h",
+  lwd = 7,
+  lend = "butt",
+  col = adjustcolor("#4E79A7", alpha.f = 0.55),
+  ylim = c(0, ymax * 1.1),
+  xlim = c(0, 1),
+  xlab = expression("Estimated propensity score " * hat(e)(X)),
+  ylab = "Density",
+  main = "Propensity Scores from a Logistic Treatment Model"
+)
+segments(
+  hist_smoke$mids,
+  0,
+  hist_smoke$mids,
+  hist_smoke$density,
+  lwd = 7,
+  lend = "butt",
+  col = adjustcolor("#F28E2B", alpha.f = 0.55)
+)
+legend(
+  "topright",
+  legend = c("Observed non-smokers", "Observed smokers"),
+  col = c("#4E79A7", "#F28E2B"),
+  lwd = 7,
+  bty = "n"
+)
+par(old_par)
+```
+
+The propensity score plot compares the fitted distribution of \(\hat e(X)\) among observed smokers and non-smokers. The middle region, where both colors appear, is the empirical overlap region: people with similar covariates appear in both treatment groups. The tails matter because IPW uses
+\[
+\frac{T_i}{\hat e(X_i)}
+\qquad\text{and}\qquad
+\frac{1-T_i}{1-\hat e(X_i)}.
+\]
+Therefore, smokers with very small \(\hat e(X_i)\) receive large treated weights, and non-smokers with very large \(\hat e(X_i)\) receive large untreated weights. A plot with little overlap would signal a practical positivity problem.
+
+```{r propensity-overlap-guide, echo=FALSE, fig.width=8.8, fig.height=4.1}
+start_picture()
+
+segments(0.10, 0.42, 0.90, 0.42, lwd = 3, col = "#333333")
+segments(c(0.10, 0.50, 0.90), 0.39, c(0.10, 0.50, 0.90), 0.45,
+         lwd = 2, col = "#333333")
+draw_text(0.10, 0.31, "0", cex = 0.68, font = 2)
+draw_text(0.50, 0.31, "0.5", cex = 0.68, font = 2)
+draw_text(0.90, 0.31, "1", cex = 0.68, font = 2)
+draw_text(0.50, 0.20, "Estimated propensity score ehat(X)", cex = 0.66, font = 2)
+
+rect(0.24, 0.50, 0.58, 0.60, col = adjustcolor("#4E79A7", alpha.f = 0.45),
+     border = NA)
+rect(0.40, 0.64, 0.76, 0.74, col = adjustcolor("#F28E2B", alpha.f = 0.45),
+     border = NA)
+draw_text(0.25, 0.66, "mostly\nnon-smokers", cex = 0.54, col = "#4E79A7", font = 2)
+draw_text(0.76, 0.56, "mostly\nsmokers", cex = 0.54, col = "#F28E2B", font = 2)
+
+draw_box(0.50, 0.86, 0.28, 0.12,
+         "Overlap region:\ncomparisons are data-supported",
+         fill = "#DDFBE1", cex = 0.54, font = 2)
+draw_arrow(0.50, 0.79, 0.50, 0.62, col = "#5BA45B")
+
+draw_box(0.18, 0.08, 0.27, 0.11,
+         "Smoker with tiny ehat:\nlarge T / ehat weight",
+         fill = "#FFE0E0", cex = 0.50, font = 2)
+draw_box(0.82, 0.08, 0.27, 0.11,
+         "Non-smoker with ehat near 1:\nlarge (1-T)/(1-ehat) weight",
+         fill = "#FFE0E0", cex = 0.47, font = 2)
+draw_arrow(0.18, 0.15, 0.20, 0.40, col = "#E15759", lty = 2)
+draw_arrow(0.82, 0.15, 0.80, 0.40, col = "#E15759", lty = 2)
+```
+
+## Model Fit: Calibration on the Risk Scale
+
+A logistic model can be useful even when individual predictions are noisy. For teaching purposes, one simple diagnostic is calibration: among people assigned similar predicted risk, do the observed risks roughly match the predicted risks?
+
+```{r calibration-data}
+tutorial_data$predicted_cvd_risk <- predict(outcome_model, type = "response")
+
+cal_breaks <- unique(quantile(
+  tutorial_data$predicted_cvd_risk,
+  probs = seq(0, 1, by = 0.1),
+  na.rm = TRUE
+))
+
+tutorial_data$risk_decile <- cut(
+  tutorial_data$predicted_cvd_risk,
+  breaks = cal_breaks,
+  include.lowest = TRUE
+)
+
+calibration_table <- aggregate(
+  cbind(predicted_cvd_risk, cvd_indicator) ~ risk_decile,
+  data = tutorial_data,
+  FUN = mean
+)
+
+calibration_table$n <- as.integer(table(tutorial_data$risk_decile)[
+  as.character(calibration_table$risk_decile)
+])
+
+names(calibration_table) <- c(
+  "Risk_decile",
+  "Mean_predicted_risk",
+  "Observed_risk",
+  "N"
+)
+
+knitr::kable(
+  data.frame(
+    Risk_decile = calibration_table$Risk_decile,
+    Mean_predicted_percent = round(100 * calibration_table$Mean_predicted_risk, 2),
+    Observed_percent = round(100 * calibration_table$Observed_risk, 2),
+    N = calibration_table$N
+  )
+)
+```
+
+```{r calibration-picture, echo=FALSE, fig.width=6.5, fig.height=6.0}
+old_par <- par(mar = c(5, 5, 4, 1))
+plot(
+  calibration_table$Mean_predicted_risk,
+  calibration_table$Observed_risk,
+  pch = 19,
+  cex = pmax(1, sqrt(calibration_table$N) / 13),
+  col = "#4E79A7",
+  xlim = range(c(calibration_table$Mean_predicted_risk, calibration_table$Observed_risk)),
+  ylim = range(c(calibration_table$Mean_predicted_risk, calibration_table$Observed_risk)),
+  xlab = "Mean predicted CVD risk",
+  ylab = "Observed CVD risk",
+  main = "Calibration Check by Predicted-Risk Decile"
+)
+abline(0, 1, lwd = 2, lty = 2, col = "#999999")
+text(
+  calibration_table$Mean_predicted_risk,
+  calibration_table$Observed_risk,
+  labels = seq_len(nrow(calibration_table)),
+  pos = 3,
+  cex = 0.8
+)
+par(old_par)
+```
+
+The calibration plot groups participants by predicted-risk decile. For each decile, the \(x\)-coordinate is the average predicted CVD risk and the \(y\)-coordinate is the observed fraction with CVD. Points close to the diagonal line mean that the model's average prediction in that risk stratum is close to the empirical event rate. Points above the line indicate underprediction; points below the line indicate overprediction.
+
+```{r calibration-reading-guide, echo=FALSE, fig.width=7.4, fig.height=4.8}
+old_par <- par(mar = c(4.5, 4.5, 3, 1))
+plot(
+  c(0, 1), c(0, 1),
+  type = "n",
+  xlab = "Mean predicted risk in a stratum",
+  ylab = "Observed risk in the same stratum",
+  main = "Reading a Calibration Plot",
+  xaxs = "i", yaxs = "i"
+)
+abline(0, 1, lwd = 3, lty = 2, col = "#999999")
+points(c(0.25, 0.75, 0.55), c(0.45, 0.55, 0.55),
+       pch = 19, cex = 2, col = c("#E15759", "#F28E2B", "#4E79A7"))
+arrows(0.25, 0.27, 0.25, 0.43, length = 0.08, lwd = 2, col = "#E15759")
+arrows(0.75, 0.73, 0.75, 0.57, length = 0.08, lwd = 2, col = "#F28E2B")
+text(0.25, 0.51, "observed > predicted\nunderprediction", cex = 0.75)
+text(0.75, 0.47, "observed < predicted\noverprediction", cex = 0.75)
+text(0.55, 0.62, "near diagonal\nwell calibrated", cex = 0.75)
+text(0.50, 0.10,
+     "Calibration is about average agreement within groups,\nnot about perfectly predicting each individual outcome.",
+     cex = 0.78, font = 2)
+par(old_par)
+```
+
+This diagnostic does not prove the model is correct, and it does not prove the causal assumptions. It only checks whether predicted risks and observed risks are broadly aligned across risk strata.
+
+## What Logistic Regression Does Not Solve
+
+Logistic regression is a statistical model. It does not by itself guarantee causal identification.
+
+```{r logistic-causal-roadmap-picture, echo=FALSE, fig.width=8.8, fig.height=4.8}
+start_picture()
+
+draw_box(0.16, 0.68, 0.25, 0.17,
+         "Causal question\nE{Y(1)} vs E{Y(0)}",
+         fill = "#F1CE63", cex = 0.60, font = 2)
+draw_box(0.42, 0.68, 0.25, 0.17,
+         "Identification\nconsistency\nexchangeability\npositivity",
+         fill = "#A0CBE8", cex = 0.55, font = 2)
+draw_box(0.68, 0.68, 0.25, 0.17,
+         "Logistic models\nestimate e(X)\nand m(t, X)",
+         fill = "#B7D7A8", cex = 0.60, font = 2)
+draw_box(0.50, 0.32, 0.34, 0.17,
+         "Estimators\nIPW, OR, DR\nstandardized risks",
+         fill = "#FCE4C6", cex = 0.60, font = 2)
+draw_box(0.84, 0.32, 0.24, 0.17,
+         "Uncertainty\nbootstrap or EIF",
+         fill = "#E8E8E8", cex = 0.60, font = 2)
+
+draw_arrow(0.285, 0.68, 0.295, 0.68)
+draw_arrow(0.545, 0.68, 0.555, 0.68)
+draw_arrow(0.68, 0.59, 0.56, 0.41)
+draw_arrow(0.67, 0.32, 0.72, 0.32)
+
+draw_text(0.50, 0.10,
+          "Logistic regression helps with estimation.\nThe causal assumptions come before the model.",
+          cex = 0.72, font = 2)
+```
+
+The lectures use logistic regression in a deliberately simple way: main effects for measured baseline covariates. That makes the tutorial transparent, but it is still a working model. If the true response surface has nonlinearities or interactions, the fitted probabilities may be misspecified. Doubly robust methods help with some nuisance-model misspecification, but they do not repair violations of the causal identification assumptions.
+
+## Summary
+
+Logistic regression is useful in these lectures because it estimates probabilities for binary variables.
+
+1. On the log-odds scale, the model is linear.
+2. On the probability scale, predictions stay between 0 and 1.
+3. For the propensity score, logistic regression estimates \(e(X)=P(T=1\mid X)\).
+4. For outcome regression, logistic regression estimates \(m(t,X)=P(Y=1\mid T=t,X)\).
+5. For causal risk comparisons, the coefficient of \(T\) is not the final target; standardized or weighted marginal risks are the target.
+
+The practical lesson is:
+
+$$
+\text{logistic regression estimates conditional probabilities;}
+\qquad
+\text{causal estimators transform them into marginal causal contrasts.}
+$$

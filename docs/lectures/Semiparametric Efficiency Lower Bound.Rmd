@@ -1,0 +1,4113 @@
+---
+title: "Semiparametric Efficiency Lower Bound for the Smoking-CVD Risk Difference"
+author: "Se Yoon Lee"
+date: "2026-07-06"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    number_sections: true
+    theme: readable
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+set.seed(20260706)
+```
+
+```{r picture-helpers, include=FALSE}
+start_picture <- function() {
+  par(mar = c(0, 0, 0, 0), xaxs = "i", yaxs = "i")
+  plot.new()
+  plot.window(xlim = c(0, 1), ylim = c(0, 1))
+}
+
+draw_text <- function(x, y, label, cex = 1, font = 1, col = "#222222") {
+  if (inherits(label, "expression") || is.call(label)) {
+    text(x, y, labels = label, cex = cex, font = font, col = col)
+    return(invisible(NULL))
+  }
+
+  lines <- strsplit(label, "\n", fixed = TRUE)[[1]]
+  line_height <- 0.055 * cex
+  offsets <- seq((length(lines) - 1) / 2, -(length(lines) - 1) / 2) *
+    line_height
+  text(rep(x, length(lines)), y + offsets, labels = lines,
+       cex = cex, font = font, col = col)
+}
+
+draw_box <- function(x, y, w, h, label, fill = "#FFFFFF",
+                     border = "#333333", lwd = 2, lty = 1,
+                     cex = 1, font = 1, col = "#222222") {
+  rect(x - w / 2, y - h / 2, x + w / 2, y + h / 2,
+       col = fill, border = border, lwd = lwd, lty = lty)
+  draw_text(x, y, label, cex = cex, font = font, col = col)
+}
+
+draw_circle <- function(x, y, r, label, fill = "#FFFFFF",
+                        border = "#333333", lwd = 2,
+                        cex = 1, font = 1, col = "#222222") {
+  symbols(x, y, circles = r, inches = FALSE, add = TRUE,
+          bg = fill, fg = border, lwd = lwd)
+  draw_text(x, y, label, cex = cex, font = font, col = col)
+}
+
+draw_arrow <- function(x0, y0, x1, y1, col = "#333333",
+                       lwd = 2, lty = 1) {
+  arrows(x0, y0, x1, y1, length = 0.08, lwd = lwd,
+         col = col, lty = lty)
+}
+
+inv_logit <- function(x) {
+  1 / (1 + exp(-x))
+}
+
+safe_logit <- function(p, eps = 1e-6) {
+  p <- pmin(pmax(p, eps), 1 - eps)
+  log(p / (1 - p))
+}
+
+bound_probability <- function(p, eps = 1e-4) {
+  pmin(pmax(p, eps), 1 - eps)
+}
+
+weighted_mean <- function(x, w) {
+  ok <- !is.na(x) & !is.na(w)
+  sum(w[ok] * x[ok]) / sum(w[ok])
+}
+
+mean_sd <- function(x) {
+  paste0(round(mean(x), 4), " (", round(sd(x), 4), ")")
+}
+
+mkable <- function(x, ...) {
+  knitr::kable(x, escape = FALSE, row.names = FALSE, ...)
+}
+
+method_math_label <- function(x) {
+  x <- as.character(x)
+  labels <- c(
+    Crude = "\\(\\hat\\psi_{crude}\\)",
+    IPW = "\\(\\hat\\psi_{IPW}\\)",
+    Outcome_regression = "\\(\\hat\\psi_{OR}\\)",
+    Doubly_robust = "\\(\\hat\\psi_{DR}\\)",
+    Oracle_EIF = "\\(\\hat\\psi_{oracle\\ EIF}\\)",
+    `Estimated DR` = "\\(\\hat\\psi_{DR}\\)",
+    `Oracle EIF` = "\\(\\hat\\psi_{oracle\\ EIF}\\)",
+    `Rich in-sample DR` = "\\(\\hat\\psi_{DR,rich}\\)",
+    `Rich cross-fitted DR` = "\\(\\hat\\psi_{DR,cf}\\)"
+  )
+
+  out <- labels[x]
+  out[is.na(out)] <- x[is.na(out)]
+  unname(out)
+}
+
+truth_math_label <- function(x) {
+  x <- as.character(x)
+  labels <- c(
+    psi = "\\(\\psi\\)",
+    v_eff = "\\(V_{\\mathrm{EIF}} = E\\{D^*(O)^2\\}\\)",
+    heterogeneity = "\\(\\mathrm{Var}\\{Q_1(X)-Q_0(X)\\}\\)",
+    residual = "\\(E[Q_1(1-Q_1)/e + Q_0(1-Q_0)/(1-e)]\\)"
+  )
+
+  out <- labels[x]
+  out[is.na(out)] <- x[is.na(out)]
+  unname(out)
+}
+```
+
+## Today's Question
+
+Lectures 1-6 estimated and interpreted the causal risk difference for cardiovascular disease (CVD) under smoking versus non-smoking.
+
+This note asks the PhD-level version of the same classroom problem:
+
+> Among all regular estimators of the identified risk difference, what is the smallest possible large-sample variance?
+
+That smallest possible variance is the **semiparametric efficiency lower bound**.
+
+The target parameter is still
+
+$$
+\psi
+=
+E\{Y(1)\} - E\{Y(0)\},
+$$
+
+where \(Y(1)\) is the potential CVD outcome under smoking and \(Y(0)\) is the potential CVD outcome under non-smoking.
+
+The bridge from Lecture 4 to this note is the doubly robust estimator. Lecture 4 introduced it as a prediction-plus-correction estimator. Here we show that the same correction is not a trick; it is the empirical version of the **efficient influence function**.
+
+```{r lecture-map-picture, echo=FALSE, fig.width=8.8, fig.height=4.2}
+start_picture()
+
+draw_box(0.10, 0.70, 0.16, 0.17, "L1\nCrude\nrisk gap",
+         fill = "#A0CBE8", cex = 0.66, font = 2)
+draw_box(0.26, 0.70, 0.16, 0.17, "L2\nIPW",
+         fill = "#F28E2B", cex = 0.72, font = 2)
+draw_box(0.42, 0.70, 0.16, 0.17, "L3\nOutcome\nregression",
+         fill = "#59A14F", cex = 0.58, font = 2)
+draw_box(0.58, 0.70, 0.16, 0.17, "L4\nDoubly\nrobust",
+         fill = "#B7D7A8", cex = 0.62, font = 2)
+draw_box(0.74, 0.70, 0.16, 0.17, "L5\nBootstrap\ninference",
+         fill = "#F1CE63", cex = 0.60, font = 2)
+draw_box(0.90, 0.70, 0.16, 0.17, "L6\nSensitivity",
+         fill = "#E4E6FF", cex = 0.66, font = 2)
+
+draw_arrow(0.18, 0.70, 0.21, 0.70)
+draw_arrow(0.34, 0.70, 0.37, 0.70)
+draw_arrow(0.50, 0.70, 0.53, 0.70)
+draw_arrow(0.66, 0.70, 0.69, 0.70)
+draw_arrow(0.82, 0.70, 0.85, 0.70)
+
+draw_box(0.50, 0.30, 0.76, 0.22,
+         "This note\nWhy the DR correction is the efficient influence function\nand why Var(EIF) / n is the benchmark",
+         fill = "#FFE0E0", cex = 0.72, font = 2)
+draw_arrow(0.58, 0.60, 0.50, 0.41, lty = 2)
+draw_arrow(0.74, 0.60, 0.57, 0.41, lty = 2)
+```
+
+We will again use the classroom NHANES complete-case dataset from Lectures 1-6. The efficiency bound derived below is the bound for the i.i.d. classroom analysis used throughout these notes.
+
+## Source Map
+
+The attached material points to one coherent story.
+
+| Source material | Role in this note |
+|:--|:--|
+| Kennedy, *Semiparametric Theory and Empirical Processes in Causal Inference* | Tangent spaces, efficient influence functions, ATE EIF, product-rate remainder |
+| Wager, *Causal Inference* | AIPW intuition, strong double robustness, cross-fitting perspective |
+| *On the Asymptotic Properties of Debiased Machine Learning Estimators* | Neyman orthogonality and cross-fitting details |
+| *debiased_ml_slides* | Pedagogical version of orthogonal scores and sample splitting |
+
+The note does not quote these sources at length. Instead, it adapts their machinery to the same smoking-CVD risk difference used throughout this lecture course.
+
+## Data Structure and Identification
+
+For each person, let
+
+$$
+O = (X,T,Y),
+$$
+
+where:
+
+| Symbol | Meaning in this course |
+|:--|:--|
+| \(T=1\) | smoker |
+| \(T=0\) | non-smoker |
+| \(Y=1\) | had CVD before interview |
+| \(Y=0\) | did not have CVD before interview |
+| \(X\) | age, gender, race/ethnicity, education, income-to-poverty ratio, BMI |
+
+The causal estimand is
+
+$$
+\psi
+=
+\psi_1 - \psi_0,
+\qquad
+\psi_t = E\{Y(t)\}.
+$$
+
+The observed-data identification assumptions are the same ones used earlier:
+
+1. **Consistency:** if \(T=t\), then \(Y=Y(t)\).
+2. **Conditional exchangeability:** \(\{Y(1),Y(0)\} \perp T \mid X\).
+3. **Positivity:** \(0 < P(T=1 \mid X) < 1\) for covariate values in the target population.
+
+Under these assumptions,
+
+$$
+\psi_t
+=
+E\{E(Y \mid T=t,X)\}.
+$$
+
+Define the nuisance functions
+
+$$
+e(X) = P(T=1 \mid X),
+$$
+
+and
+
+$$
+Q_t(X) = E(Y \mid T=t,X),
+\qquad t \in \{0,1\}.
+$$
+
+Then the identified parameter is
+
+$$
+\psi
+=
+E\{Q_1(X)-Q_0(X)\}.
+$$
+
+```{r identification-picture, echo=FALSE, fig.width=8.8, fig.height=4.5}
+start_picture()
+
+draw_circle(0.20, 0.68, 0.09, "X\nbaseline\ncovariates",
+            fill = "#F1CE63", cex = 0.68, font = 2)
+draw_circle(0.50, 0.68, 0.09, "T\nsmoking",
+            fill = "#F28E2B", cex = 0.74, font = 2)
+draw_circle(0.80, 0.68, 0.09, "Y\nCVD",
+            fill = "#E15759", cex = 0.74, font = 2)
+
+draw_arrow(0.29, 0.68, 0.41, 0.68)
+draw_arrow(0.59, 0.68, 0.71, 0.68, col = "#F28E2B", lwd = 3)
+draw_arrow(0.25, 0.61, 0.73, 0.61)
+
+draw_box(0.28, 0.30, 0.30, 0.16,
+         expression(atop("Treatment model", paste(e, "(X) = P(T=1 | X)"))),
+         fill = "#DCEAF7", cex = 0.64, font = 2)
+draw_box(0.72, 0.30, 0.30, 0.16,
+         expression(atop("Outcome model", paste(Q[t], "(X) = E(Y | T=t, X)"))),
+         fill = "#DDFBE1", cex = 0.60, font = 2)
+
+draw_text(0.50, 0.08,
+          expression(paste("The efficient estimator uses both nuisance functions, but targets only ", psi, ".")),
+          cex = 0.78, font = 2)
+```
+
+## The Semiparametric Model
+
+A parametric model specifies a finite-dimensional family \(p(o;\theta)\). A semiparametric model lets part of the distribution be infinite-dimensional.
+
+For this note, the main model is the nonparametric observed-data model:
+
+$$
+P \in \mathcal{M}_{np},
+$$
+
+where the distribution of \(X\), the treatment mechanism \(e(X)\), and the outcome regression \(Q_t(X)\) are unrestricted except for positivity and regularity conditions.
+
+This matters because the target parameter \(\psi(P)\) is one-dimensional, but \(P\) contains many nuisance features:
+
+$$
+P
+\quad \Longleftrightarrow \quad
+\{p_X(x), e(x), Q_0(x), Q_1(x), \text{conditional outcome variation}\}.
+$$
+
+The semiparametric question is:
+
+> If we refuse to fully parametrize these nuisance parts, what is the best possible first-order variance for estimating \(\psi\)?
+
+## Influence Functions
+
+An estimator \(\hat\psi\) is **asymptotically linear** if
+
+$$
+\hat\psi - \psi
+=
+\frac{1}{n}\sum_{i=1}^n \phi(O_i)
++
+o_p(n^{-1/2}),
+$$
+
+where \(E\{\phi(O)\}=0\) and \(E\{\phi(O)^2\}<\infty\).
+
+Then
+
+$$
+\sqrt{n}(\hat\psi-\psi)
+\rightsquigarrow
+N\{0, E(\phi^2)\}.
+$$
+
+The function \(\phi\) is an influence function for the estimator. If \(\phi\) is the **efficient influence function**, its variance is the smallest possible variance among regular asymptotically linear estimators in the model.
+
+```{r influence-picture, echo=FALSE, fig.width=8.8, fig.height=4.0}
+start_picture()
+
+draw_box(0.18, 0.67, 0.26, 0.18,
+         expression(atop("Estimator", hat(psi))),
+         fill = "#E4E6FF", cex = 0.84, font = 2)
+draw_box(0.50, 0.67, 0.26, 0.18,
+         expression(atop("Asymptotic linearization",
+                         sqrt(n) * (hat(psi) - psi))),
+         fill = "#F1CE63", cex = 0.70, font = 2)
+draw_box(0.82, 0.67, 0.26, 0.18,
+         expression(atop("Influence function", phi)),
+         fill = "#DDFBE1", cex = 0.82, font = 2)
+draw_arrow(0.31, 0.67, 0.37, 0.67)
+draw_arrow(0.63, 0.67, 0.69, 0.67)
+
+draw_box(0.35, 0.28, 0.35, 0.18,
+         expression(atop(paste("Variance of ", phi),
+                         "is asymptotic variance")),
+         fill = "#FFE0E0", cex = 0.70, font = 2)
+draw_box(0.72, 0.28, 0.35, 0.18,
+         expression(atop(paste("Efficient ", phi^"*"),
+                         "has smallest variance")),
+         fill = "#B7D7A8", cex = 0.70, font = 2)
+draw_arrow(0.82, 0.57, 0.72, 0.38, lty = 2)
+```
+
+## Tangent-Space Geometry
+
+Semiparametric efficiency is geometry in
+
+$$
+L_0^2(P)
+=
+\{f(O):E_P f(O)=0,\ E_P f(O)^2<\infty\},
+$$
+
+with inner product
+
+$$
+\langle f,h\rangle_P = E_P\{f(O)h(O)\}.
+$$
+
+The key objects are:
+
+| Object | Notation | Meaning |
+|:--|:--|:--|
+| Regular submodel | \(\{P_\epsilon:\epsilon\in(-\delta,\delta), P_0=P\}\) | A one-dimensional path through the statistical model \(\mathcal M\). |
+| Score direction | \(S(O)=\left.\frac{d}{d\epsilon}\log p_\epsilon(O)\right|_{\epsilon=0}\) | The velocity of the submodel at \(P\), viewed as a vector in \(L_0^2(P)\). |
+| Tangent space | \(\mathcal T(P)=\overline{\{S: S \text{ is a regular score at }P\}}\) | All locally possible directions through \(\mathcal M\). |
+| Pathwise derivative | \(\dot\psi_P(S)=\left.\frac{d}{d\epsilon}\psi(P_\epsilon)\right|_{\epsilon=0}\) | Directional derivative of the target along score \(S\). |
+| Gradient | \(g_\psi\) satisfying \(\dot\psi_P(S)=\langle g_\psi,S\rangle_P\) | A Riesz representer of the derivative. |
+| Nuisance tangent space | \(\mathcal T_\eta=\{S\in\mathcal T(P):\dot\psi_P(S)=0\}\) | Directions that change nuisance features but not the target. |
+| Canonical gradient / EIF | \(D_P^*\) or \(\phi_{\mathrm{EIF}}\) | The gradient after removing all nuisance variation. |
+
+The projection formula is the central geometric statement:
+
+$$
+D_P^*
+=
+\Pi_{\mathcal T_\eta^\perp}g_\psi
+=
+g_\psi-\Pi_{\mathcal T_\eta}g_\psi,
+\qquad
+\langle D_P^*,S_\eta\rangle_P=0
+\quad\text{for all }S_\eta\in\mathcal T_\eta.
+$$
+
+Thus the efficient influence function is not just any influence function. It is the **canonical gradient**, the part of the target gradient that remains after projecting away directions irrelevant to \(\psi(P)\).
+
+```{r tangent-picture, echo=FALSE, fig.width=9.4, fig.height=4.2}
+start_picture()
+
+rect(0.04, 0.12, 0.96, 0.92, border = "#555555", lwd = 2)
+draw_text(0.50, 0.865, expression(L[0]^2 * "(P): scores, gradients, and orthogonal projection"),
+          cex = 0.80, font = 2)
+
+draw_box(0.16, 0.73, 0.22, 0.15,
+         expression(atop("regular submodel", P[epsilon]~~"with"~~P[0]==P)),
+         fill = "#E4E6FF", cex = 0.58, font = 2)
+draw_box(0.16, 0.52, 0.22, 0.15,
+         expression(atop("score direction", S(O) %in% L[0]^2 * "(P)")),
+         fill = "#DFF3FF", cex = 0.58, font = 2)
+draw_box(0.16, 0.31, 0.22, 0.15,
+         expression(atop("derivative", dot(psi)[P](S) == E[P] * "{" * g[psi] * S * "}")),
+         fill = "#FFF4CC", cex = 0.55, font = 2)
+draw_arrow(0.16, 0.655, 0.16, 0.60)
+draw_arrow(0.16, 0.445, 0.16, 0.39)
+
+rect(0.34, 0.27, 0.91, 0.43, col = "#E8E8E8",
+     border = "#777777", lwd = 2)
+draw_text(0.63, 0.22, expression(nuisance~tangent~space~~T[eta]),
+          cex = 0.70, font = 2)
+
+origin <- c(0.43, 0.35)
+foot <- c(0.67, 0.35)
+tip <- c(0.67, 0.72)
+
+arrows(origin[1], origin[2], tip[1], tip[2], lwd = 2.7,
+       col = "#4E79A7", lty = 2, length = 0.08)
+draw_text(0.47, 0.62, expression(g[psi]~~"(target gradient)"),
+          cex = 0.68, col = "#4E79A7", font = 2)
+
+arrows(origin[1], origin[2], foot[1], foot[2], lwd = 3,
+       col = "#777777", length = 0.08)
+draw_text(0.54, 0.45, expression(Pi[T[eta]]*g[psi]),
+          cex = 0.76, col = "#777777", font = 2)
+draw_text(0.81, 0.50, expression(S[eta] %in% T[eta]),
+          cex = 0.72, col = "#777777")
+
+arrows(foot[1], foot[2], tip[1], tip[2], lwd = 4,
+       col = "#E15759", length = 0.08)
+draw_text(0.82, 0.72, expression(D[P]^"*" == phi[EIF]),
+          cex = 0.76, font = 2, col = "#E15759")
+draw_text(0.82, 0.64, expression(phi[EIF] == g[psi] - Pi[T[eta]]*g[psi]),
+          cex = 0.74, font = 2, col = "#E15759")
+
+segments(foot[1] - 0.045, foot[2],
+         foot[1] - 0.045, foot[2] + 0.045,
+         lwd = 2.2, col = "#222222")
+segments(foot[1] - 0.045, foot[2] + 0.045,
+         foot[1], foot[2] + 0.045,
+         lwd = 2.2, col = "#222222")
+draw_text(0.66, 0.50, expression(E[P] * "{" * phi[EIF] * S[eta] * "}" == 0),
+          cex = 0.67, font = 2, col = "#222222")
+
+draw_text(0.50, 0.08,
+          "Efficiency = keep the target-sensitive direction and remove nuisance-only motion.",
+          cex = 0.66, font = 2)
+```
+
+For the ATE/risk-difference problem, the observed data are \(O=(X,T,Y)\) and the likelihood factorizes as
+
+$$
+p(o)=p(x)\,p(t\mid x)\,p(y\mid t,x).
+$$
+
+This induces the orthogonal tangent-space decomposition
+
+$$
+\mathcal T(P)
+=
+\mathcal T_X
+\oplus
+\mathcal T_{T\mid X}
+\oplus
+\mathcal T_{Y\mid T,X}.
+$$
+
+The ATE target is
+
+$$
+\psi(P)=E_P\{Q_1(X)-Q_0(X)\},
+\qquad
+Q_t(X)=E_P(Y\mid T=t,X),
+\qquad
+e(X)=P(T=1\mid X).
+$$
+
+The efficient influence function decomposes into interpretable orthogonal pieces:
+
+$$
+D_P^*(O)
+=
+\underbrace{Q_1(X)-Q_0(X)-\psi}_{\phi_X(O)}
++
+\underbrace{0}_{\phi_{T\mid X}(O)}
++
+\underbrace{H(T,X)\{Y-Q_T(X)\}}_{\phi_{Y\mid T,X}(O)},
+$$
+
+where
+
+$$
+H(T,X)
+=
+\frac{T}{e(X)}
+-
+\frac{1-T}{1-e(X)}
+$$
+
+is the residual-weight function multiplying the outcome residual. This is the same augmentation term that turns outcome standardization into the doubly robust estimator. In estimated form, the DR estimator can be written as the solution of the empirical EIF equation
+
+$$
+P_nD_{\hat P,\psi}^*(O)=0,
+$$
+
+where
+
+$$
+D_{\hat P,\psi}^*(O)
+=
+\hat Q_1(X)-\hat Q_0(X)
++
+\hat H(T,X)\{Y-\hat Q_T(X)\}
+-
+\psi.
+$$
+
+```{r tangent-ate-decomposition-picture, echo=FALSE, fig.width=9.4, fig.height=3.8}
+start_picture()
+
+rect(0.04, 0.12, 0.96, 0.90, border = "#555555", lwd = 2)
+draw_text(0.50, 0.94, expression("ATE EIF: orthogonal pieces of the tangent space"),
+          cex = 0.86, font = 2)
+
+draw_box(0.22, 0.70, 0.27, 0.16,
+         expression(atop(phi[X] == Q[1](X)-Q[0](X)-psi,
+                         "covariate distribution")),
+         fill = "#DDFBE1", cex = 0.54, font = 2)
+draw_box(0.50, 0.70, 0.22, 0.16,
+         expression(atop(phi[T*"|"*X] == 0,
+                         "treatment mechanism")),
+         fill = "#F1CE63", cex = 0.56, font = 2)
+draw_box(0.78, 0.70, 0.27, 0.16,
+         expression(atop(phi[Y*"|"*T*","*X] == H(T,X) * "{" * Y-Q[T](X) * "}",
+                         "outcome regression")),
+         fill = "#A0CBE8", cex = 0.50, font = 2)
+
+draw_box(0.50, 0.41, 0.56, 0.15,
+         expression(atop(D[P]^"*" == phi[EIF],
+                         phi[EIF] == phi[X] + phi[T*"|"*X] + phi[Y*"|"*T*","*X])),
+         fill = "#FFE0E0", cex = 0.60, font = 2)
+
+draw_arrow(0.22, 0.62, 0.39, 0.48)
+draw_arrow(0.50, 0.62, 0.50, 0.49)
+draw_arrow(0.78, 0.62, 0.61, 0.48)
+
+draw_box(0.28, 0.21, 0.36, 0.12,
+         expression(H(T,X) == frac(T, e(X)) - frac(1-T, 1-e(X))),
+         fill = "#FFFFFF", cex = 0.60, font = 2)
+draw_box(0.72, 0.21, 0.36, 0.12,
+         expression(atop("DR estimating equation", P[n]*D[hat(P), psi]^"*" == 0)),
+         fill = "#FFFFFF", cex = 0.56, font = 2)
+draw_arrow(0.78, 0.62, 0.72, 0.29, lty = 2)
+```
+
+This geometric view is why the same phrase, **orthogonality**, appears in semiparametric efficiency, doubly robust estimation, and debiased machine learning.
+
+## Efficient Influence Function for \(\psi_t\)
+
+For
+
+$$
+\psi_t = E\{Q_t(X)\},
+$$
+
+the efficient influence function in the nonparametric observed-data model is
+
+$$
+D_t^*(O)
+=
+\frac{I(T=t)}{P(T=t \mid X)}
+\{Y-Q_t(X)\}
++
+Q_t(X)-\psi_t.
+$$
+
+For \(t=1\),
+
+$$
+D_1^*(O)
+=
+\frac{T}{e(X)}\{Y-Q_1(X)\}
++
+Q_1(X)-\psi_1.
+$$
+
+For \(t=0\),
+
+$$
+D_0^*(O)
+=
+\frac{1-T}{1-e(X)}\{Y-Q_0(X)\}
++
+Q_0(X)-\psi_0.
+$$
+
+Each \(D_t^*\) has two components:
+
+| Component | Formula | Meaning |
+|:--|:--|:--|
+| Residual correction | \(I(T=t)\{Y-Q_t(X)\}/P(T=t\mid X)\) | uses observed residuals from people actually in treatment arm \(t\) |
+| Standardization variation | \(Q_t(X)-\psi_t\) | variation in predicted counterfactual risk across covariates |
+
+```{r eif-components-picture, echo=FALSE, fig.width=8.8, fig.height=4.5}
+start_picture()
+
+draw_box(0.18, 0.70, 0.28, 0.18,
+         expression(atop("Observed residual", paste(Y, " - ", Q[t], "(X)"))),
+         fill = "#FCE4C6", cex = 0.66, font = 2)
+draw_box(0.50, 0.70, 0.28, 0.18,
+         expression(atop("Inverse probability", paste(I(T == t), " / ", p[t], "(X)"))),
+         fill = "#DCEAF7", cex = 0.62, font = 2)
+draw_box(0.82, 0.70, 0.28, 0.18,
+         expression(atop("Covariate variation", paste(Q[t], "(X) - ", psi[t]))),
+         fill = "#DDFBE1", cex = 0.62, font = 2)
+
+draw_arrow(0.31, 0.70, 0.37, 0.70)
+draw_arrow(0.63, 0.70, 0.69, 0.70)
+
+draw_box(0.50, 0.32, 0.70, 0.22,
+         expression(atop(paste(D[t]^"*", "(O)"),
+                         "weighted residual + standardized prediction deviation")),
+         fill = "#FFF6C7", cex = 0.72, font = 2)
+
+draw_arrow(0.50, 0.60, 0.50, 0.43)
+```
+
+## Efficient Influence Function for the Risk Difference
+
+The risk difference is
+
+$$
+\psi = \psi_1-\psi_0.
+$$
+
+Therefore its efficient influence function is
+
+$$
+D^*(O)
+=
+D_1^*(O)-D_0^*(O).
+$$
+
+Equivalently,
+
+$$
+D^*(O)
+=
+\frac{T}{e(X)}
+\{Y-Q_1(X)\}
+-
+\frac{1-T}{1-e(X)}
+\{Y-Q_0(X)\}
++
+Q_1(X)-Q_0(X)-\psi.
+$$
+
+This formula is the mathematical heart of Lecture 4.
+
+The doubly robust estimator is obtained by replacing unknown nuisance functions with estimates and averaging the non-\(-\psi\) part:
+
+$$
+\hat\psi_{DR}
+=
+\frac{1}{n}
+\sum_{i=1}^{n}
+\left[
+\hat Q_1(X_i)-\hat Q_0(X_i)
++
+\frac{T_i}{\hat e(X_i)}
+\{Y_i-\hat Q_1(X_i)\}
+-
+\frac{1-T_i}{1-\hat e(X_i)}
+\{Y_i-\hat Q_0(X_i)\}
+\right].
+$$
+
+The empirical mean of the estimated influence function is exactly zero if we define
+
+$$
+\hat D_i
+=
+\left[
+\hat Q_1(X_i)-\hat Q_0(X_i)
++
+\frac{T_i}{\hat e(X_i)}
+\{Y_i-\hat Q_1(X_i)\}
+-
+\frac{1-T_i}{1-\hat e(X_i)}
+\{Y_i-\hat Q_0(X_i)\}
+\right]
+-
+\hat\psi_{DR}.
+$$
+
+```{r dr-eif-picture, echo=FALSE, fig.width=8.8, fig.height=4.4}
+start_picture()
+
+draw_box(0.15, 0.72, 0.23, 0.17,
+         "Outcome\nstandardization\nQ1 - Q0",
+         fill = "#59A14F", cex = 0.58, font = 2)
+draw_box(0.43, 0.72, 0.23, 0.17,
+         "Smoker residual\nT/e * (Y-Q1)",
+         fill = "#F28E2B", cex = 0.56, font = 2)
+draw_box(0.71, 0.72, 0.23, 0.17,
+         "Non-smoker residual\n-(1-T)/(1-e) * (Y-Q0)",
+         fill = "#4E79A7", cex = 0.50, font = 2)
+draw_box(0.89, 0.36, 0.17, 0.15,
+         "Average\n= DR",
+         fill = "#B7D7A8", cex = 0.60, font = 2)
+
+draw_arrow(0.26, 0.72, 0.32, 0.72)
+draw_arrow(0.54, 0.72, 0.60, 0.72)
+draw_arrow(0.77, 0.64, 0.84, 0.43)
+
+draw_text(0.45, 0.30,
+          "Lecture 4 DR = empirical efficient influence function estimating equation.",
+          cex = 0.76, font = 2)
+```
+
+## The Efficiency Lower Bound
+
+The semiparametric efficiency lower bound for estimating \(\psi\) is
+
+$$
+\mathcal{I}_{eff}^{-1}
+=
+E\{D^*(O)^2\}.
+$$
+
+Thus any regular estimator \(\hat\psi\) must satisfy, asymptotically,
+
+$$
+\mathrm{Var}(\hat\psi)
+\geq
+\frac{E\{D^*(O)^2\}}{n}
+$$
+
+in the nonparametric i.i.d. model.
+
+If an estimator is asymptotically linear with influence function \(D^*\), then it attains the bound:
+
+$$
+\sqrt{n}(\hat\psi-\psi)
+\rightsquigarrow
+N\left(0, E\{D^*(O)^2\}\right).
+$$
+
+This is the formal meaning of "efficient" in semiparametric theory.
+
+## Variance Decomposition
+
+For the risk difference, the efficient variance has a useful decomposition:
+
+$$
+E\{D^*(O)^2\}
+=
+\mathrm{Var}\{Q_1(X)-Q_0(X)\}
++
+E\left[
+\frac{\mathrm{Var}(Y \mid T=1,X)}{e(X)}
++
+\frac{\mathrm{Var}(Y \mid T=0,X)}{1-e(X)}
+\right].
+$$
+
+For binary \(Y\),
+
+$$
+\mathrm{Var}(Y \mid T=t,X)
+=
+Q_t(X)\{1-Q_t(X)\}.
+$$
+
+So
+
+$$
+E\{D^*(O)^2\}
+=
+\mathrm{Var}\{Q_1(X)-Q_0(X)\}
++
+E\left[
+\frac{Q_1(X)\{1-Q_1(X)\}}{e(X)}
++
+\frac{Q_0(X)\{1-Q_0(X)\}}{1-e(X)}
+\right].
+$$
+
+This decomposition is extremely informative:
+
+1. The first term is heterogeneity in conditional causal risk differences.
+2. The second term is residual outcome noise under the two treatment worlds.
+3. Positivity appears directly through \(1/e(X)\) and \(1/\{1-e(X)\}\).
+
+```{r bound-decomposition-picture, echo=FALSE, fig.width=8.8, fig.height=4.2}
+start_picture()
+
+draw_box(0.50, 0.82, 0.50, 0.14,
+         expression(atop("Efficient variance bound",
+                         paste(V[EIF], " = E{", D^"*", "(O)^2}"))),
+         fill = "#FFE0E0", cex = 0.70, font = 2)
+
+draw_box(0.27, 0.48, 0.36, 0.18,
+         expression(atop("Treatment-effect heterogeneity",
+                         Var(Q[1](X) - Q[0](X)))),
+         fill = "#DDFBE1", cex = 0.58, font = 2)
+draw_box(0.73, 0.48, 0.36, 0.18,
+         expression(atop("Residual outcome noise",
+                         paste("weighted by ", 1/e(X), " and ", 1/(1-e(X))))),
+         fill = "#DCEAF7", cex = 0.54, font = 2)
+
+draw_arrow(0.44, 0.75, 0.33, 0.58)
+draw_arrow(0.56, 0.75, 0.67, 0.58)
+
+draw_box(0.50, 0.16, 0.58, 0.14,
+         "Weak overlap inflates the bound even before considering bias.",
+         fill = "#FFF6C7", cex = 0.68, font = 2)
+draw_arrow(0.73, 0.39, 0.55, 0.24, lty = 2)
+```
+
+## Orthogonality and the Product Remainder
+
+The efficient influence function is orthogonal to nuisance directions. In modern DML language, the estimating equation is **Neyman orthogonal**.
+
+For the DR estimating function, nuisance error enters the second-order remainder as a product. Let \(\hat e\), \(\hat Q_1\), and \(\hat Q_0\) be estimated nuisance functions. A key remainder term is of the form
+
+$$
+R_2(\hat\eta,\eta)
+\approx
+E\left[
+\{\hat e(X)-e(X)\}
+\left\{
+\frac{\hat Q_1(X)-Q_1(X)}{\hat e(X)}
++
+\frac{\hat Q_0(X)-Q_0(X)}{1-\hat e(X)}
+\right\}
+\right].
+$$
+
+The exact sign convention depends on how the remainder is written, but the important point is the product:
+
+$$
+|R_2(\hat\eta,\eta)|
+\lesssim
+\|\hat e-e\|
+\left(
+\|\hat Q_1-Q_1\|+\|\hat Q_0-Q_0\|
+\right)
+$$
+
+under positivity.
+
+This explains the \(n^{-1/4}\) rule:
+
+$$
+\|\hat e-e\| = o_p(n^{-1/4})
+\quad \text{and} \quad
+\|\hat Q_t-Q_t\| = o_p(n^{-1/4})
+$$
+
+are enough to make the product
+
+$$
+o_p(n^{-1/2}).
+$$
+
+That lets the first-order behavior be governed by the empirical average of \(D^*(O)\), yielding asymptotic normality and efficiency.
+
+```{r product-remainder-picture, echo=FALSE, fig.width=8.8, fig.height=4.2}
+start_picture()
+
+draw_box(0.20, 0.68, 0.28, 0.18,
+         expression(atop("Treatment model error",
+                         paste("||", hat(e) - e, "||"))),
+         fill = "#F28E2B", cex = 0.62, font = 2)
+draw_box(0.50, 0.68, 0.12, 0.18,
+         "times",
+         fill = "#FFFFFF", cex = 0.70, font = 2)
+draw_box(0.80, 0.68, 0.28, 0.18,
+         expression(atop("Outcome model error",
+                         paste("||", hat(Q) - Q, "||"))),
+         fill = "#59A14F", cex = 0.62, font = 2)
+
+draw_arrow(0.32, 0.68, 0.42, 0.68)
+draw_arrow(0.58, 0.68, 0.68, 0.68)
+
+draw_box(0.50, 0.32, 0.54, 0.18,
+         expression(atop(paste(R[2], "(", hat(eta), ", ", eta, ")"),
+                         "small if the product is small")),
+         fill = "#FFE0E0", cex = 0.70, font = 2)
+
+draw_arrow(0.50, 0.58, 0.50, 0.42)
+```
+
+## Double Robustness vs Efficiency
+
+Double robustness and efficiency are related but distinct.
+
+| Property | Meaning |
+|:--|:--|
+| Double robustness | consistency can hold if either \(e(X)\) or \(Q_t(X)\) is consistently estimated |
+| Local efficiency | if all nuisance functions are consistently estimated well enough, the estimator has influence function \(D^*\) |
+| Semiparametric efficiency | among regular estimators in the model, no estimator has smaller asymptotic variance than \(E(D^{*2})/n\) |
+
+So DR is not merely "two chances to be right." Its deeper role is:
+
+> It targets the efficient influence function and therefore can attain the efficiency lower bound.
+
+## Load and Prepare the NHANES Classroom Data
+
+```{r load-data}
+data_candidates <- c(
+  file.path("..", "Data", "NHANES_data.csv"),
+  file.path("Data", "NHANES_data.csv"),
+  "C:/Users/seyoo/OneDrive/GitHub_repository/Causal_Inference_Survival_Analysis/Causal_Inference_Lecture/Data/NHANES_data.csv"
+)
+
+data_path <- data_candidates[file.exists(data_candidates)][1]
+if (is.na(data_path)) {
+  stop("Could not find NHANES_data.csv. Check the data path.")
+}
+
+nhanes <- read.csv(data_path, stringsAsFactors = FALSE)
+
+baseline_vars <- c(
+  "age_yr",
+  "gender",
+  "race",
+  "educ_lvl",
+  "inc_to_pov_ratio",
+  "bmi"
+)
+
+analysis_vars <- c("smoker_indicator", "cvd_indicator", baseline_vars)
+
+eff_data <- nhanes[complete.cases(nhanes[, analysis_vars]), analysis_vars]
+eff_data$smoker_indicator <- as.integer(eff_data$smoker_indicator)
+eff_data$cvd_indicator <- as.integer(eff_data$cvd_indicator)
+
+eff_data$smoking_group <- factor(
+  ifelse(eff_data$smoker_indicator == 1, "Smoker", "Non-smoker"),
+  levels = c("Non-smoker", "Smoker")
+)
+
+eff_data$gender_label <- factor(
+  eff_data$gender,
+  levels = c("F", "M"),
+  labels = c("Female", "Male")
+)
+
+eff_data$race_label <- factor(
+  eff_data$race,
+  levels = c(
+    "mex_american",
+    "other_hispanic",
+    "nh_white",
+    "nh_black",
+    "nh_asian"
+  ),
+  labels = c(
+    "Mexican American",
+    "Other Hispanic",
+    "Non-Hispanic White",
+    "Non-Hispanic Black",
+    "Non-Hispanic Asian"
+  )
+)
+
+eff_data$educ_label <- factor(
+  eff_data$educ_lvl,
+  levels = c(
+    "lt_9th_grade",
+    "9_to_12th_grade_no_diploma",
+    "hs_grad_or_ged",
+    "start_college_to_aa",
+    "college_grad_or_above"
+  ),
+  labels = c(
+    "Less than 9th grade",
+    "9th-12th, no diploma",
+    "High school or GED",
+    "Some college or AA",
+    "College graduate or above"
+  )
+)
+
+nrow(eff_data)
+```
+
+```{r sample-summary}
+sample_summary <- data.frame(
+  Group = c("Non-smoker", "Smoker", "Total"),
+  N = c(
+    sum(eff_data$smoker_indicator == 0),
+    sum(eff_data$smoker_indicator == 1),
+    nrow(eff_data)
+  ),
+  CVD_percent = round(100 * c(
+    mean(eff_data$cvd_indicator[eff_data$smoker_indicator == 0]),
+    mean(eff_data$cvd_indicator[eff_data$smoker_indicator == 1]),
+    mean(eff_data$cvd_indicator)
+  ), 2)
+)
+
+mkable(sample_summary)
+```
+
+## Estimate the Nuisance Functions
+
+We use the same classroom covariate set as Lectures 2-6.
+
+```{r nuisance-models}
+treatment_model <- glm(
+  smoker_indicator ~ age_yr + gender_label + race_label +
+    educ_label + inc_to_pov_ratio + bmi,
+  data = eff_data,
+  family = binomial()
+)
+
+outcome_model <- glm(
+  cvd_indicator ~ smoker_indicator + age_yr + gender_label +
+    race_label + educ_label + inc_to_pov_ratio + bmi,
+  data = eff_data,
+  family = binomial()
+)
+
+eff_data$e_hat <- bound_probability(predict(treatment_model, type = "response"))
+
+data_if_smoker <- eff_data
+data_if_non_smoker <- eff_data
+data_if_smoker$smoker_indicator <- 1
+data_if_non_smoker$smoker_indicator <- 0
+
+eff_data$q1_hat <- bound_probability(
+  predict(outcome_model, newdata = data_if_smoker, type = "response")
+)
+
+eff_data$q0_hat <- bound_probability(
+  predict(outcome_model, newdata = data_if_non_smoker, type = "response")
+)
+
+nuisance_summary <- data.frame(
+  Quantity = c(
+    "Estimated propensity score \\(\\hat e(X)\\)",
+    "Predicted CVD risk if smoker \\(\\hat Q_1(X)\\)",
+    "Predicted CVD risk if non-smoker \\(\\hat Q_0(X)\\)"
+  ),
+  Mean_SD = c(
+    mean_sd(eff_data$e_hat),
+    mean_sd(eff_data$q1_hat),
+    mean_sd(eff_data$q0_hat)
+  ),
+  Min = round(c(
+    min(eff_data$e_hat),
+    min(eff_data$q1_hat),
+    min(eff_data$q0_hat)
+  ), 4),
+  Max = round(c(
+    max(eff_data$e_hat),
+    max(eff_data$q1_hat),
+    max(eff_data$q0_hat)
+  ), 4)
+)
+names(nuisance_summary) <- c("Quantity", "Mean (SD)", "Min", "Max")
+
+mkable(nuisance_summary)
+```
+
+```{r nuisance-plots, echo=FALSE, fig.width=8.8, fig.height=5.2}
+old_par <- par(mfrow = c(2, 2), mar = c(4.5, 4.5, 3, 1))
+
+boxplot(
+  e_hat ~ smoking_group,
+  data = eff_data,
+  col = c("#A0CBE8", "#F28E2B"),
+  ylab = expression(paste(hat(e), "(X) = ", hat(P), "(T=1 | X)")),
+  main = "Estimated Propensity Scores"
+)
+
+hist(
+  eff_data$e_hat,
+  breaks = 30,
+  col = "#A0CBE8",
+  border = "white",
+  xlab = expression(paste(hat(e), "(X)")),
+  main = "Overlap Diagnostic"
+)
+
+plot(
+  eff_data$q0_hat,
+  eff_data$q1_hat,
+  pch = 21,
+  bg = adjustcolor("#59A14F", alpha.f = 0.45),
+  col = "white",
+  xlab = expression(paste(hat(Q)[0], "(X)")),
+  ylab = expression(paste(hat(Q)[1], "(X)")),
+  main = "Two Predicted Worlds"
+)
+abline(0, 1, lty = 2, lwd = 2)
+
+hist(
+  100 * (eff_data$q1_hat - eff_data$q0_hat),
+  breaks = 30,
+  col = "#F1CE63",
+  border = "white",
+  xlab = expression(paste(100, " x {", hat(Q)[1], "(X)-", hat(Q)[0], "(X)}")),
+  main = "Conditional RD Distribution"
+)
+
+par(old_par)
+```
+
+## Estimate the DR Effect and Its EIF
+
+```{r nhanes-dr-eif}
+T_obs <- eff_data$smoker_indicator
+Y_obs <- eff_data$cvd_indicator
+e_hat <- eff_data$e_hat
+q1_hat <- eff_data$q1_hat
+q0_hat <- eff_data$q0_hat
+
+dr_component <- q1_hat - q0_hat +
+  T_obs / e_hat * (Y_obs - q1_hat) -
+  (1 - T_obs) / (1 - e_hat) * (Y_obs - q0_hat)
+
+psi_dr <- mean(dr_component)
+eif_dr <- dr_component - psi_dr
+
+or_component <- q1_hat - q0_hat
+psi_or <- mean(or_component)
+
+ipw_psi1 <- weighted_mean(Y_obs[T_obs == 1], 1 / e_hat[T_obs == 1])
+ipw_psi0 <- weighted_mean(Y_obs[T_obs == 0], 1 / (1 - e_hat[T_obs == 0]))
+psi_ipw <- ipw_psi1 - ipw_psi0
+
+psi_crude <- mean(Y_obs[T_obs == 1]) - mean(Y_obs[T_obs == 0])
+
+effect_table <- data.frame(
+  Estimator = c(
+    "\\(\\hat\\psi_{crude}\\)",
+    "\\(\\hat\\psi_{IPW}\\)",
+    "\\(\\hat\\psi_{OR}\\)",
+    "\\(\\hat\\psi_{DR}\\)"
+  ),
+  Method = c("Observed comparison", "IPW", "Outcome regression", "Doubly robust"),
+  Risk_difference_pp = round(100 * c(
+    psi_crude,
+    psi_ipw,
+    psi_or,
+    psi_dr
+  ), 3)
+)
+names(effect_table) <- c("Estimator", "Method", "Risk difference (pp)")
+
+mkable(effect_table)
+```
+
+The estimated efficient influence function for the DR estimator is centered by construction:
+
+```{r eif-check}
+eif_check <- data.frame(
+  Quantity = c(
+    "Mean estimated EIF \\(P_n\\hat D\\)",
+    "SD estimated EIF \\(sd(\\hat D_i)\\)",
+    "Estimated EIF SE \\(sd(\\hat D_i)/\\sqrt n\\)",
+    "Estimated EIF SE in percentage points"
+  ),
+  Value = c(
+    mean(eif_dr),
+    sd(eif_dr),
+    sd(eif_dr) / sqrt(nrow(eff_data)),
+    100 * sd(eif_dr) / sqrt(nrow(eff_data))
+  )
+)
+
+eif_check$Value <- signif(eif_check$Value, 5)
+mkable(eif_check)
+```
+
+The estimated semiparametric efficiency lower bound for \(\mathrm{Var}(\hat\psi)\) is
+
+$$
+\frac{\widehat{\mathrm{Var}}(\hat D)}{n}.
+$$
+
+This is not a theorem that our fitted logistic models are correct. It is a plug-in estimate of the bound based on the nuisance functions used in this classroom analysis.
+
+## Decompose the Estimated Bound
+
+The empirical analog of the bound decomposition is:
+
+```{r bound-decomposition-nhanes}
+tau_hat_x <- q1_hat - q0_hat
+
+heterogeneity_component <- var(tau_hat_x)
+residual_component <- mean(
+  q1_hat * (1 - q1_hat) / e_hat +
+    q0_hat * (1 - q0_hat) / (1 - e_hat)
+)
+total_decomposition <- heterogeneity_component + residual_component
+direct_eif_variance <- var(eif_dr)
+
+bound_table <- data.frame(
+  Component = c(
+    "Heterogeneity \\(\\widehat{\\mathrm{Var}}\\{\\hat Q_1(X)-\\hat Q_0(X)\\}\\)",
+    "Residual noise \\(P_n[\\hat Q_1(1-\\hat Q_1)/\\hat e + \\hat Q_0(1-\\hat Q_0)/(1-\\hat e)]\\)",
+    "Total decomposition \\(\\hat V_{\\mathrm{EIF}}\\)",
+    "Direct sample variance \\(\\widehat{\\mathrm{Var}}(\\hat D_i)\\)"
+  ),
+  Variance_scale = round(c(
+    heterogeneity_component,
+    residual_component,
+    total_decomposition,
+    direct_eif_variance
+  ), 5),
+  SE_percentage_points = round(100 * sqrt(c(
+    heterogeneity_component,
+    residual_component,
+    total_decomposition,
+    direct_eif_variance
+  ) / nrow(eff_data)), 3)
+)
+names(bound_table) <- c("Component", "Variance scale", "SE (pp)")
+
+mkable(bound_table)
+```
+
+```{r bound-decomposition-plot, echo=FALSE, fig.width=8.8, fig.height=4.5}
+component_values <- c(
+  Heterogeneity = heterogeneity_component,
+  `Residual noise` = residual_component
+)
+
+old_par <- par(mar = c(5, 5, 4, 1))
+
+bar_locations <- barplot(
+  component_values,
+  col = c("#59A14F", "#4E79A7"),
+  ylim = c(0, max(component_values) * 1.25),
+  ylab = "Estimated variance contribution",
+  main = "Estimated Components of the Efficiency Bound"
+)
+
+text(
+  bar_locations,
+  component_values,
+  labels = round(component_values, 4),
+  pos = 3,
+  cex = 0.9,
+  font = 2
+)
+
+par(old_par)
+```
+
+**Interpretation.** The estimated efficiency bound is almost entirely driven by the residual-noise component, not by treatment-effect heterogeneity. Numerically, the heterogeneity contribution is about \(0.0009\), while the residual contribution is about \(0.3773\). This means that, after conditioning on the observed covariates, most of the unavoidable uncertainty comes from the binary outcome variation \(Y-Q_T(X)\), amplified by the inverse propensity weights \(1/\hat e(X)\) and \(1/\{1-\hat e(X)\}\). In this example, improving precision is therefore less about explaining heterogeneity in \(\hat Q_1(X)-\hat Q_0(X)\), and more about the hard statistical fact that CVD is a noisy binary outcome and overlap controls how much that noise is inflated.
+
+The total decomposition \(\hat V_{\mathrm{EIF}}=0.3782\) is also close to the direct empirical variance \(\widehat{\mathrm{Var}}(\hat D_i)=0.3655\). This agreement is a useful diagnostic: the closed-form decomposition and the sample variance of the estimated EIF are telling essentially the same first-order uncertainty story. On the standard-error scale, both imply an uncertainty of about \(0.76\)--\(0.78\) percentage points for the DR risk-difference estimate.
+
+## Bootstrap SE vs EIF SE
+
+Lecture 5 used the bootstrap. Semiparametric theory gives an analytic first-order SE estimate through the EIF:
+
+$$
+\widehat{SE}_{EIF}
+=
+\sqrt{
+\frac{1}{n}
+\widehat{\mathrm{Var}}(\hat D)
+}.
+$$
+
+The bootstrap and EIF SE answer similar first-order questions. The bootstrap reruns the estimator; the EIF SE uses the estimated first-order linear representation.
+
+```{r bootstrap-nhanes}
+fit_dr_once <- function(input_data) {
+  treatment_model_b <- glm(
+    smoker_indicator ~ age_yr + gender_label + race_label +
+      educ_label + inc_to_pov_ratio + bmi,
+    data = input_data,
+    family = binomial()
+  )
+
+  outcome_model_b <- glm(
+    cvd_indicator ~ smoker_indicator + age_yr + gender_label +
+      race_label + educ_label + inc_to_pov_ratio + bmi,
+    data = input_data,
+    family = binomial()
+  )
+
+  e_b <- bound_probability(predict(treatment_model_b, type = "response"))
+
+  d1 <- input_data
+  d0 <- input_data
+  d1$smoker_indicator <- 1
+  d0$smoker_indicator <- 0
+
+  q1_b <- bound_probability(predict(outcome_model_b, newdata = d1, type = "response"))
+  q0_b <- bound_probability(predict(outcome_model_b, newdata = d0, type = "response"))
+
+  t_b <- input_data$smoker_indicator
+  y_b <- input_data$cvd_indicator
+
+  mean(q1_b - q0_b +
+         t_b / e_b * (y_b - q1_b) -
+         (1 - t_b) / (1 - e_b) * (y_b - q0_b))
+}
+
+set.seed(20260706)
+B_boot <- 200
+n_eff <- nrow(eff_data)
+boot_dr <- numeric(B_boot)
+
+for (b in seq_len(B_boot)) {
+  rows_b <- sample.int(n_eff, size = n_eff, replace = TRUE)
+  boot_dr[b] <- tryCatch(
+    fit_dr_once(eff_data[rows_b, ]),
+    error = function(e) NA_real_
+  )
+}
+
+boot_dr <- boot_dr[!is.na(boot_dr)]
+
+se_compare <- data.frame(
+  Method = c("\\(\\widehat{SE}_{EIF}\\)", "\\(\\widehat{SE}_{boot}\\)"),
+  SE_percentage_points = round(100 * c(
+    sd(eif_dr) / sqrt(n_eff),
+    sd(boot_dr)
+  ), 3),
+  Number_of_bootstrap_samples = c(NA, length(boot_dr))
+)
+names(se_compare) <- c("SE estimator", "SE (pp)", "Bootstrap samples")
+
+mkable(se_compare)
+```
+
+```{r bootstrap-vs-eif-plot, echo=FALSE, fig.width=8.8, fig.height=4.6}
+old_par <- par(mar = c(5, 5, 4, 1))
+
+hist(
+  100 * boot_dr,
+  breaks = 28,
+  col = "#A0CBE8",
+  border = "white",
+  xlab = "Bootstrap DR risk difference (percentage points)",
+  main = "Bootstrap Distribution of the DR Estimator"
+)
+
+abline(v = 100 * psi_dr, lwd = 3, col = "#E15759")
+abline(v = 100 * psi_dr + c(-1, 1) * 1.96 * 100 * sd(eif_dr) / sqrt(n_eff),
+       lwd = 2, col = "#333333", lty = 2)
+
+legend(
+  "topright",
+  legend = c("Original DR estimate", "EIF normal 95% interval"),
+  lwd = c(3, 2),
+  lty = c(1, 2),
+  col = c("#E15759", "#333333"),
+  bty = "n"
+)
+
+par(old_par)
+```
+
+**Interpretation.** The bootstrap distribution is centered near the original DR estimate, shown by the red vertical line. The dashed black lines are the normal 95% interval based on the estimated EIF standard error, not on the bootstrap quantiles. The fact that the bootstrap standard error, \(0.788\) percentage points, is close to the EIF standard error, \(0.762\) percentage points, is reassuring: two different uncertainty calculations are giving nearly the same scale.
+
+This comparison supports the asymptotic linearity approximation
+
+$$
+\hat\psi_{DR}-\psi
+\approx
+P_n D^*(O).
+$$
+
+In words, once the nuisance functions are fit, the remaining sampling variability of the DR estimator behaves much like the empirical average of its influence-function contributions. The bootstrap histogram is slightly irregular because it uses only 200 resamples and refits the nuisance models each time, but its width is broadly consistent with the analytic EIF-based interval. That is exactly what we hope to see before trusting Wald-style confidence intervals from semiparametric theory.
+
+## Simulation 1: Efficiency Bound in a Known DGP
+
+Now we simulate from a known observational data-generating process. This lets us compute the true \(\psi\) and the true efficiency bound.
+
+The data-generating process is:
+
+$$
+X_1,X_2 \sim N(0,1),
+\qquad
+X_3 \sim \mathrm{Bernoulli}(0.45),
+$$
+
+$$
+e(X)
+=
+\mathrm{expit}(-0.25 + 0.70X_1 - 0.55X_2 + 0.35X_3),
+$$
+
+$$
+Q_0(X)
+=
+\mathrm{expit}(-2.10 + 0.80X_1 - 0.45X_2 + 0.35X_3),
+$$
+
+and
+
+$$
+Q_1(X)
+=
+\mathrm{expit}\{\mathrm{logit}(Q_0(X)) + 0.45 + 0.35X_1\}.
+$$
+
+Then \(T \sim \mathrm{Bernoulli}\{e(X)\}\), and \(Y \sim \mathrm{Bernoulli}\{Q_T(X)\}\).
+
+```{r simulation-functions}
+generate_dgp <- function(n, overlap_strength = 1) {
+  x1 <- rnorm(n)
+  x2 <- rnorm(n)
+  x3 <- rbinom(n, size = 1, prob = 0.45)
+
+  e <- inv_logit(overlap_strength * (-0.25 + 0.70 * x1 - 0.55 * x2 + 0.35 * x3))
+  q0 <- inv_logit(-2.10 + 0.80 * x1 - 0.45 * x2 + 0.35 * x3)
+  q1 <- inv_logit(safe_logit(q0) + 0.45 + 0.35 * x1)
+
+  t <- rbinom(n, size = 1, prob = e)
+  y <- rbinom(n, size = 1, prob = ifelse(t == 1, q1, q0))
+
+  data.frame(
+    x1 = x1,
+    x2 = x2,
+    x3 = x3,
+    t = t,
+    y = y,
+    e_true = e,
+    q1_true = q1,
+    q0_true = q0
+  )
+}
+
+truth_from_large_population <- function(n_pop = 200000, overlap_strength = 1) {
+  pop <- generate_dgp(n_pop, overlap_strength = overlap_strength)
+  psi <- mean(pop$q1_true - pop$q0_true)
+  v_heterogeneity <- var(pop$q1_true - pop$q0_true)
+  v_residual <- mean(
+    pop$q1_true * (1 - pop$q1_true) / pop$e_true +
+      pop$q0_true * (1 - pop$q0_true) / (1 - pop$e_true)
+  )
+  c(
+    psi = psi,
+    v_eff = v_heterogeneity + v_residual,
+    heterogeneity = v_heterogeneity,
+    residual = v_residual
+  )
+}
+
+estimate_sim_methods <- function(dat,
+                                 e_spec = c("correct", "wrong"),
+                                 q_spec = c("correct", "wrong")) {
+  e_spec <- match.arg(e_spec)
+  q_spec <- match.arg(q_spec)
+
+  if (e_spec == "correct") {
+    e_formula <- t ~ x1 + x2 + x3
+  } else {
+    e_formula <- t ~ x1
+  }
+
+  if (q_spec == "correct") {
+    q_formula <- y ~ t + x1 + x2 + x3 + t:x1
+  } else {
+    q_formula <- y ~ t + x1
+  }
+
+  e_fit <- glm(e_formula, data = dat, family = binomial())
+  q_fit <- glm(q_formula, data = dat, family = binomial())
+
+  e_hat_s <- bound_probability(predict(e_fit, type = "response"))
+
+  d1 <- dat
+  d0 <- dat
+  d1$t <- 1
+  d0$t <- 0
+
+  q1_hat_s <- bound_probability(predict(q_fit, newdata = d1, type = "response"))
+  q0_hat_s <- bound_probability(predict(q_fit, newdata = d0, type = "response"))
+
+  crude <- mean(dat$y[dat$t == 1]) - mean(dat$y[dat$t == 0])
+
+  ipw <- weighted_mean(dat$y[dat$t == 1], 1 / e_hat_s[dat$t == 1]) -
+    weighted_mean(dat$y[dat$t == 0], 1 / (1 - e_hat_s[dat$t == 0]))
+
+  outcome_regression <- mean(q1_hat_s - q0_hat_s)
+
+  dr <- mean(
+    q1_hat_s - q0_hat_s +
+      dat$t / e_hat_s * (dat$y - q1_hat_s) -
+      (1 - dat$t) / (1 - e_hat_s) * (dat$y - q0_hat_s)
+  )
+
+  oracle <- mean(
+    dat$q1_true - dat$q0_true +
+      dat$t / dat$e_true * (dat$y - dat$q1_true) -
+      (1 - dat$t) / (1 - dat$e_true) * (dat$y - dat$q0_true)
+  )
+
+  c(
+    Crude = crude,
+    IPW = ipw,
+    Outcome_regression = outcome_regression,
+    Doubly_robust = dr,
+    Oracle_EIF = oracle
+  )
+}
+
+parametric_or_se <- function(q_fit, d1, d0, B = 120) {
+  beta_hat <- coef(q_fit)
+  vc <- vcov(q_fit)
+
+  if (any(!is.finite(beta_hat)) || any(!is.finite(vc))) {
+    return(NA_real_)
+  }
+
+  p <- length(beta_hat)
+  vc <- vc + diag(1e-10, p)
+
+  coef_draws <- tryCatch(
+    {
+      z <- matrix(rnorm(B * p), nrow = B, ncol = p)
+      sweep(z %*% chol(vc), 2, beta_hat, "+")
+    },
+    error = function(e) NULL
+  )
+
+  if (is.null(coef_draws)) {
+    return(NA_real_)
+  }
+
+  x1_mat <- model.matrix(delete.response(terms(q_fit)), data = d1)
+  x0_mat <- model.matrix(delete.response(terms(q_fit)), data = d0)
+
+  q1_draws <- inv_logit(x1_mat %*% t(coef_draws))
+  q0_draws <- inv_logit(x0_mat %*% t(coef_draws))
+  psi_draws <- colMeans(q1_draws - q0_draws)
+
+  sd(psi_draws)
+}
+
+estimate_sim_methods_with_ci <- function(dat,
+                                         e_spec = c("correct", "wrong"),
+                                         q_spec = c("correct", "wrong")) {
+  e_spec <- match.arg(e_spec)
+  q_spec <- match.arg(q_spec)
+
+  if (e_spec == "correct") {
+    e_formula <- t ~ x1 + x2 + x3
+  } else {
+    e_formula <- t ~ x1
+  }
+
+  if (q_spec == "correct") {
+    q_formula <- y ~ t + x1 + x2 + x3 + t:x1
+  } else {
+    q_formula <- y ~ t + x1
+  }
+
+  e_fit <- glm(e_formula, data = dat, family = binomial())
+  q_fit <- glm(q_formula, data = dat, family = binomial())
+
+  e_hat_s <- bound_probability(predict(e_fit, type = "response"))
+
+  d1 <- dat
+  d0 <- dat
+  d1$t <- 1
+  d0$t <- 0
+
+  q1_hat_s <- bound_probability(predict(q_fit, newdata = d1, type = "response"))
+  q0_hat_s <- bound_probability(predict(q_fit, newdata = d0, type = "response"))
+
+  n <- nrow(dat)
+  treated <- dat$t == 1
+  untreated <- dat$t == 0
+
+  crude <- mean(dat$y[treated]) - mean(dat$y[untreated])
+  crude_se <- sqrt(
+    var(dat$y[treated]) / sum(treated) +
+      var(dat$y[untreated]) / sum(untreated)
+  )
+
+  ipw_psi1 <- weighted_mean(dat$y[treated], 1 / e_hat_s[treated])
+  ipw_psi0 <- weighted_mean(dat$y[untreated], 1 / (1 - e_hat_s[untreated]))
+  ipw <- ipw_psi1 - ipw_psi0
+
+  ipw_den1 <- mean(dat$t / e_hat_s)
+  ipw_den0 <- mean((1 - dat$t) / (1 - e_hat_s))
+  ipw_if <- dat$t / e_hat_s * (dat$y - ipw_psi1) / ipw_den1 -
+    (1 - dat$t) / (1 - e_hat_s) * (dat$y - ipw_psi0) / ipw_den0
+  ipw_se <- sd(ipw_if) / sqrt(n)
+
+  outcome_regression <- mean(q1_hat_s - q0_hat_s)
+  or_se <- parametric_or_se(q_fit, d1, d0)
+  if (!is.finite(or_se)) {
+    or_se <- sd(q1_hat_s - q0_hat_s) / sqrt(n)
+  }
+
+  dr_component <- q1_hat_s - q0_hat_s +
+    dat$t / e_hat_s * (dat$y - q1_hat_s) -
+    (1 - dat$t) / (1 - e_hat_s) * (dat$y - q0_hat_s)
+  dr <- mean(dr_component)
+  dr_se <- sd(dr_component - dr) / sqrt(n)
+
+  oracle_component <- dat$q1_true - dat$q0_true +
+    dat$t / dat$e_true * (dat$y - dat$q1_true) -
+    (1 - dat$t) / (1 - dat$e_true) * (dat$y - dat$q0_true)
+  oracle <- mean(oracle_component)
+  oracle_se <- sd(oracle_component - oracle) / sqrt(n)
+
+  estimates <- c(
+    Crude = crude,
+    IPW = ipw,
+    Outcome_regression = outcome_regression,
+    Doubly_robust = dr,
+    Oracle_EIF = oracle
+  )
+
+  ses <- c(
+    Crude = crude_se,
+    IPW = ipw_se,
+    Outcome_regression = or_se,
+    Doubly_robust = dr_se,
+    Oracle_EIF = oracle_se
+  )
+
+  data.frame(
+    Method = names(estimates),
+    Estimate = unname(estimates),
+    SE = unname(ses),
+    Lower = unname(estimates - 1.96 * ses),
+    Upper = unname(estimates + 1.96 * ses),
+    row.names = NULL
+  )
+}
+
+estimate_dr_with_eif <- function(dat,
+                                 e_spec = c("correct", "wrong"),
+                                 q_spec = c("correct", "wrong")) {
+  e_spec <- match.arg(e_spec)
+  q_spec <- match.arg(q_spec)
+
+  if (e_spec == "correct") {
+    e_formula <- t ~ x1 + x2 + x3
+  } else {
+    e_formula <- t ~ x1
+  }
+
+  if (q_spec == "correct") {
+    q_formula <- y ~ t + x1 + x2 + x3 + t:x1
+  } else {
+    q_formula <- y ~ t + x1
+  }
+
+  e_fit <- glm(e_formula, data = dat, family = binomial())
+  q_fit <- glm(q_formula, data = dat, family = binomial())
+
+  e_hat_s <- bound_probability(predict(e_fit, type = "response"))
+
+  d1 <- dat
+  d0 <- dat
+  d1$t <- 1
+  d0$t <- 0
+
+  q1_hat_s <- bound_probability(predict(q_fit, newdata = d1, type = "response"))
+  q0_hat_s <- bound_probability(predict(q_fit, newdata = d0, type = "response"))
+
+  dr_component <- q1_hat_s - q0_hat_s +
+    dat$t / e_hat_s * (dat$y - q1_hat_s) -
+    (1 - dat$t) / (1 - e_hat_s) * (dat$y - q0_hat_s)
+
+  psi_hat <- mean(dr_component)
+  eif_hat <- dr_component - psi_hat
+
+  c(
+    psi = psi_hat,
+    se = sd(eif_hat) / sqrt(nrow(dat)),
+    lower = psi_hat - 1.96 * sd(eif_hat) / sqrt(nrow(dat)),
+    upper = psi_hat + 1.96 * sd(eif_hat) / sqrt(nrow(dat)),
+    e_min = min(e_hat_s),
+    e_max = max(e_hat_s),
+    max_inverse_weight = max(1 / e_hat_s, 1 / (1 - e_hat_s))
+  )
+}
+
+oracle_eif_with_se <- function(dat) {
+  oracle_component <- dat$q1_true - dat$q0_true +
+    dat$t / dat$e_true * (dat$y - dat$q1_true) -
+    (1 - dat$t) / (1 - dat$e_true) * (dat$y - dat$q0_true)
+
+  psi_hat <- mean(oracle_component)
+  eif_hat <- oracle_component - psi_hat
+
+  c(
+    psi = psi_hat,
+    se = sd(eif_hat) / sqrt(nrow(dat)),
+    lower = psi_hat - 1.96 * sd(eif_hat) / sqrt(nrow(dat)),
+    upper = psi_hat + 1.96 * sd(eif_hat) / sqrt(nrow(dat))
+  )
+}
+
+summarize_ci_performance <- function(results, truth, v_eff = NULL) {
+  split_results <- split(results, list(results$Method, results$n), drop = TRUE)
+
+  out <- lapply(split_results, function(current) {
+    n_current <- unique(current$n)
+    method_current <- unique(current$Method)
+    estimate <- current$Estimate
+    se <- current$SE
+
+    data.frame(
+      n = n_current,
+      Method = method_current,
+      Bias = mean(estimate) - truth,
+      Monte_Carlo_SD = sd(estimate),
+      Mean_EIF_SE = mean(se),
+      Coverage = mean(current$Lower <= truth & current$Upper >= truth),
+      Efficiency_ratio = if (is.null(v_eff)) {
+        NA_real_
+      } else {
+        var(estimate) / (v_eff / n_current)
+      },
+      row.names = NULL
+    )
+  })
+
+  do.call(rbind, out)
+}
+
+evaluate_aipw_with_nuisances <- function(dat, e_hat_s, q1_hat_s, q0_hat_s) {
+  mean(
+    q1_hat_s - q0_hat_s +
+      dat$t / e_hat_s * (dat$y - q1_hat_s) -
+      (1 - dat$t) / (1 - e_hat_s) * (dat$y - q0_hat_s)
+  )
+}
+
+make_rich_features <- function(dat) {
+  dat$x1_2 <- dat$x1^2
+  dat$x2_2 <- dat$x2^2
+  dat$x1_3 <- dat$x1^3
+  dat$x2_3 <- dat$x2^3
+  dat$x1x2 <- dat$x1 * dat$x2
+  dat
+}
+
+rich_e_formula <- t ~ x1 + x2 + x3 + x1_2 + x2_2 + x1_3 + x2_3 + x1x2
+rich_q_formula <- y ~ t * (x1 + x2 + x3 + x1_2 + x2_2 + x1_3 + x2_3 + x1x2)
+
+estimate_dr_with_formula <- function(dat, e_formula, q_formula) {
+  dat_rich <- make_rich_features(dat)
+
+  e_fit <- glm(e_formula, data = dat_rich, family = binomial())
+  q_fit <- glm(q_formula, data = dat_rich, family = binomial())
+
+  e_hat_s <- bound_probability(predict(e_fit, type = "response"))
+
+  d1 <- dat_rich
+  d0 <- dat_rich
+  d1$t <- 1
+  d0$t <- 0
+
+  q1_hat_s <- bound_probability(predict(q_fit, newdata = d1, type = "response"))
+  q0_hat_s <- bound_probability(predict(q_fit, newdata = d0, type = "response"))
+
+  dr_component <- q1_hat_s - q0_hat_s +
+    dat_rich$t / e_hat_s * (dat_rich$y - q1_hat_s) -
+    (1 - dat_rich$t) / (1 - e_hat_s) * (dat_rich$y - q0_hat_s)
+
+  psi_hat <- mean(dr_component)
+  eif_hat <- dr_component - psi_hat
+
+  c(
+    psi = psi_hat,
+    se = sd(eif_hat) / sqrt(nrow(dat_rich)),
+    lower = psi_hat - 1.96 * sd(eif_hat) / sqrt(nrow(dat_rich)),
+    upper = psi_hat + 1.96 * sd(eif_hat) / sqrt(nrow(dat_rich))
+  )
+}
+
+estimate_dr_crossfit <- function(dat, e_formula, q_formula, K = 5) {
+  dat_rich <- make_rich_features(dat)
+  n <- nrow(dat_rich)
+  folds <- sample(rep(seq_len(K), length.out = n))
+
+  e_hat_s <- q1_hat_s <- q0_hat_s <- rep(NA_real_, n)
+
+  for (k in seq_len(K)) {
+    valid <- which(folds == k)
+    train <- which(folds != k)
+
+    e_fit <- glm(e_formula, data = dat_rich[train, ], family = binomial())
+    q_fit <- glm(q_formula, data = dat_rich[train, ], family = binomial())
+
+    valid_data <- dat_rich[valid, ]
+    d1 <- valid_data
+    d0 <- valid_data
+    d1$t <- 1
+    d0$t <- 0
+
+    e_hat_s[valid] <- bound_probability(
+      predict(e_fit, newdata = valid_data, type = "response")
+    )
+    q1_hat_s[valid] <- bound_probability(
+      predict(q_fit, newdata = d1, type = "response")
+    )
+    q0_hat_s[valid] <- bound_probability(
+      predict(q_fit, newdata = d0, type = "response")
+    )
+  }
+
+  dr_component <- q1_hat_s - q0_hat_s +
+    dat_rich$t / e_hat_s * (dat_rich$y - q1_hat_s) -
+    (1 - dat_rich$t) / (1 - e_hat_s) * (dat_rich$y - q0_hat_s)
+
+  psi_hat <- mean(dr_component)
+  eif_hat <- dr_component - psi_hat
+
+  c(
+    psi = psi_hat,
+    se = sd(eif_hat) / sqrt(n),
+    lower = psi_hat - 1.96 * sd(eif_hat) / sqrt(n),
+    upper = psi_hat + 1.96 * sd(eif_hat) / sqrt(n)
+  )
+}
+```
+
+```{r simulation-truth}
+set.seed(20260706)
+sim_truth <- truth_from_large_population()
+sim_truth_table <- data.frame(
+  Quantity = truth_math_label(names(sim_truth)),
+  Value = round(unname(sim_truth), 5)
+)
+
+mkable(sim_truth_table)
+```
+
+The oracle EIF estimator is not available in practice because it uses the true nuisance functions. It is useful in simulation because its variance should match the efficiency bound.
+
+```{r simulation-efficiency}
+set.seed(20260706)
+R_eff <- 200
+n_sim <- 800
+
+sim_method_names <- c(
+  "Crude",
+  "IPW",
+  "Outcome_regression",
+  "Doubly_robust",
+  "Oracle_EIF"
+)
+
+sim_estimates <- matrix(NA_real_, nrow = R_eff, ncol = length(sim_method_names))
+sim_ses <- sim_lower <- sim_upper <- sim_estimates
+colnames(sim_estimates) <- colnames(sim_ses) <-
+  colnames(sim_lower) <- colnames(sim_upper) <- sim_method_names
+
+for (r in seq_len(R_eff)) {
+  dat_r <- generate_dgp(n_sim)
+  sim_fit_r <- tryCatch(
+    estimate_sim_methods_with_ci(dat_r, e_spec = "correct", q_spec = "correct"),
+    error = function(e) data.frame(
+      Method = sim_method_names,
+      Estimate = NA_real_,
+      SE = NA_real_,
+      Lower = NA_real_,
+      Upper = NA_real_
+    )
+  )
+
+  sim_fit_r <- sim_fit_r[match(sim_method_names, sim_fit_r$Method), ]
+  sim_estimates[r, ] <- sim_fit_r$Estimate
+  sim_ses[r, ] <- sim_fit_r$SE
+  sim_lower[r, ] <- sim_fit_r$Lower
+  sim_upper[r, ] <- sim_fit_r$Upper
+}
+
+complete_sim_rows <- complete.cases(sim_estimates) &
+  complete.cases(sim_ses) &
+  complete.cases(sim_lower) &
+  complete.cases(sim_upper)
+
+sim_estimates <- sim_estimates[complete_sim_rows, , drop = FALSE]
+sim_ses <- sim_ses[complete_sim_rows, , drop = FALSE]
+sim_lower <- sim_lower[complete_sim_rows, , drop = FALSE]
+sim_upper <- sim_upper[complete_sim_rows, , drop = FALSE]
+
+summarize_mc <- function(estimates, ses, lower, upper, truth) {
+  data.frame(
+    Method = method_math_label(colnames(estimates)),
+    Mean = apply(estimates, 2, mean),
+    Bias = apply(estimates, 2, mean) - truth,
+    Monte_Carlo_SD = apply(estimates, 2, sd),
+    Mean_SE = apply(ses, 2, mean),
+    Coverage_95 = colMeans(lower <= truth & upper >= truth),
+    RMSE = sqrt(apply((t(t(estimates) - truth))^2, 2, mean)),
+    row.names = NULL
+  )
+}
+
+mc_eff_table <- summarize_mc(
+  sim_estimates,
+  sim_ses,
+  sim_lower,
+  sim_upper,
+  sim_truth["psi"]
+)
+mc_eff_table[, -1] <- round(mc_eff_table[, -1], 4)
+names(mc_eff_table) <- c(
+  "Estimator",
+  "\\(E_{MC}(\\hat\\psi)\\)",
+  "Bias",
+  "MC SD",
+  "Mean SE",
+  "95% CI coverage",
+  "RMSE"
+)
+
+theory_row <- data.frame(
+  Estimator = "\\(\\sqrt{V_{\\mathrm{EIF}}/n}\\)",
+  Mean = NA_real_,
+  Bias = NA_real_,
+  Monte_Carlo_SD = round(sqrt(sim_truth["v_eff"] / n_sim), 4),
+  Mean_SE = round(sqrt(sim_truth["v_eff"] / n_sim), 4),
+  Coverage_95 = NA_real_,
+  RMSE = NA_real_
+)
+names(theory_row) <- names(mc_eff_table)
+
+mkable(rbind(mc_eff_table, theory_row))
+```
+
+Two comments are important.
+
+First, the **Oracle EIF** row is the oracle benchmark for the nonparametric observed-data model: it uses the true \(e(X)\), \(Q_1(X)\), and \(Q_0(X)\), and its Monte Carlo SD should be close to \(\sqrt{V_{\mathrm{EIF}}/n}\).
+
+Second, the **outcome regression** row may have a smaller RMSE in this particular simulation because the simulated outcome model is exactly logistic-linear and the estimator is allowed to exploit that correct parametric restriction. That does **not** violate the semiparametric lower bound. It means the outcome-regression estimator is being judged in a smaller model than the nonparametric model used to define \(V_{\mathrm{EIF}}\). If that logistic outcome model were wrong, the same estimator could have persistent bias.
+
+```{r simulation-efficiency-plot, echo=FALSE, fig.width=9.2, fig.height=5.1}
+old_par <- par(mar = c(5.4, 9.4, 4.2, 1.2))
+
+method_sd <- apply(sim_estimates, 2, sd)
+method_bias <- apply(sim_estimates, 2, mean) - sim_truth["psi"]
+method_display <- c(
+  Crude = "Crude",
+  IPW = "IPW",
+  Outcome_regression = "Outcome regression",
+  Doubly_robust = "Doubly robust",
+  Oracle_EIF = "Oracle EIF"
+)
+
+plot_order <- rev(seq_along(method_sd))
+plot(
+  method_sd[plot_order],
+  seq_along(plot_order),
+  pch = 19,
+  cex = 1.5,
+  col = "#4E79A7",
+  yaxt = "n",
+  xlab = "Monte Carlo standard deviation",
+  ylab = "",
+  main = "Estimator Variability in the Known DGP",
+  xlim = range(c(method_sd, sqrt(sim_truth["v_eff"] / n_sim))) * c(0.95, 1.12),
+  ylim = c(0.7, length(plot_order) + 0.3)
+)
+axis(
+  2,
+  at = seq_along(plot_order),
+  labels = method_display[names(method_sd)[plot_order]],
+  las = 1,
+  cex.axis = 0.9
+)
+abline(v = sqrt(sim_truth["v_eff"] / n_sim), lwd = 3, lty = 2, col = "#E15759")
+legend(
+  "bottomright",
+  legend = "Semiparametric efficiency bound",
+  lwd = 3,
+  lty = 2,
+  col = "#E15759",
+  bty = "n"
+)
+
+par(old_par)
+```
+
+When the nuisance models are correctly specified, the DR estimator approaches the oracle EIF benchmark. In finite samples, it may not be exactly equal to the bound because nuisance functions are estimated, models are finite-dimensional, and the Monte Carlo size is limited. The parametric outcome-regression estimator is included as a warning: if the simulation makes its working model exactly true, it can look more efficient than the nonparametric semiparametric benchmark because it is borrowing extra model information.
+
+### Simulation 1A: Sample Size, Coverage, and the Efficiency Ratio
+
+This simulation has one purpose: to check the theorem in the cleanest possible setting.
+
+The theorem does **not** say that every reasonable estimator must have variance \(V_{\mathrm{EIF}}/n\). It says that the estimator whose first-order expansion is governed by the efficient influence function has asymptotic variance \(V_{\mathrm{EIF}}/n\), and that no regular estimator in the same nonparametric observed-data model can do better.
+
+So here we remove a major source of distraction: we use the true nuisance functions \(e(X)\), \(Q_1(X)\), and \(Q_0(X)\). This gives the oracle one-step estimator
+
+$$
+\hat\psi_{\mathrm{EIF}}
+=
+P_n\left[
+Q_1(X)-Q_0(X)
++
+\frac{T}{e(X)}\{Y-Q_1(X)\}
+-
+\frac{1-T}{1-e(X)}\{Y-Q_0(X)\}
+\right].
+$$
+
+If the efficiency-bound calculation is correct, then as \(n\) increases we should see:
+
+1. Monte Carlo bias close to 0.
+2. Monte Carlo standard deviation close to \(\sqrt{V_{\mathrm{EIF}}/n}\).
+3. Mean EIF-based standard error close to both quantities.
+4. Wald coverage close to 0.95.
+5. Efficiency ratio \(\mathrm{Var}_{MC}(\hat\psi_{\mathrm{EIF}})/(V_{\mathrm{EIF}}/n)\) close to 1.
+
+Suppose we repeat the simulation \(R\) times at the same sample size \(n\). Let \(\hat\psi^{(r)}\) denote the estimate from repetition \(r\), and let
+
+$$
+\bar{\hat\psi}_{MC}
+=
+\frac{1}{R}\sum_{r=1}^R \hat\psi^{(r)}.
+$$
+
+The Monte Carlo standard deviation is the empirical standard deviation of the repeated estimates:
+
+$$
+\widehat{\mathrm{SD}}_{MC}(\hat\psi)
+=
+\left[
+\frac{1}{R-1}
+\sum_{r=1}^R
+\left\{\hat\psi^{(r)}-\bar{\hat\psi}_{MC}\right\}^2
+\right]^{1/2}.
+$$
+
+In this simulation, the theorem predicts
+
+$$
+\widehat{\mathrm{SD}}_{MC}(\hat\psi_{\mathrm{EIF}})
+\approx
+\sqrt{\frac{V_{\mathrm{EIF}}}{n}},
+$$
+
+up to Monte Carlo error from using a finite number of repetitions.
+
+```{r simulation-sample-size-coverage}
+set.seed(20260706)
+sample_size_grid <- c(250, 500, 1000, 2000, 5000)
+R_size <- rep(600, length(sample_size_grid))
+oracle_theorem_results <- vector("list", length(sample_size_grid))
+
+for (j in seq_along(sample_size_grid)) {
+  n_j <- sample_size_grid[j]
+  R_j <- R_size[j]
+
+  current_results <- lapply(seq_len(R_j), function(r) {
+    dat_r <- generate_dgp(n_j)
+    fit_r <- oracle_eif_with_se(dat_r)
+    data.frame(
+      n = n_j,
+      Method = "Oracle_EIF",
+      Estimate = fit_r["psi"],
+      SE = fit_r["se"],
+      Lower = fit_r["lower"],
+      Upper = fit_r["upper"],
+      row.names = NULL
+    )
+  })
+
+  oracle_theorem_results[[j]] <- do.call(rbind, current_results)
+}
+
+oracle_theorem_results <- do.call(rbind, oracle_theorem_results)
+
+oracle_theorem_summary <- summarize_ci_performance(
+  oracle_theorem_results,
+  truth = sim_truth["psi"],
+  v_eff = sim_truth["v_eff"]
+)
+
+oracle_theorem_summary <- oracle_theorem_summary[order(oracle_theorem_summary$n), ]
+oracle_theorem_summary$MC_Reps <- vapply(
+  seq_len(nrow(oracle_theorem_summary)),
+  function(i) {
+    sum(oracle_theorem_results$n == oracle_theorem_summary$n[i])
+  },
+  integer(1)
+)
+oracle_theorem_summary$Theoretical_SE <- sqrt(sim_truth["v_eff"] / oracle_theorem_summary$n)
+oracle_theorem_summary$Ratio_MC_SE <- oracle_theorem_summary$Efficiency_ratio *
+  sqrt(2 / pmax(oracle_theorem_summary$MC_Reps - 1, 1))
+
+oracle_theorem_display <- oracle_theorem_summary[, c(
+  "n", "MC_Reps", "Bias", "Monte_Carlo_SD", "Mean_EIF_SE",
+  "Theoretical_SE", "Coverage", "Efficiency_ratio"
+)]
+oracle_theorem_display[, c(
+  "Bias", "Monte_Carlo_SD", "Mean_EIF_SE",
+  "Theoretical_SE", "Coverage", "Efficiency_ratio"
+)] <- round(
+  oracle_theorem_display[, c(
+    "Bias", "Monte_Carlo_SD", "Mean_EIF_SE",
+    "Theoretical_SE", "Coverage", "Efficiency_ratio"
+  )],
+  3
+)
+names(oracle_theorem_display) <- c(
+  "\\(n\\)",
+  "MC reps",
+  "Bias",
+  "MC SD",
+  "Mean \\(\\widehat{SE}_{EIF}\\)",
+  "\\(\\sqrt{V_{\\mathrm{EIF}}/n}\\)",
+  "95% CI coverage",
+  "\\(\\mathrm{Var}_{MC}(\\hat\\psi)/(V_{\\mathrm{EIF}}/n)\\)"
+)
+
+mkable(oracle_theorem_display)
+```
+
+```{r simulation-sample-size-coverage-plot, echo=FALSE, fig.width=9.2, fig.height=5.1}
+old_par <- par(mar = c(5, 5, 4.2, 1.2))
+
+plot(
+  oracle_theorem_summary$n,
+  oracle_theorem_summary$Theoretical_SE,
+  type = "b",
+  log = "xy",
+  pch = 19,
+  lwd = 3,
+  col = "#E15759",
+  ylim = range(c(
+    oracle_theorem_summary$Monte_Carlo_SD,
+    oracle_theorem_summary$Mean_EIF_SE,
+    oracle_theorem_summary$Theoretical_SE
+  )),
+  xlab = "Sample size n",
+  ylab = "Standard error scale",
+  main = "Oracle EIF Tracks the Efficiency Bound"
+)
+
+lines(
+  oracle_theorem_summary$n,
+  oracle_theorem_summary$Monte_Carlo_SD,
+  type = "b",
+  pch = 15,
+  lwd = 3,
+  col = "#59A14F"
+)
+
+lines(
+  oracle_theorem_summary$n,
+  oracle_theorem_summary$Mean_EIF_SE,
+  type = "b",
+  pch = 1,
+  lwd = 3,
+  col = "#4E79A7",
+  lty = 2
+)
+
+legend(
+  "topright",
+  legend = c(
+    expression(sqrt(V[EIF] / n)),
+    "Oracle EIF MC SD",
+    "Mean EIF SE"
+  ),
+  col = c("#E15759", "#59A14F", "#4E79A7"),
+  pch = c(19, 15, 1),
+  lwd = c(3, 3, 3),
+  lty = c(1, 1, 2),
+  bty = "n",
+  cex = 0.86
+)
+
+par(old_par)
+```
+
+```{r simulation-sample-size-efficiency-ratio-plot, echo=FALSE, fig.width=9.2, fig.height=4.8}
+old_par <- par(mar = c(5, 5, 4.2, 1.2))
+
+ratio_band_lower <- 1 - 1.96 * sqrt(2 / pmax(R_size - 1, 1))
+ratio_band_upper <- 1 + 1.96 * sqrt(2 / pmax(R_size - 1, 1))
+ratio_ylim <- range(c(
+  oracle_theorem_summary$Efficiency_ratio,
+  ratio_band_lower,
+  ratio_band_upper,
+  1
+), na.rm = TRUE)
+ratio_ylim <- ratio_ylim + c(-1, 1) * diff(ratio_ylim) * 0.12
+
+plot(
+  oracle_theorem_summary$n,
+  rep(1, length(sample_size_grid)),
+  type = "n",
+  lwd = 3,
+  lty = 2,
+  col = "#E15759",
+  ylim = ratio_ylim,
+  xlab = "Sample size n",
+  ylab = expression(Var[MC](hat(psi)) / (V[EIF] / n)),
+  main = "Oracle EIF Efficiency Ratio"
+)
+
+polygon(
+  c(oracle_theorem_summary$n, rev(oracle_theorem_summary$n)),
+  c(ratio_band_lower, rev(ratio_band_upper)),
+  col = adjustcolor("#BDBDBD", alpha.f = 0.35),
+  border = NA
+)
+abline(h = 1, lwd = 3, lty = 2, col = "#E15759")
+
+points(
+  oracle_theorem_summary$n,
+  oracle_theorem_summary$Efficiency_ratio,
+  pch = 15,
+  cex = 1.35,
+  col = "#59A14F"
+)
+
+legend(
+  "topright",
+  legend = c(
+    "Efficiency bound = 1",
+    "Monte Carlo 95% band if ratio = 1",
+    "Oracle EIF"
+  ),
+  col = c("#E15759", "#BDBDBD", "#59A14F"),
+  pch = c(NA, 15, 15),
+  pt.cex = c(1, 1.25, 1.35),
+  lwd = c(3, NA, NA),
+  lty = c(2, NA, NA),
+  bty = "n",
+  cex = 0.82
+)
+
+par(old_par)
+```
+
+This is the desired pattern. The green Monte Carlo standard deviation, the blue EIF standard error, and the red theoretical curve all move together on the \(n^{-1/2}\) scale. The efficiency ratio stays near 1, up to ordinary Monte Carlo error from estimating a variance with \(R=600\) repeated simulations.
+
+This is why we do the experiment: it connects the abstract lower-bound formula \(V_{\mathrm{EIF}}=E\{D^*(O)^2\}\) to observable repeated-sampling behavior. Once that connection is clear, feasible DR estimation is easier to understand. A feasible DR estimator tries to behave like this oracle EIF estimator after replacing \(e,Q_1,Q_0\) by estimates. If the nuisance estimators are good enough, its first-order behavior is governed by the same EIF; if they are unstable or misspecified, the finite-sample behavior can deviate.
+
+IPW and OR are useful comparisons, but they answer different questions. IPW does not use the outcome regression information in \(Q_t(X)\), so it often pays a variance price. OR can look extremely good when the outcome regression model is exactly correct, but that is because the simulation has given it extra parametric structure. The clean efficiency-bound check is the oracle EIF pattern above.
+
+### Simulation 1B: When the EIF/DR Estimator Beats Single-Robust Estimators
+
+The first simulation intentionally made the basic parametric outcome model correct. That is useful for understanding the efficiency bound, but it can hide the practical advantage of EIF-based estimation. Here we add a more demanding data-generating process with nonlinear confounding and treatment-effect heterogeneity:
+
+$$
+\mathrm{logit}\{e(X)\}
+=
+-0.20+0.70X_1-0.65X_2+0.35X_3
++0.55X_1X_2-0.30X_1^2+0.25\sin(X_2),
+$$
+
+and
+
+$$
+\mathrm{logit}\{Q_0(X)\}
+=
+-2.05+0.70X_1-0.45X_2+0.35X_3
++0.60X_1X_2-0.35X_2^2+0.35\sin(2X_1),
+$$
+
+with
+
+$$
+\mathrm{logit}\{Q_1(X)\}
+=
+\mathrm{logit}\{Q_0(X)\}
++0.45+0.40X_1-0.25X_2+0.45X_1X_2.
+$$
+
+We compare:
+
+1. Simple IPW using only \(X_1,X_2,X_3\) in the propensity model.
+2. Simple OR using only \(T,X_1,X_2,X_3\) in the outcome model.
+3. A richer EIF/DR estimator that includes nonlinear and interaction terms in both nuisance fits, with estimated propensities truncated to \([0.025,0.975]\) to avoid finite-sample inverse-weight explosions.
+4. The infeasible oracle EIF estimator.
+
+This is a practical stress test, not a theorem that DR always beats OR or IPW. The lesson is sharper: when single-robust working models are under-specified, the EIF/DR construction can be much closer to the oracle benchmark if its nuisance fits capture the important structure.
+
+```{r simulation-dr-advantage-functions}
+make_advantage_features <- function(dat) {
+  dat$x1_2 <- dat$x1^2
+  dat$x2_2 <- dat$x2^2
+  dat$x1x2 <- dat$x1 * dat$x2
+  dat$sin_x2 <- sin(dat$x2)
+  dat$sin2_x1 <- sin(2 * dat$x1)
+  dat
+}
+
+generate_advantage_dgp <- function(n) {
+  x1 <- rnorm(n)
+  x2 <- rnorm(n)
+  x3 <- rbinom(n, size = 1, prob = 0.45)
+
+  x1_2 <- x1^2
+  x2_2 <- x2^2
+  x1x2 <- x1 * x2
+  sin_x2 <- sin(x2)
+  sin2_x1 <- sin(2 * x1)
+
+  e <- bound_probability(
+    inv_logit(
+      -0.20 + 0.70 * x1 - 0.65 * x2 + 0.35 * x3 +
+        0.55 * x1x2 - 0.30 * x1_2 + 0.25 * sin_x2
+    ),
+    eps = 0.01
+  )
+
+  q0 <- bound_probability(
+    inv_logit(
+      -2.05 + 0.70 * x1 - 0.45 * x2 + 0.35 * x3 +
+        0.60 * x1x2 - 0.35 * x2_2 + 0.35 * sin2_x1
+    ),
+    eps = 0.01
+  )
+
+  q1 <- bound_probability(
+    inv_logit(safe_logit(q0) + 0.45 + 0.40 * x1 - 0.25 * x2 + 0.45 * x1x2),
+    eps = 0.01
+  )
+
+  t <- rbinom(n, size = 1, prob = e)
+  y <- rbinom(n, size = 1, prob = ifelse(t == 1, q1, q0))
+
+  data.frame(
+    x1 = x1,
+    x2 = x2,
+    x3 = x3,
+    t = t,
+    y = y,
+    e_true = e,
+    q1_true = q1,
+    q0_true = q0
+  )
+}
+
+truth_advantage_dgp <- function(n_pop = 250000) {
+  pop <- generate_advantage_dgp(n_pop)
+  psi <- mean(pop$q1_true - pop$q0_true)
+  v_eff <- var(pop$q1_true - pop$q0_true) +
+    mean(
+      pop$q1_true * (1 - pop$q1_true) / pop$e_true +
+        pop$q0_true * (1 - pop$q0_true) / (1 - pop$e_true)
+    )
+
+  c(psi = psi, v_eff = v_eff)
+}
+
+estimate_advantage_methods_with_ci <- function(dat) {
+  dat_rich <- make_advantage_features(dat)
+  n <- nrow(dat_rich)
+
+  e_simple <- glm(t ~ x1 + x2 + x3, data = dat_rich, family = binomial())
+  q_simple <- glm(y ~ t + x1 + x2 + x3, data = dat_rich, family = binomial())
+
+  e_rich <- glm(
+    t ~ x1 + x2 + x3 + x1_2 + x2_2 + x1x2 + sin_x2,
+    data = dat_rich,
+    family = binomial()
+  )
+  q_rich <- glm(
+    y ~ t * (x1 + x2 + x3 + x1_2 + x2_2 + x1x2 + sin2_x1),
+    data = dat_rich,
+    family = binomial()
+  )
+
+  e_simple_hat <- bound_probability(predict(e_simple, type = "response"), eps = 0.025)
+  e_rich_hat <- bound_probability(predict(e_rich, type = "response"), eps = 0.025)
+
+  d1 <- dat_rich
+  d0 <- dat_rich
+  d1$t <- 1
+  d0$t <- 0
+
+  q1_simple <- bound_probability(predict(q_simple, newdata = d1, type = "response"))
+  q0_simple <- bound_probability(predict(q_simple, newdata = d0, type = "response"))
+  q1_rich <- bound_probability(predict(q_rich, newdata = d1, type = "response"))
+  q0_rich <- bound_probability(predict(q_rich, newdata = d0, type = "response"))
+
+  treated <- dat_rich$t == 1
+  untreated <- dat_rich$t == 0
+
+  crude <- mean(dat_rich$y[treated]) - mean(dat_rich$y[untreated])
+  crude_se <- sqrt(
+    var(dat_rich$y[treated]) / sum(treated) +
+      var(dat_rich$y[untreated]) / sum(untreated)
+  )
+
+  ipw_psi1 <- weighted_mean(dat_rich$y[treated], 1 / e_simple_hat[treated])
+  ipw_psi0 <- weighted_mean(dat_rich$y[untreated], 1 / (1 - e_simple_hat[untreated]))
+  ipw <- ipw_psi1 - ipw_psi0
+
+  ipw_den1 <- mean(dat_rich$t / e_simple_hat)
+  ipw_den0 <- mean((1 - dat_rich$t) / (1 - e_simple_hat))
+  ipw_if <- dat_rich$t / e_simple_hat * (dat_rich$y - ipw_psi1) / ipw_den1 -
+    (1 - dat_rich$t) / (1 - e_simple_hat) * (dat_rich$y - ipw_psi0) / ipw_den0
+  ipw_se <- sd(ipw_if) / sqrt(n)
+
+  outcome_regression <- mean(q1_simple - q0_simple)
+  or_se <- parametric_or_se(q_simple, d1, d0, B = 80)
+  if (!is.finite(or_se)) {
+    or_se <- sd(q1_simple - q0_simple) / sqrt(n)
+  }
+
+  dr_component <- q1_rich - q0_rich +
+    dat_rich$t / e_rich_hat * (dat_rich$y - q1_rich) -
+    (1 - dat_rich$t) / (1 - e_rich_hat) * (dat_rich$y - q0_rich)
+  dr <- mean(dr_component)
+  dr_se <- sd(dr_component - dr) / sqrt(n)
+
+  oracle_component <- dat_rich$q1_true - dat_rich$q0_true +
+    dat_rich$t / dat_rich$e_true * (dat_rich$y - dat_rich$q1_true) -
+    (1 - dat_rich$t) / (1 - dat_rich$e_true) * (dat_rich$y - dat_rich$q0_true)
+  oracle <- mean(oracle_component)
+  oracle_se <- sd(oracle_component - oracle) / sqrt(n)
+
+  estimates <- c(
+    Crude = crude,
+    IPW = ipw,
+    Outcome_regression = outcome_regression,
+    Doubly_robust = dr,
+    Oracle_EIF = oracle
+  )
+  ses <- c(
+    Crude = crude_se,
+    IPW = ipw_se,
+    Outcome_regression = or_se,
+    Doubly_robust = dr_se,
+    Oracle_EIF = oracle_se
+  )
+
+  data.frame(
+    Method = names(estimates),
+    Estimate = unname(estimates),
+    SE = unname(ses),
+    Lower = unname(estimates - 1.96 * ses),
+    Upper = unname(estimates + 1.96 * ses),
+    row.names = NULL
+  )
+}
+```
+
+```{r simulation-dr-advantage}
+set.seed(20260706)
+advantage_truth <- truth_advantage_dgp()
+R_advantage <- 120
+n_advantage <- 1200
+
+advantage_method_names <- c(
+  "Crude",
+  "IPW",
+  "Outcome_regression",
+  "Doubly_robust",
+  "Oracle_EIF"
+)
+
+advantage_estimates <- matrix(
+  NA_real_,
+  nrow = R_advantage,
+  ncol = length(advantage_method_names),
+  dimnames = list(NULL, advantage_method_names)
+)
+advantage_ses <- advantage_lower <- advantage_upper <- advantage_estimates
+
+for (r in seq_len(R_advantage)) {
+  fit_r <- tryCatch(
+    estimate_advantage_methods_with_ci(generate_advantage_dgp(n_advantage)),
+    error = function(e) data.frame(
+      Method = advantage_method_names,
+      Estimate = NA_real_,
+      SE = NA_real_,
+      Lower = NA_real_,
+      Upper = NA_real_
+    )
+  )
+
+  fit_r <- fit_r[match(advantage_method_names, fit_r$Method), ]
+  advantage_estimates[r, ] <- fit_r$Estimate
+  advantage_ses[r, ] <- fit_r$SE
+  advantage_lower[r, ] <- fit_r$Lower
+  advantage_upper[r, ] <- fit_r$Upper
+}
+
+complete_advantage_rows <- complete.cases(advantage_estimates) &
+  complete.cases(advantage_ses) &
+  complete.cases(advantage_lower) &
+  complete.cases(advantage_upper)
+
+advantage_estimates <- advantage_estimates[complete_advantage_rows, , drop = FALSE]
+advantage_ses <- advantage_ses[complete_advantage_rows, , drop = FALSE]
+advantage_lower <- advantage_lower[complete_advantage_rows, , drop = FALSE]
+advantage_upper <- advantage_upper[complete_advantage_rows, , drop = FALSE]
+
+advantage_mc_table <- summarize_mc(
+  advantage_estimates,
+  advantage_ses,
+  advantage_lower,
+  advantage_upper,
+  advantage_truth["psi"]
+)
+
+advantage_label_map <- c(
+  Crude = "\\(\\hat\\psi_{crude}\\)",
+  IPW = "\\(\\hat\\psi_{IPW}^{simple}\\)",
+  Outcome_regression = "\\(\\hat\\psi_{OR}^{simple}\\)",
+  Doubly_robust = "\\(\\hat\\psi_{DR/EIF}^{rich}\\)",
+  Oracle_EIF = "\\(\\hat\\psi_{oracle\\ EIF}\\)"
+)
+
+advantage_mc_table$Method <- advantage_label_map[advantage_method_names]
+advantage_mc_table[, -1] <- round(advantage_mc_table[, -1], 4)
+names(advantage_mc_table) <- c(
+  "Estimator",
+  "\\(E_{MC}(\\hat\\psi)\\)",
+  "Bias",
+  "MC SD",
+  "Mean SE",
+  "95% CI coverage",
+  "RMSE"
+)
+
+advantage_bound_row <- data.frame(
+  Estimator = "\\(\\sqrt{V_{\\mathrm{EIF}}/n}\\)",
+  Mean = NA_real_,
+  Bias = NA_real_,
+  Monte_Carlo_SD = round(sqrt(advantage_truth["v_eff"] / n_advantage), 4),
+  Mean_SE = round(sqrt(advantage_truth["v_eff"] / n_advantage), 4),
+  Coverage_95 = NA_real_,
+  RMSE = NA_real_
+)
+names(advantage_bound_row) <- names(advantage_mc_table)
+
+mkable(rbind(advantage_mc_table, advantage_bound_row))
+```
+
+```{r simulation-dr-advantage-plot, echo=FALSE, fig.width=9.2, fig.height=5.2}
+old_par <- par(mar = c(5.6, 5.4, 4.2, 1.2))
+
+advantage_rmse <- sqrt(
+  colMeans((advantage_estimates - advantage_truth["psi"])^2)
+)
+advantage_plot_order <- c(
+  "Crude",
+  "IPW",
+  "Outcome_regression",
+  "Doubly_robust",
+  "Oracle_EIF"
+)
+advantage_bar_labels <- c(
+  "Crude",
+  "Simple\nIPW",
+  "Simple\nOR",
+  "Rich\nDR/EIF",
+  "Oracle\nEIF"
+)
+advantage_cols <- c("#BAB0AC", "#F28E2B", "#A0CBE8", "#59A14F", "#4E79A7")
+
+bp <- barplot(
+  advantage_rmse[advantage_plot_order],
+  names.arg = advantage_bar_labels,
+  col = advantage_cols,
+  ylim = c(0, 1.18 * max(advantage_rmse)),
+  ylab = "RMSE",
+  main = "EIF/DR Advantage Under Under-Specified Single-Robust Models",
+  las = 1,
+  cex.names = 0.86
+)
+abline(h = sqrt(advantage_truth["v_eff"] / n_advantage),
+       lwd = 3, lty = 2, col = "#E15759")
+text(
+  bp,
+  advantage_rmse[advantage_plot_order],
+  labels = sprintf("%.3f", advantage_rmse[advantage_plot_order]),
+  pos = 3,
+  cex = 0.82,
+  font = 2
+)
+legend(
+  "topright",
+  legend = expression("Semiparametric bound: " * sqrt(V[EIF] / n)),
+  lwd = 3,
+  lty = 2,
+  col = "#E15759",
+  bty = "n",
+  cex = 0.82
+)
+
+par(old_par)
+```
+
+In this experiment, the simple IPW and simple OR estimators are biased because the nuisance models omit nonlinear confounding and treatment-effect heterogeneity. The rich EIF/DR estimator is not simply averaging predictions; it uses the efficient influence-function correction
+
+$$
+\hat Q_1(X)-\hat Q_0(X)
++ \frac{T}{\hat e(X)}\{Y-\hat Q_1(X)\}
+- \frac{1-T}{1-\hat e(X)}\{Y-\hat Q_0(X)\},
+$$
+
+so the estimator behaves much closer to the oracle EIF benchmark. This is the simulation where the lecture message should feel practical: **the EIF is not just a variance formula; it is also the recipe for a robust estimating equation.**
+
+## Simulation 2: Double Robustness
+
+Now we intentionally misspecify nuisance models.
+
+| Scenario | Propensity model | Outcome model |
+|:--|:--|:--|
+| both correct | correct | correct |
+| only \(e\) correct | correct | wrong |
+| only \(Q\) correct | wrong | correct |
+| both wrong | wrong | wrong |
+
+```{r simulation-double-robustness}
+set.seed(20260706)
+R_dr <- 120
+n_dr <- 1000
+
+scenario_table <- data.frame(
+  Scenario = c(
+    "Both correct",
+    "Only e correct",
+    "Only Q correct",
+    "Both wrong"
+  ),
+  e_spec = c("correct", "correct", "wrong", "wrong"),
+  q_spec = c("correct", "wrong", "correct", "wrong"),
+  stringsAsFactors = FALSE
+)
+
+dr_results <- lapply(seq_len(nrow(scenario_table)), function(s) {
+  estimates <- matrix(NA_real_, nrow = R_dr, ncol = 5)
+  colnames(estimates) <- colnames(sim_estimates)
+
+  for (r in seq_len(R_dr)) {
+    dat_r <- generate_dgp(n_dr)
+    estimates[r, ] <- tryCatch(
+      estimate_sim_methods(
+        dat_r,
+        e_spec = scenario_table$e_spec[s],
+        q_spec = scenario_table$q_spec[s]
+      ),
+      error = function(e) rep(NA_real_, 5)
+    )
+  }
+
+  estimates <- estimates[complete.cases(estimates), , drop = FALSE]
+  data.frame(
+    Scenario = scenario_table$Scenario[s],
+    Method = c("Outcome regression", "IPW", "Doubly robust"),
+    Bias = c(
+      mean(estimates[, "Outcome_regression"]) - sim_truth["psi"],
+      mean(estimates[, "IPW"]) - sim_truth["psi"],
+      mean(estimates[, "Doubly_robust"]) - sim_truth["psi"]
+    ),
+    Monte_Carlo_SD = c(
+      sd(estimates[, "Outcome_regression"]),
+      sd(estimates[, "IPW"]),
+      sd(estimates[, "Doubly_robust"])
+    ),
+    RMSE = c(
+      sqrt(mean((estimates[, "Outcome_regression"] - sim_truth["psi"])^2)),
+      sqrt(mean((estimates[, "IPW"] - sim_truth["psi"])^2)),
+      sqrt(mean((estimates[, "Doubly_robust"] - sim_truth["psi"])^2))
+    )
+  )
+})
+
+dr_results <- do.call(rbind, dr_results)
+dr_display <- dr_results
+dr_display[, c("Bias", "Monte_Carlo_SD", "RMSE")] <-
+  round(dr_display[, c("Bias", "Monte_Carlo_SD", "RMSE")], 4)
+dr_display$Method <- method_math_label(gsub(" ", "_", dr_display$Method))
+names(dr_display) <- c(
+  "Scenario",
+  "Estimator",
+  "Bias",
+  "MC SD",
+  "RMSE"
+)
+
+mkable(dr_display)
+```
+
+```{r simulation-double-robustness-plot, echo=FALSE, fig.width=9.2, fig.height=5.2}
+old_par <- par(mar = c(5.2, 5.2, 4.2, 1.2), xpd = FALSE)
+
+dr_bias_only <- subset(dr_results, Method == "Doubly robust")
+bias_values <- dr_bias_only$Bias
+names(bias_values) <- dr_bias_only$Scenario
+bar_labels <- c(
+  "Both\ncorrect",
+  "Only e\ncorrect",
+  "Only Q\ncorrect",
+  "Both\nwrong"
+)
+ylim_bias <- range(c(bias_values, 0))
+ylim_bias <- ylim_bias + c(-1, 1) * diff(ylim_bias) * 0.25
+
+bar_locations <- barplot(
+  bias_values,
+  col = c("#B7D7A8", "#F1CE63", "#A0CBE8", "#E15759"),
+  ylab = "Monte Carlo bias",
+  main = "DR Bias Under Nuisance Misspecification",
+  names.arg = bar_labels,
+  las = 1,
+  cex.names = 0.85,
+  ylim = ylim_bias
+)
+abline(h = 0, lwd = 2)
+text(
+  x = bar_locations,
+  y = bias_values + ifelse(bias_values >= 0, 0.003, -0.0015),
+  labels = round(bias_values, 3),
+  cex = 0.8,
+  font = 2,
+  pos = ifelse(bias_values >= 0, 3, 1)
+)
+
+par(old_par)
+```
+
+The DR estimator is stable when either nuisance model is correct. When both are wrong, the product remainder no longer vanishes and bias can remain.
+
+### Simulation 2A: A Bias Surface for the Product Remainder
+
+The previous experiment uses four discrete scenarios. The DR remainder is more geometric than that. If \(\hat e-e\) is on one axis and \(\hat Q-Q\) is on the other axis, the bias is approximately flat along the axes and grows when both errors are nonzero.
+
+To isolate that idea, we generate one large dataset from the true DGP and then deliberately perturb the true nuisance functions:
+
+$$
+\hat e_\delta(X)
+=
+\mathrm{expit}\{\mathrm{logit}(e(X))+\delta_e g_e(X)\},
+$$
+
+and
+
+$$
+\hat Q_{t,\delta}(X)
+=
+\mathrm{expit}\{\mathrm{logit}(Q_t(X))+\delta_Q g_Q(X)\}.
+$$
+
+If \(\delta_e=0\), the treatment model is correct. If \(\delta_Q=0\), the outcome model is correct. The DR estimating function should be nearly unbiased along either axis and biased away from the axes.
+
+```{r simulation-bias-surface}
+set.seed(20260706)
+bias_dat <- generate_dgp(100000)
+
+delta_e_grid <- seq(-1.2, 1.2, by = 0.3)
+delta_q_grid <- seq(-1.2, 1.2, by = 0.3)
+
+bias_surface <- expand.grid(
+  delta_e = delta_e_grid,
+  delta_q = delta_q_grid
+)
+
+g_e <- with(bias_dat, scale(x1 - 0.5 * x2 + 0.25 * x3)[, 1])
+g_q <- with(bias_dat, scale(x2 + 0.35 * x1 - 0.40 * x3)[, 1])
+
+bias_surface$Estimate <- NA_real_
+
+for (i in seq_len(nrow(bias_surface))) {
+  e_tilt <- bound_probability(
+    inv_logit(safe_logit(bias_dat$e_true) + bias_surface$delta_e[i] * g_e)
+  )
+  q1_tilt <- bound_probability(
+    inv_logit(safe_logit(bias_dat$q1_true) + bias_surface$delta_q[i] * g_q)
+  )
+  q0_tilt <- bound_probability(
+    inv_logit(safe_logit(bias_dat$q0_true) + bias_surface$delta_q[i] * g_q)
+  )
+
+  bias_surface$Estimate[i] <- evaluate_aipw_with_nuisances(
+    bias_dat,
+    e_hat_s = e_tilt,
+    q1_hat_s = q1_tilt,
+    q0_hat_s = q0_tilt
+  )
+}
+
+bias_surface$Bias <- bias_surface$Estimate - sim_truth["psi"]
+
+axis_slice <- subset(
+  bias_surface,
+  abs(delta_e) < 1e-12 | abs(delta_q) < 1e-12 | abs(delta_e - delta_q) < 1e-12
+)
+axis_slice$Abs_bias <- abs(axis_slice$Bias)
+axis_slice_display <- axis_slice[order(axis_slice$delta_e, axis_slice$delta_q), ]
+axis_slice_display$Estimate <- round(axis_slice_display$Estimate, 4)
+axis_slice_display$Bias <- round(axis_slice_display$Bias, 4)
+axis_slice_display$Abs_bias <- round(axis_slice_display$Abs_bias, 4)
+names(axis_slice_display) <- c(
+  "\\(\\delta_e\\)",
+  "\\(\\delta_Q\\)",
+  "\\(\\hat\\psi_{DR}(\\delta_e,\\delta_Q)\\)",
+  "Bias",
+  "\\(\\lvert\\mathrm{Bias}\\rvert\\)"
+)
+
+mkable(head(axis_slice_display, 18))
+```
+
+```{r simulation-bias-surface-plot, echo=FALSE, fig.width=8.8, fig.height=5.2}
+old_par <- par(mar = c(5, 5, 4, 5))
+
+bias_matrix <- matrix(
+  abs(bias_surface$Bias),
+  nrow = length(delta_e_grid),
+  ncol = length(delta_q_grid)
+)
+
+image(
+  delta_e_grid,
+  delta_q_grid,
+  bias_matrix,
+  col = colorRampPalette(c("#FFFFFF", "#F1CE63", "#F28E2B", "#E15759"))(40),
+  xlab = expression("Treatment-model perturbation " * delta[e]),
+  ylab = expression("Outcome-model perturbation " * delta[Q]),
+  main = "Absolute DR Bias Is Small Along Either Correct-Nuisance Axis"
+)
+contour(
+  delta_e_grid,
+  delta_q_grid,
+  bias_matrix,
+  add = TRUE,
+  drawlabels = FALSE,
+  col = "#333333",
+  lwd = 1
+)
+abline(h = 0, v = 0, lwd = 3, col = "#4E79A7")
+
+legend(
+  "topright",
+  legend = c("Either nuisance correct"),
+  lwd = 3,
+  col = "#4E79A7",
+  bty = "n"
+)
+
+par(old_par)
+```
+
+This plot is a useful diagnostic picture for Lecture 4. The DR estimator is not magic; it has a second-order remainder. The axes are protected by double robustness. The corners are not.
+
+## Simulation 3: Positivity and the Bound
+
+This simulation asks a different question from the previous sections. We are no longer asking whether DR is unbiased or whether the oracle EIF reaches its bound. We are asking:
+
+> How much statistical information is available when treatment assignment is nearly deterministic for some covariate profiles?
+
+Recall the ATE efficient influence function:
+
+$$
+D^*(O)
+=
+Q_1(X)-Q_0(X)-\psi
++
+\frac{T}{e(X)}\{Y-Q_1(X)\}
+-
+\frac{1-T}{1-e(X)}\{Y-Q_0(X)\}.
+$$
+
+Its variance is the semiparametric efficiency bound,
+
+$$
+V_{\mathrm{EIF}}
+=
+E\{D^*(O)^2\}.
+$$
+
+For binary outcomes, this decomposes into
+
+$$
+V_{\mathrm{EIF}}
+=
+\underbrace{
+\mathrm{Var}\{Q_1(X)-Q_0(X)\}
+}_{\text{effect heterogeneity}}
++
+\underbrace{
+E\left[
+\frac{Q_1(X)\{1-Q_1(X)\}}{e(X)}
++
+\frac{Q_0(X)\{1-Q_0(X)\}}{1-e(X)}
+\right]
+}_{\text{residual noise amplified by inverse propensity scores}}.
+$$
+
+The important positivity terms are therefore
+
+$$
+\frac{1}{e(X)}
+\quad \text{and} \quad
+\frac{1}{1-e(X)}.
+$$
+
+As the propensity score gets closer to 0 or 1, these inverse factors become large. That makes each observed outcome carry more noise for the counterfactual contrast. This is not a small-sample problem. It is part of the first-order information bound.
+
+In the simulation, the outcome model \(Q_t(X)\) is held fixed. Only the treatment mechanism changes:
+
+$$
+e_a(X)
+=
+\mathrm{expit}
+\left[
+a\{-0.25+0.70X_1-0.55X_2+0.35X_3\}
+\right].
+$$
+
+The scalar \(a\) is the **propensity-score separation strength**:
+
+1. Small \(a\): \(e_a(X)\) stays closer to 0.5, so treated and untreated subjects overlap well.
+2. Large \(a\): \(e_a(X)\) moves closer to 0 or 1 for many covariate profiles, so overlap becomes weak.
+
+Because \(Q_1(X)\) and \(Q_0(X)\) do not change with \(a\), the target ATE
+
+$$
+\psi = E\{Q_1(X)-Q_0(X)\}
+$$
+
+should remain approximately constant. What changes is the information bound \(V_{\mathrm{EIF}}\), especially its residual-noise component.
+
+```{r positivity-simulation}
+set.seed(20260706)
+overlap_grid <- seq(0.25, 2.75, by = 0.25)
+
+positivity_results <- do.call(rbind, lapply(overlap_grid, function(a) {
+  pop_a <- generate_dgp(n = 100000, overlap_strength = a)
+  psi_a <- mean(pop_a$q1_true - pop_a$q0_true)
+  heterogeneity_a <- var(pop_a$q1_true - pop_a$q0_true)
+  residual_a <- mean(
+    pop_a$q1_true * (1 - pop_a$q1_true) / pop_a$e_true +
+      pop_a$q0_true * (1 - pop_a$q0_true) / (1 - pop_a$e_true)
+  )
+
+  data.frame(
+    overlap_strength = a,
+    psi = psi_a,
+    v_eff = heterogeneity_a + residual_a,
+    heterogeneity = heterogeneity_a,
+    residual = residual_a,
+    p05_e = quantile(pop_a$e_true, 0.05),
+    p95_e = quantile(pop_a$e_true, 0.95),
+    mean_inverse_factor = mean(1 / pop_a$e_true + 1 / (1 - pop_a$e_true)),
+    row.names = NULL
+  )
+}))
+
+positivity_table <- data.frame(
+  Overlap_strength = positivity_results$overlap_strength,
+  Psi = round(positivity_results$psi, 4),
+  P05_e = round(positivity_results$p05_e, 3),
+  P95_e = round(positivity_results$p95_e, 3),
+  Mean_inverse_factor = round(positivity_results$mean_inverse_factor, 2),
+  V_eff = round(positivity_results$v_eff, 4),
+  Heterogeneity = round(positivity_results$heterogeneity, 4),
+  Residual = round(positivity_results$residual, 4)
+)
+names(positivity_table) <- c(
+  "Overlap strength",
+  "\\(\\psi\\)",
+  "5th pct. \\(e_a(X)\\)",
+  "95th pct. \\(e_a(X)\\)",
+  "\\(E[1/e_a+1/(1-e_a)]\\)",
+  "\\(V_{\\mathrm{EIF}}\\)",
+  "\\(\\mathrm{Var}\\{Q_1-Q_0\\}\\)",
+  "Residual component"
+)
+
+mkable(positivity_table)
+```
+
+```{r positivity-plot, echo=FALSE, fig.width=8.8, fig.height=4.8}
+old_par <- par(mar = c(5, 5, 4, 1))
+
+plot(
+  overlap_grid,
+  positivity_results$v_eff,
+  type = "b",
+  pch = 19,
+  lwd = 3,
+  col = "#E15759",
+  xlab = "Propensity-score separation strength",
+  ylab = expression(V[EIF]),
+  main = "Weak Positivity Inflates the Efficiency Bound"
+)
+lines(
+  overlap_grid,
+  positivity_results$residual,
+  type = "b",
+  pch = 17,
+  lwd = 2,
+  col = "#4E79A7"
+)
+lines(
+  overlap_grid,
+  positivity_results$heterogeneity,
+  type = "b",
+  pch = 15,
+  lwd = 2,
+  col = "#59A14F"
+)
+legend(
+  "topleft",
+  legend = c("Total bound", "Residual component", "Heterogeneity component"),
+  col = c("#E15759", "#4E79A7", "#59A14F"),
+  pch = c(19, 17, 15),
+  lwd = c(3, 2, 2),
+  bty = "n"
+)
+
+par(old_par)
+```
+
+The target effect barely changes in this simulation because the outcome model is fixed. The information bound changes sharply because treatment assignment becomes less overlapping.
+
+The table and figure should be read in the following way:
+
+1. The 5th percentile of \(e_a(X)\) decreases and the 95th percentile increases as \(a\) grows. This means some covariate profiles are almost always untreated and others are almost always treated.
+2. The average inverse factor \(E[1/e_a(X)+1/\{1-e_a(X)\}]\) increases. This is a direct numerical summary of positivity stress.
+3. The heterogeneity component \(\mathrm{Var}\{Q_1(X)-Q_0(X)\}\) stays nearly fixed because \(Q_1,Q_0\), and the distribution of \(X\), are fixed.
+4. The residual component increases because the same Bernoulli outcome noise is multiplied by \(1/e_a(X)\) or \(1/\{1-e_a(X)\}\).
+
+So the point is not that confounding bias got worse. In this population calculation there is no estimation bias at all. The point is that weak positivity reduces information: even the best regular estimator must have a larger asymptotic variance.
+
+### Simulation 3A: Positivity, Inverse Weights, and Coverage
+
+The previous positivity experiment computes the population bound. Here we ask what the analyst sees in repeated samples.
+
+For each overlap strength \(a\), we generate \(R\) datasets of size \(n=800\). In each dataset we estimate the DR one-step estimator and its EIF standard error,
+
+$$
+\widehat{SE}_{EIF}
+=
+\left[
+\frac{1}{n}
+P_n\{\hat D_i-\bar{\hat D}\}^2
+\right]^{1/2},
+$$
+
+where
+
+$$
+\hat D_i
+=
+\hat Q_1(X_i)-\hat Q_0(X_i)
++
+\frac{T_i}{\hat e(X_i)}\{Y_i-\hat Q_1(X_i)\}
+-
+\frac{1-T_i}{1-\hat e(X_i)}\{Y_i-\hat Q_0(X_i)\}.
+$$
+
+The Wald interval is
+
+$$
+\hat\psi_{DR} \pm 1.96\,\widehat{SE}_{EIF}.
+$$
+
+We also record the largest inverse-probability factor in each sample:
+
+$$
+\max_i
+\left[
+\max\left\{
+\frac{1}{\hat e(X_i)},
+\frac{1}{1-\hat e(X_i)}
+\right\}
+\right].
+$$
+
+This is a finite-sample warning sign. When this number is large, a small number of observations can dominate the EIF correction term.
+
+As overlap worsens, three things tend to move together:
+
+1. The true lower-bound SE \(\sqrt{V_{\mathrm{EIF}}/n}\) increases.
+2. The empirical EIF SE increases.
+3. The largest inverse-probability weights become unstable.
+
+```{r positivity-coverage-simulation}
+set.seed(20260706)
+overlap_coverage_grid <- c(0.50, 1.00, 1.75, 2.50)
+R_overlap <- 80
+n_overlap <- 800
+
+overlap_results <- vector("list", length(overlap_coverage_grid))
+
+for (j in seq_along(overlap_coverage_grid)) {
+  a_j <- overlap_coverage_grid[j]
+  truth_j <- truth_from_large_population(n_pop = 100000, overlap_strength = a_j)
+
+  current <- vector("list", R_overlap)
+
+  for (r in seq_len(R_overlap)) {
+    dat_r <- generate_dgp(n_overlap, overlap_strength = a_j)
+
+    dr_fit <- tryCatch(
+      estimate_dr_with_eif(dat_r, e_spec = "correct", q_spec = "correct"),
+      error = function(e) rep(NA_real_, 7)
+    )
+
+    current[[r]] <- data.frame(
+      Overlap_strength = a_j,
+      Truth = truth_j["psi"],
+      Bound_SE = sqrt(truth_j["v_eff"] / n_overlap),
+      Estimate = dr_fit["psi"],
+      SE = dr_fit["se"],
+      Lower = dr_fit["lower"],
+      Upper = dr_fit["upper"],
+      Min_e_hat = dr_fit["e_min"],
+      Max_e_hat = dr_fit["e_max"],
+      Max_inverse_weight = dr_fit["max_inverse_weight"]
+    )
+  }
+
+  overlap_results[[j]] <- do.call(rbind, current)
+}
+
+overlap_results <- do.call(rbind, overlap_results)
+overlap_results <- overlap_results[complete.cases(overlap_results), ]
+
+overlap_summary <- do.call(rbind, lapply(
+  split(overlap_results, overlap_results$Overlap_strength),
+  function(current) {
+    data.frame(
+      Overlap_strength = unique(current$Overlap_strength),
+      Truth = unique(current$Truth),
+      Bound_SE = unique(current$Bound_SE),
+      Bias = mean(current$Estimate) - unique(current$Truth),
+      Monte_Carlo_SD = sd(current$Estimate),
+      Mean_EIF_SE = mean(current$SE),
+      Coverage = mean(current$Lower <= current$Truth & current$Upper >= current$Truth),
+      Median_max_inverse_weight = median(current$Max_inverse_weight),
+      P95_max_inverse_weight = quantile(current$Max_inverse_weight, 0.95),
+      row.names = NULL
+    )
+  }
+))
+
+overlap_display <- overlap_summary
+overlap_display[, -1] <- round(overlap_display[, -1], 3)
+names(overlap_display) <- c(
+  "Overlap strength",
+  "\\(\\psi\\)",
+  "\\(\\sqrt{V_{\\mathrm{EIF}}/n}\\)",
+  "Bias",
+  "MC SD",
+  "Mean \\(\\widehat{SE}_{EIF}\\)",
+  "95% CI coverage",
+  "Median max inverse weight",
+  "95th pct. max inverse weight"
+)
+mkable(overlap_display)
+```
+
+```{r positivity-coverage-plot, echo=FALSE, fig.width=8.8, fig.height=5.2}
+old_par <- par(mfrow = c(1, 2), mar = c(5, 5, 4, 1))
+
+plot(
+  overlap_summary$Overlap_strength,
+  overlap_summary$Bound_SE,
+  type = "b",
+  pch = 19,
+  lwd = 3,
+  col = "#E15759",
+  ylim = range(c(
+    overlap_summary$Bound_SE,
+    overlap_summary$Monte_Carlo_SD,
+    overlap_summary$Mean_EIF_SE
+  )),
+  xlab = "Propensity-score separation strength",
+  ylab = "SE scale",
+  main = "SE Inflation Under Weak Overlap"
+)
+lines(overlap_summary$Overlap_strength, overlap_summary$Monte_Carlo_SD,
+      type = "b", pch = 17, lwd = 2, col = "#4E79A7")
+lines(overlap_summary$Overlap_strength, overlap_summary$Mean_EIF_SE,
+      type = "b", pch = 15, lwd = 2, col = "#59A14F")
+legend(
+  "topleft",
+  legend = c("True bound SE", "MC SD", "Mean EIF SE"),
+  col = c("#E15759", "#4E79A7", "#59A14F"),
+  pch = c(19, 17, 15),
+  lwd = c(3, 2, 2),
+  bty = "n",
+  cex = 0.78
+)
+
+plot(
+  overlap_summary$Overlap_strength,
+  overlap_summary$P95_max_inverse_weight,
+  type = "b",
+  pch = 19,
+  lwd = 3,
+  col = "#F28E2B",
+  xlab = "Propensity-score separation strength",
+  ylab = "95th percentile of max inverse weight",
+  main = "Finite-Sample Weight Instability"
+)
+lines(overlap_summary$Overlap_strength, overlap_summary$Median_max_inverse_weight,
+      type = "b", pch = 17, lwd = 2, col = "#4E79A7")
+legend(
+  "topleft",
+  legend = c("95th percentile", "Median"),
+  col = c("#F28E2B", "#4E79A7"),
+  pch = c(19, 17),
+  lwd = c(3, 2),
+  bty = "n",
+  cex = 0.82
+)
+
+par(old_par)
+```
+
+The left panel compares three standard-error scales. The red curve is the population lower-bound standard error, \(\sqrt{V_{\mathrm{EIF}}/n}\). The blue curve is the Monte Carlo standard deviation of the repeated DR estimates. The green curve is the average EIF standard error computed by the analyst. Under stable overlap, these should be close. As overlap weakens, all three move upward because the EIF itself becomes more variable.
+
+The right panel explains why. The maximum inverse weight increases as the propensity scores approach 0 or 1. This does not necessarily create bias when the models are correct, but it makes the estimating equation noisier. In a real data analysis, a large maximum inverse weight means the estimate is partly determined by a few observations in covariate regions with little treatment overlap.
+
+This is why positivity is not only an identification assumption. It is also an information condition. Even with correct models and no unmeasured confounding, limited overlap can make the lower bound too large for precise estimation.
+
+## Simulation 4: The \(n^{-1/4}\) Product-Rate Story
+
+Suppose the treatment model error is approximately \(n^{-\alpha_e}\) and the outcome model error is approximately \(n^{-\alpha_Q}\). The DR second-order remainder is roughly
+
+$$
+n^{-(\alpha_e+\alpha_Q)}.
+$$
+
+For this to be negligible relative to \(n^{-1/2}\), we need
+
+$$
+\alpha_e+\alpha_Q > 1/2.
+$$
+
+```{r product-rate-simulation}
+n_grid <- round(exp(seq(log(200), log(50000), length.out = 80)))
+
+rate_cases <- data.frame(
+  Case = c(
+    "Both n^{-1/4}",
+    "One n^{-1/2}, one n^{-0.20}",
+    "Both too slow",
+    "One n^{-0.35}, one n^{-0.20}"
+  ),
+  alpha_e = c(0.25, 0.50, 0.15, 0.35),
+  alpha_q = c(0.25, 0.20, 0.15, 0.20)
+)
+
+rate_curves <- lapply(seq_len(nrow(rate_cases)), function(i) {
+  data.frame(
+    n = n_grid,
+    Case = rate_cases$Case[i],
+    scaled_remainder = n_grid^(0.5 - rate_cases$alpha_e[i] - rate_cases$alpha_q[i])
+  )
+})
+
+rate_curves <- do.call(rbind, rate_curves)
+
+rate_table <- rate_cases
+rate_table$alpha_sum <- rate_table$alpha_e + rate_table$alpha_q
+rate_table$Root_n_negligible <- ifelse(rate_table$alpha_sum > 0.5, "yes", "borderline/no")
+rate_table$Case <- c(
+  "Both \\(n^{-1/4}\\)",
+  "One \\(n^{-1/2}\\), one \\(n^{-0.20}\\)",
+  "Both too slow",
+  "One \\(n^{-0.35}\\), one \\(n^{-0.20}\\)"
+)
+names(rate_table) <- c(
+  "Case",
+  "\\(\\alpha_e\\)",
+  "\\(\\alpha_Q\\)",
+  "\\(\\alpha_e+\\alpha_Q\\)",
+  "\\(\\sqrt n R_2=o_p(1)\\)?"
+)
+
+mkable(rate_table)
+```
+
+```{r product-rate-plot, echo=FALSE, fig.width=8.8, fig.height=4.8}
+old_par <- par(mar = c(5, 5, 4, 1))
+
+plot(
+  range(n_grid),
+  range(rate_curves$scaled_remainder),
+  log = "xy",
+  type = "n",
+  xlab = expression(n),
+  ylab = expression(sqrt(n)~"times second-order remainder"),
+  main = "When Does the Product Remainder Disappear?"
+)
+
+cols <- c("#59A14F", "#4E79A7", "#E15759", "#F28E2B")
+ltys <- c(1, 2, 1, 3)
+pchs <- c(15, 17, 19, 18)
+for (i in seq_len(nrow(rate_cases))) {
+  current <- subset(rate_curves, Case == rate_cases$Case[i])
+  lines(current$n, current$scaled_remainder, lwd = 3, lty = ltys[i], col = cols[i])
+  points(
+    current$n[c(1, 25, 50, 80)],
+    current$scaled_remainder[c(1, 25, 50, 80)],
+    pch = pchs[i],
+    col = cols[i],
+    cex = 1.0
+  )
+}
+abline(h = 1, lty = 2, lwd = 2)
+legend(
+  "topright",
+  legend = expression(
+    "Both " * n^{-1/4},
+    "One " * n^{-1/2} * ", one " * n^{-0.20},
+    "Both too slow",
+    "One " * n^{-0.35} * ", one " * n^{-0.20}
+  ),
+  col = cols,
+  lwd = 3,
+  lty = ltys,
+  pch = pchs,
+  bty = "o",
+  bg = "white",
+  box.col = "white",
+  cex = 0.78
+)
+
+par(old_par)
+```
+
+If the curve decreases toward zero, the second-order nuisance remainder is asymptotically negligible on the \(\sqrt{n}\) scale. If it stays flat or increases, first-order inference can fail. The flat green curve is the boundary case \(\alpha_e+\alpha_Q=1/2\). The blue and orange curves both decrease because their exponent sums are larger than \(1/2\), but the blue curve decreases faster because \(0.50+0.20=0.70\), whereas \(0.35+0.20=0.55\).
+
+### Simulation 4A: A Population-Level Product-Rate Perturbation
+
+The previous figure was algebraic. We can make it more concrete by tracking the leading product-remainder magnitude directly.
+
+A population DR expansion has the schematic form
+
+$$
+\hat\psi_{DR}-\psi
+=
+(P_n-P)D^*(O)
++
+R_2(\hat\eta,\eta)
++
+\text{higher-order terms},
+$$
+
+where the second-order drift is approximately a product of nuisance errors:
+
+$$
+|R_2(\hat\eta,\eta)|
+\approx
+C
+\|\hat e-e\|
+\left(\|\hat Q_1-Q_1\|+\|\hat Q_0-Q_0\|\right).
+$$
+
+If
+
+$$
+\|\hat e-e\| \asymp n^{-\alpha_e},
+\qquad
+\|\hat Q_t-Q_t\| \asymp n^{-\alpha_Q},
+$$
+
+then
+
+$$
+|R_2(\hat\eta,\eta)|
+\asymp
+n^{-(\alpha_e+\alpha_Q)}
+$$
+
+and the root-\(n\) scaled remainder behaves like
+
+$$
+\sqrt n\, |R_2(\hat\eta,\eta)|
+\asymp
+n^{1/2-(\alpha_e+\alpha_Q)}.
+$$
+
+This figure plots that leading product magnitude. This is cleaner than plotting the signed bias from arbitrary nuisance perturbation directions, because signed bias can accidentally cross zero and create a misleading U-shape after taking absolute values.
+
+```{r product-rate-population-simulation}
+rate_bias_n_grid <- round(exp(seq(log(250), log(30000), length.out = 25)))
+rate_bias_cases <- data.frame(
+  Case = c(
+    "alpha_e + alpha_Q = 0.70",
+    "alpha_e + alpha_Q = 0.50",
+    "alpha_e + alpha_Q = 0.30"
+  ),
+  alpha_e = c(0.35, 0.25, 0.15),
+  alpha_q = c(0.35, 0.25, 0.15),
+  stringsAsFactors = FALSE
+)
+
+rate_bias_results <- lapply(seq_len(nrow(rate_bias_cases)), function(i) {
+  current_case <- rate_bias_cases[i, ]
+
+  out <- lapply(rate_bias_n_grid, function(n_nominal) {
+    nuisance_product <- n_nominal^(
+      -(current_case$alpha_e + current_case$alpha_q)
+    )
+
+    data.frame(
+      n = n_nominal,
+      Case = current_case$Case,
+      alpha_sum = current_case$alpha_e + current_case$alpha_q,
+      Product_remainder = nuisance_product,
+      Root_n_scaled_remainder = sqrt(n_nominal) * nuisance_product
+    )
+  })
+
+  do.call(rbind, out)
+})
+
+rate_bias_results <- do.call(rbind, rate_bias_results)
+
+rate_bias_display <- do.call(rbind, lapply(
+  split(rate_bias_results, rate_bias_results$Case),
+  function(current) {
+    current[c(1, round(nrow(current) / 2), nrow(current)), ]
+  }
+))
+row.names(rate_bias_display) <- NULL
+rate_bias_display$Case <- paste0(
+  "\\(\\alpha_e+\\alpha_Q = ",
+  sprintf("%.2f", rate_bias_display$alpha_sum),
+  "\\)"
+)
+
+rate_bias_display$Product_remainder <- signif(rate_bias_display$Product_remainder, 3)
+rate_bias_display$Root_n_scaled_remainder <- signif(rate_bias_display$Root_n_scaled_remainder, 3)
+names(rate_bias_display) <- c(
+  "\\(n\\)",
+  "Case",
+  "\\(\\alpha_e+\\alpha_Q\\)",
+  "\\(n^{-(\\alpha_e+\\alpha_Q)}\\)",
+  "\\(\\sqrt n\\,n^{-(\\alpha_e+\\alpha_Q)}\\)"
+)
+
+mkable(rate_bias_display)
+```
+
+```{r product-rate-population-plot, echo=FALSE, fig.width=8.8, fig.height=4.8}
+old_par <- par(mar = c(5, 5, 4, 1))
+
+plot(
+  range(rate_bias_results$n),
+  range(rate_bias_results$Root_n_scaled_remainder),
+  log = "xy",
+  type = "n",
+  xlab = expression(n),
+  ylab = expression(sqrt(n)~"times product remainder"),
+  main = "Root-n Scaled Product Remainder"
+)
+
+cols_rate_bias <- c("#59A14F", "#F28E2B", "#E15759")
+for (i in seq_len(nrow(rate_bias_cases))) {
+  current <- subset(rate_bias_results, Case == rate_bias_cases$Case[i])
+  lines(current$n, current$Root_n_scaled_remainder,
+        lwd = 3, col = cols_rate_bias[i])
+}
+abline(h = 1, lty = 2, lwd = 2)
+legend(
+  "topright",
+  legend = expression(
+    alpha[e] + alpha[Q] == 0.70,
+    alpha[e] + alpha[Q] == 0.50,
+    alpha[e] + alpha[Q] == 0.30
+  ),
+  col = cols_rate_bias,
+  lwd = 3,
+  bty = "n",
+  cex = 0.82
+)
+
+par(old_par)
+```
+
+The green curve represents a nuisance product rate faster than \(n^{-1/2}\), so the root-\(n\) scaled remainder vanishes. The orange curve is the boundary case \(\alpha_e+\alpha_Q=1/2\), so the root-\(n\) scaled remainder stays constant. The red curve represents nuisance learning that is too slow; the second-order term remains visible, and even grows, after root-\(n\) scaling.
+
+## Cross-Fitting and DML
+
+When nuisance functions are estimated with flexible machine learning, empirical process conditions such as Donsker restrictions can be hard to verify.
+
+Cross-fitting is the practical workaround:
+
+1. Split the sample into \(K\) folds.
+2. For each fold, train \(\hat e\) and \(\hat Q\) on the other folds.
+3. Predict nuisance functions in the held-out fold.
+4. Evaluate the EIF estimating function using held-out predictions.
+5. Average the fold-specific EIF contributions.
+
+```{r crossfit-picture, echo=FALSE, fig.width=8.8, fig.height=4.2}
+start_picture()
+
+draw_box(0.14, 0.72, 0.20, 0.15,
+         "Fold 1\nheld out",
+         fill = "#FFE0E0", cex = 0.62, font = 2)
+draw_box(0.36, 0.72, 0.20, 0.15,
+         "Train on\nfolds 2-K",
+         fill = "#DDFBE1", cex = 0.62, font = 2)
+draw_box(0.62, 0.72, 0.23, 0.15,
+         expression(atop(paste("Predict ", hat(e), ", ", hat(Q)),
+                         "on fold 1")),
+         fill = "#F1CE63", cex = 0.58, font = 2)
+draw_box(0.86, 0.72, 0.19, 0.15,
+         expression(atop("Compute", hat(phi)[i]^"CF")),
+         fill = "#A0CBE8", cex = 0.66, font = 2)
+
+draw_arrow(0.24, 0.72, 0.27, 0.72)
+draw_arrow(0.46, 0.72, 0.50, 0.72)
+draw_arrow(0.74, 0.72, 0.78, 0.72)
+
+draw_box(0.50, 0.34, 0.62, 0.18,
+         "Repeat for all folds, then average one-step contributions",
+         fill = "#E4E6FF", cex = 0.70, font = 2)
+draw_arrow(0.86, 0.62, 0.58, 0.43, lty = 2)
+```
+
+Cross-fitting helps remove "own-observation" bias: the same outcome \(Y_i\) is not used both to train the nuisance function and to evaluate its residual correction for observation \(i\).
+
+In DML language, the efficient influence function is the orthogonal score.
+
+### Simulation 5: Cross-Fitting with Rich Nuisance Models
+
+This simulation has a specific role in the lecture. Up to this point, we have studied the EIF as if the nuisance functions \(e(X)\), \(Q_1(X)\), and \(Q_0(X)\) were either known or estimated by simple parametric models. In modern semiparametric inference, however, nuisance functions are often learned by flexible regression methods. Then the main technical danger is that the same observation can be used twice:
+
+1. once to train \(\hat e\) or \(\hat Q\);
+2. again to evaluate the EIF residual for that same observation.
+
+That reuse can create **own-observation feedback**. The fitted nuisance function may partially adapt to \(Y_i\) or \(T_i\), making the residual correction look artificially stable.
+
+Cross-fitting changes the construction of the EIF contribution. Let \(I_1,\ldots,I_K\) be a partition of the sample. For observation \(i\in I_k\), estimate the nuisance functions using only the training sample \(I_{-k}\):
+
+$$
+\hat e^{(-k)}(X_i),
+\qquad
+\hat Q_1^{(-k)}(X_i),
+\qquad
+\hat Q_0^{(-k)}(X_i).
+$$
+
+Then compute the held-out one-step contribution
+
+$$
+\hat\phi_i^{CF}
+=
+\hat Q_1^{(-k)}(X_i)-\hat Q_0^{(-k)}(X_i)
++
+\frac{T_i}{\hat e^{(-k)}(X_i)}
+\{Y_i-\hat Q_1^{(-k)}(X_i)\}
+-
+\frac{1-T_i}{1-\hat e^{(-k)}(X_i)}
+\{Y_i-\hat Q_0^{(-k)}(X_i)\}.
+$$
+
+The cross-fitted DR estimate is
+
+$$
+\hat\psi_{CF}
+=
+P_n \hat\phi_i^{CF}.
+$$
+
+The centered estimated EIF contribution used for standard errors is then
+
+$$
+\hat D_i^{CF}
+=
+\hat\phi_i^{CF}-\hat\psi_{CF}.
+$$
+
+This is not a different causal estimand. It is a different way to build the same EIF-based estimating equation so that nuisance learning is separated from EIF evaluation. That separation is why DML theory can allow rich nuisance learners under product-rate conditions rather than relying only on classical Donsker empirical-process assumptions.
+
+```{r crossfit-feedback-picture, echo=FALSE, fig.width=8.8, fig.height=4.4}
+start_picture()
+
+draw_box(0.25, 0.78, 0.36, 0.15,
+         "In-sample nuisance fitting",
+         fill = "#FFE0E0", cex = 0.70, font = 2)
+draw_box(0.25, 0.53, 0.38, 0.17,
+         expression(atop(paste("Train ", hat(e), ", ", hat(Q), " using all data"),
+                         paste("including observation ", i))),
+         fill = "#F1CE63", cex = 0.56, font = 2)
+draw_box(0.25, 0.27, 0.38, 0.17,
+         expression(atop(paste("Evaluate ", hat(phi)[i]),
+                         "on the same observation")),
+         fill = "#F1CE63", cex = 0.58, font = 2)
+draw_arrow(0.25, 0.44, 0.25, 0.36)
+draw_arrow(0.42, 0.27, 0.42, 0.52, lty = 2, col = "#E15759")
+draw_text(0.25, 0.08,
+          "Possible own-observation feedback",
+          cex = 0.67, font = 2, col = "#E15759")
+
+draw_box(0.75, 0.78, 0.36, 0.15,
+         "Cross-fitted nuisance fitting",
+         fill = "#DDFBE1", cex = 0.70, font = 2)
+draw_box(0.75, 0.53, 0.38, 0.17,
+         expression(atop(paste("Train ", hat(e)^"(-k)", ", ", hat(Q)^"(-k)"),
+                         paste("without fold ", k))),
+         fill = "#A0CBE8", cex = 0.56, font = 2)
+draw_box(0.75, 0.27, 0.38, 0.17,
+         expression(atop(paste("Evaluate ", hat(phi)[i]^"CF"),
+                         paste("for held-out ", i %in% I[k]))),
+         fill = "#B7D7A8", cex = 0.58, font = 2)
+draw_arrow(0.75, 0.44, 0.75, 0.36)
+draw_text(0.75, 0.08,
+          "Nuisance learning separated from EIF evaluation",
+          cex = 0.64, font = 2, col = "#2F6B3F")
+```
+
+To see the mechanics, we fit richer nuisance models than the true DGP requires: cubic terms and an \(X_1X_2\) interaction. This is still a GLM, not a full machine-learning learner, but it creates a useful classroom version of the DML workflow.
+
+We compare:
+
+1. A rich in-sample DR estimator.
+2. A rich 5-fold cross-fitted DR estimator.
+3. The infeasible oracle EIF estimator.
+
+```{r crossfit-simulation}
+set.seed(20260706)
+R_cf <- 60
+n_cf <- 600
+K_cf <- 5
+
+crossfit_results <- vector("list", 3 * R_cf)
+counter <- 1
+
+for (r in seq_len(R_cf)) {
+  dat_r <- generate_dgp(n_cf)
+
+  insample_fit <- tryCatch(
+    estimate_dr_with_formula(dat_r, rich_e_formula, rich_q_formula),
+    error = function(e) rep(NA_real_, 4)
+  )
+
+  crossfit_fit <- tryCatch(
+    estimate_dr_crossfit(dat_r, rich_e_formula, rich_q_formula, K = K_cf),
+    error = function(e) rep(NA_real_, 4)
+  )
+
+  oracle_fit <- oracle_eif_with_se(dat_r)
+
+  fit_matrix <- rbind(
+    `Rich in-sample DR` = insample_fit,
+    `Rich cross-fitted DR` = crossfit_fit,
+    `Oracle EIF` = oracle_fit
+  )
+
+  for (m in rownames(fit_matrix)) {
+    crossfit_results[[counter]] <- data.frame(
+      n = n_cf,
+      Method = m,
+      Estimate = fit_matrix[m, "psi"],
+      SE = fit_matrix[m, "se"],
+      Lower = fit_matrix[m, "lower"],
+      Upper = fit_matrix[m, "upper"]
+    )
+    counter <- counter + 1
+  }
+}
+
+crossfit_results <- do.call(rbind, crossfit_results)
+crossfit_results <- crossfit_results[complete.cases(crossfit_results), ]
+
+crossfit_summary <- summarize_ci_performance(
+  crossfit_results,
+  truth = sim_truth["psi"],
+  v_eff = sim_truth["v_eff"]
+)
+
+crossfit_display <- crossfit_summary
+crossfit_display[, c("Bias", "Monte_Carlo_SD", "Mean_EIF_SE", "Coverage", "Efficiency_ratio")] <-
+  round(crossfit_display[, c("Bias", "Monte_Carlo_SD", "Mean_EIF_SE", "Coverage", "Efficiency_ratio")], 3)
+crossfit_display$Method <- method_math_label(crossfit_display$Method)
+names(crossfit_display) <- c(
+  "\\(n\\)",
+  "Estimator",
+  "Bias",
+  "MC SD",
+  "Mean \\(\\widehat{SE}_{EIF}\\)",
+  "95% CI coverage",
+  "\\(\\mathrm{Var}_{MC}(\\hat\\psi)/(V_{\\mathrm{EIF}}/n)\\)"
+)
+
+mkable(crossfit_display)
+```
+
+The table compares the repeated-sampling behavior of three estimators:
+
+1. \(\hat\psi_{\mathrm{oracle}}\): uses the true nuisance functions. This is the unattainable benchmark.
+2. \(\hat\psi_{\mathrm{CF}}\): estimates nuisances on training folds and evaluates EIF contributions on held-out folds.
+3. \(\hat\psi_{\mathrm{in}}\): estimates nuisances and evaluates the EIF on the same observations.
+
+The comparison is not meant to prove that cross-fitting always dominates in every small simulation. With simple GLMs, the difference can be modest because GLMs are relatively stable. The point is structural: cross-fitting creates the empirical version of the theoretical condition that the nuisance error is separated from the score evaluation.
+
+```{r crossfit-simulation-plot, echo=FALSE, fig.width=9.2, fig.height=5.2}
+old_par <- par(mar = c(5.4, 5.6, 4.2, 1.2))
+
+crossfit_method_order <- c(
+  "Oracle EIF",
+  "Rich cross-fitted DR",
+  "Rich in-sample DR"
+)
+crossfit_plot_data <- subset(crossfit_results, Method %in% crossfit_method_order)
+crossfit_plot_data$Method <- factor(
+  crossfit_plot_data$Method,
+  levels = crossfit_method_order
+)
+crossfit_errors <- split(
+  100 * (crossfit_plot_data$Estimate - sim_truth["psi"]),
+  crossfit_plot_data$Method
+)
+crossfit_ylim <- quantile(unlist(crossfit_errors), probs = c(0.02, 0.98), na.rm = TRUE)
+crossfit_ylim <- crossfit_ylim + c(-1, 1) * diff(crossfit_ylim) * 0.15
+outside_count <- sum(
+  unlist(crossfit_errors) < crossfit_ylim[1] |
+    unlist(crossfit_errors) > crossfit_ylim[2],
+  na.rm = TRUE
+)
+
+boxplot(
+  crossfit_errors,
+  col = c("#A0CBE8", "#B7D7A8", "#F1CE63"),
+  ylab = "Estimation error (percentage points)",
+  main = "Cross-Fitting Separates Nuisance Learning from EIF Evaluation",
+  names = c("Oracle\nEIF", "Cross-fitted\nDR", "In-sample\nDR"),
+  las = 1,
+  cex.names = 0.88,
+  ylim = crossfit_ylim,
+  outline = FALSE
+)
+abline(h = 0, lwd = 2)
+stripchart(
+  crossfit_errors,
+  vertical = TRUE,
+  method = "jitter",
+  pch = 16,
+  cex = 0.45,
+  col = adjustcolor("#333333", alpha.f = 0.35),
+  add = TRUE
+)
+if (outside_count > 0) {
+  mtext(
+    paste0(outside_count, " extreme replicate(s) outside plotted range"),
+    side = 3,
+    line = 0.2,
+    adj = 1,
+    cex = 0.72,
+    col = "#555555"
+  )
+}
+
+par(old_par)
+```
+
+The DML paper often visualizes this idea with histograms: a conventional or non-orthogonal construction can be shifted or poorly matched to its Gaussian approximation, while an orthogonal score is much closer to the reference normal distribution. The exact partially linear model in that paper is different from our ATE setting, so the analogous diagnostic here is:
+
+1. **same-sample EIF evaluation:** fit nuisance functions and evaluate the score on the same observations;
+2. **cross-fitted orthogonal EIF evaluation:** fit nuisance functions away from observation \(i\), then evaluate the EIF contribution for observation \(i\).
+
+The cleanest scale for this comparison is the studentized repeated-sampling error
+
+\[
+Z_r
+=
+\frac{\hat\psi^{(r)}-\psi}{\widehat{SE}^{(r)}}.
+\]
+
+If the first-order EIF approximation is working well, the histogram of \(Z_r\) should be close to the red \(N(0,1)\) curve.
+
+```{r crossfit-dml-histogram, echo=FALSE, fig.width=9.4, fig.height=4.6}
+old_par <- par(mfrow = c(1, 2), mar = c(5.0, 4.8, 4.2, 1.0), oma = c(0, 0, 1.0, 0))
+
+dml_hist_data <- subset(
+  crossfit_results,
+  Method %in% c("Rich in-sample DR", "Rich cross-fitted DR") & SE > 0
+)
+dml_hist_data$Z <- (dml_hist_data$Estimate - sim_truth["psi"]) / dml_hist_data$SE
+
+draw_dml_hist <- function(z, main, fill) {
+  z <- z[is.finite(z)]
+  hist_info <- hist(
+    z,
+    breaks = seq(-4.5, 4.5, by = 0.5),
+    plot = FALSE
+  )
+  ymax <- max(hist_info$density, dnorm(0)) * 1.15
+  hist(
+    z,
+    breaks = seq(-4.5, 4.5, by = 0.5),
+    probability = TRUE,
+    col = adjustcolor(fill, alpha.f = 0.70),
+    border = "#4D4D4D",
+    xlim = c(-4.5, 4.5),
+    ylim = c(0, ymax),
+    main = main,
+    xlab = expression((hat(psi) - psi) / widehat(SE)),
+    ylab = "Density",
+    las = 1
+  )
+  curve(dnorm(x), from = -4.5, to = 4.5, add = TRUE, col = "#E15759", lwd = 2.5)
+  abline(v = 0, lty = 2, lwd = 1.5, col = "#333333")
+  legend(
+    "topright",
+    legend = c("Simulation", expression(N(0, 1))),
+    fill = c(adjustcolor(fill, alpha.f = 0.70), NA),
+    border = c("#4D4D4D", NA),
+    lty = c(NA, 1),
+    lwd = c(NA, 2.5),
+    col = c(NA, "#E15759"),
+    bty = "n",
+    cex = 0.78
+  )
+  mtext(
+    sprintf("mean = %.2f, sd = %.2f", mean(z), sd(z)),
+    side = 3,
+    line = 0.2,
+    adj = 0,
+    cex = 0.72,
+    col = "#555555"
+  )
+}
+
+draw_dml_hist(
+  dml_hist_data$Z[dml_hist_data$Method == "Rich in-sample DR"],
+  "Same-Sample EIF Evaluation",
+  "#F1CE63"
+)
+draw_dml_hist(
+  dml_hist_data$Z[dml_hist_data$Method == "Rich cross-fitted DR"],
+  "Orthogonal Cross-Fitted EIF",
+  "#A0CBE8"
+)
+
+mtext(
+  "DML-style normal approximation diagnostic",
+  outer = TRUE,
+  line = -0.2,
+  font = 2,
+  cex = 1.05
+)
+par(old_par)
+```
+
+The point of this figure is not that every small Monte Carlo run must look perfectly normal. Here \(R=60\), so the histograms are necessarily rough. The main diagnostic is whether the studentized errors are centered near zero and have roughly unit spread. Cross-fitting is designed to make this approximation more credible by removing the direct path from \(Y_i\) into both nuisance training and EIF evaluation for the same observation.
+
+The boxplot displays estimation error in percentage points over repeated simulations. The oracle EIF distribution is the benchmark target. The cross-fitted estimator should be read as the feasible estimator that most closely follows the DML construction. The in-sample estimator can perform well with stable parametric regressions, but it is not the construction that protects us from adaptive overfitting.
+
+The role of this simulation is therefore conceptual and technical:
+
+1. It shows how the EIF is evaluated after nuisance learning.
+2. It explains why DML uses out-of-fold nuisance predictions.
+3. It connects the product-rate condition to an implementable algorithm.
+4. It clarifies that cross-fitting is not a new estimand; it is a device for making the same EIF-based estimator behave like its asymptotic expansion.
+
+## Practical Checklist
+
+When using an EIF-based lower bound for the smoking-CVD risk difference, check:
+
+1. **Estimand:** Is the target \(\psi=E\{Y(1)\}-E\{Y(0)\}\), a risk ratio, or another scale?
+2. **Observed-data model:** Are we using the same i.i.d. complete-case model assumed by this lecture note?
+3. **Identification:** Are consistency, exchangeability, and positivity plausible?
+4. **Nuisance functions:** Are \(e(X)\), \(Q_1(X)\), and \(Q_0(X)\) estimated well enough?
+5. **Overlap:** Are estimated propensities bounded away from 0 and 1?
+6. **Estimator:** Does the estimator solve or approximate the EIF equation?
+7. **Inference:** Are SEs based on the EIF, bootstrap, or both?
+8. **Sensitivity:** What does Lecture 6 say about unmeasured confounding?
+
+## Key Takeaways
+
+1. The DR estimator from Lecture 4 is the sample analog of the efficient influence function for the risk difference.
+2. The semiparametric efficiency lower bound is \(E\{D^*(O)^2\}/n\).
+3. The bound decomposes into treatment-effect heterogeneity plus residual outcome noise amplified by inverse propensity scores.
+4. Weak positivity inflates the bound even if there is no bias.
+5. DR estimators can be consistent if either the treatment model or outcome model is correct, but they are efficient only when the full first-order expansion is controlled.
+6. The \(n^{-1/4}\) product-rate condition explains why flexible nuisance estimation can still yield root-\(n\) inference.
+7. The simulation experiments show the same theory from several angles: efficiency ratios, Wald coverage, bias surfaces, positivity stress tests, and cross-fitted nuisance learning.
+8. Cross-fitting separates nuisance learning from EIF evaluation and makes the DR estimating equation usable with richer learners.
+
+## Appendix 1: Pathwise Derivative Sketch
+
+Let \(P_\epsilon\) be a regular parametric submodel through \(P\) with score
+
+$$
+S(O)
+=
+\left.
+\frac{\partial}{\partial \epsilon}
+\log p_\epsilon(O)
+\right|_{\epsilon=0}.
+$$
+
+A parameter \(\psi(P)\) is pathwise differentiable if
+
+$$
+\left.
+\frac{\partial}{\partial \epsilon}
+\psi(P_\epsilon)
+\right|_{\epsilon=0}
+=
+E\{D^*(O)S(O)\}
+$$
+
+for every regular submodel.
+
+For
+
+$$
+\psi_t(P) = E\{Q_t(X)\},
+$$
+
+the candidate gradient is
+
+$$
+D_t^*(O)
+=
+\frac{I(T=t)}{P(T=t \mid X)}
+\{Y-Q_t(X)\}
++
+Q_t(X)-\psi_t.
+$$
+
+One can verify:
+
+1. \(E\{D_t^*(O)\}=0\).
+2. The weighted residual term captures perturbations of the conditional outcome law \(Y \mid T,X\).
+3. The \(Q_t(X)-\psi_t\) term captures perturbations of the covariate distribution \(P_X\).
+4. The treatment mechanism perturbation contributes zero because the residual term has conditional mean zero given \(T,X\).
+
+Thus \(D_t^*\) represents the pathwise derivative and is the canonical gradient in the nonparametric model.
+
+## Appendix 2: Mean-Zero Verification
+
+For \(t=1\):
+
+$$
+E\left[
+\frac{T}{e(X)}\{Y-Q_1(X)\}
+\mid X
+\right]
+=
+\frac{E(T\mid X)}{e(X)}
+E\{Y-Q_1(X)\mid T=1,X\}
+=
+0.
+$$
+
+Also,
+
+$$
+E\{Q_1(X)-\psi_1\}=0.
+$$
+
+Therefore \(E\{D_1^*(O)\}=0\). The proof for \(D_0^*\) is analogous.
+
+## Appendix 3: Variance Decomposition
+
+Write
+
+$$
+D^*(O)
+=
+R_1(O)-R_0(O)+\tau(X)-\psi,
+$$
+
+where
+
+$$
+R_1(O)=\frac{T}{e(X)}\{Y-Q_1(X)\},
+$$
+
+$$
+R_0(O)=\frac{1-T}{1-e(X)}\{Y-Q_0(X)\},
+$$
+
+and
+
+$$
+\tau(X)=Q_1(X)-Q_0(X).
+$$
+
+Conditional on \(X\), \(R_1\) and \(R_0\) have mean zero. Also \(R_1R_0=0\) because \(T\) cannot equal both 1 and 0. Therefore cross-terms vanish, and
+
+$$
+E(D^{*2})
+=
+E\{R_1^2\}
++
+E\{R_0^2\}
++
+\mathrm{Var}\{\tau(X)\}.
+$$
+
+Now
+
+$$
+E(R_1^2 \mid X)
+=
+\frac{1}{e(X)^2}
+E[T\{Y-Q_1(X)\}^2 \mid X]
+=
+\frac{\mathrm{Var}(Y \mid T=1,X)}{e(X)}.
+$$
+
+Similarly,
+
+$$
+E(R_0^2 \mid X)
+=
+\frac{\mathrm{Var}(Y \mid T=0,X)}{1-e(X)}.
+$$
+
+This gives the decomposition used above.
+
+## Appendix 4: DR Remainder Sketch
+
+Let
+
+$$
+m(O;\eta)
+=
+Q_1(X)-Q_0(X)
++
+\frac{T}{e(X)}\{Y-Q_1(X)\}
+-
+\frac{1-T}{1-e(X)}\{Y-Q_0(X)\}.
+$$
+
+The DR estimator is \(P_n m(O;\hat\eta)\). Add and subtract terms:
+
+$$
+\hat\psi_{DR}-\psi
+=
+(P_n-P)m(O;\eta)
++
+(P_n-P)\{m(O;\hat\eta)-m(O;\eta)\}
++
+P\{m(O;\hat\eta)-m(O;\eta)\}.
+$$
+
+The first term gives the efficient influence function. The second term is an empirical process term controlled by Donsker conditions or cross-fitting plus regularity. The third term is the drift or second-order remainder.
+
+Under the true distribution,
+
+$$
+P\{m(O;\hat\eta)-m(O;\eta)\}
+$$
+
+is a product of treatment-model and outcome-model errors. This is the analytic source of double robustness and the \(n^{-1/4}\) product-rate rule.
+
+## Appendix 5: Relation to Lecture 5 Bootstrap
+
+If
+
+$$
+\hat\psi-\psi
+=
+P_nD^*(O)+o_p(n^{-1/2}),
+$$
+
+then the first-order variance is
+
+$$
+\frac{E(D^{*2})}{n}.
+$$
+
+The nonparametric bootstrap approximates the sampling distribution by resampling observations and rerunning the estimator. When the estimator is regular and the bootstrap is valid, the bootstrap SE estimates the same first-order target.
+
+For highly adaptive, non-smooth, or design-based estimators, bootstrap validity may require additional care. This is why influence-function-based inference and bootstrap inference should be understood as related but not interchangeable.
+
+## References
+
+Bang, H., & Robins, J. M. (2005). Doubly robust estimation in missing data and causal inference models. *Biometrics*, 61(4), 962-973.
+
+Chernozhukov, V., Chetverikov, D., Demirer, M., Duflo, E., Hansen, C., Newey, W., & Robins, J. (2018). Double/debiased machine learning for treatment and structural parameters. *The Econometrics Journal*, 21(1), C1-C68.
+
+Hahn, J. (1998). On the role of the propensity score in efficient semiparametric estimation of average treatment effects. *Econometrica*, 66(2), 315-331.
+
+Hernan, M. A., & Robins, J. M. (2020). *Causal Inference: What If*. Chapman & Hall/CRC.
+
+Hirano, K., Imbens, G. W., & Ridder, G. (2003). Efficient estimation of average treatment effects using the estimated propensity score. *Econometrica*, 71(4), 1161-1189.
+
+Kennedy, E. H. (2016). Semiparametric theory and empirical processes in causal inference. arXiv:1510.04740.
+
+Newey, W. K. (1994). The asymptotic variance of semiparametric estimators. *Econometrica*, 62(6), 1349-1382.
+
+Newey, W. K., & Robins, J. R. (2018). Cross-fitting and fast remainder rates for semiparametric estimation. arXiv:1801.09138.
+
+Robins, J. M., Rotnitzky, A., & Zhao, L. P. (1994). Estimation of regression coefficients when some regressors are not always observed. *Journal of the American Statistical Association*, 89(427), 846-866.
+
+Tsiatis, A. A. (2006). *Semiparametric Theory and Missing Data*. Springer.
+
+van der Laan, M. J., & Robins, J. M. (2003). *Unified Methods for Censored Longitudinal Data and Causality*. Springer.
+
+van der Vaart, A. W. (1998). *Asymptotic Statistics*. Cambridge University Press.
+
+Velez, A. *On the Asymptotic Properties of Debiased Machine Learning Estimators*.
+
+Wager, S. *Causal Inference* lecture notes.

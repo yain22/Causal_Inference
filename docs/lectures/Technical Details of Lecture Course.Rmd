@@ -1,0 +1,2246 @@
+---
+title: "Technical Details of Lecture Course"
+author: "Se Yoon Lee"
+date: "2026-07-05"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    number_sections: true
+    theme: readable
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+<style type="text/css">
+.proposition-box {
+  margin: 1.4em 0 1.6em 0;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #eeeeee;
+  box-shadow: 8px 8px 12px rgba(0, 0, 0, 0.22);
+}
+.proposition-title {
+  background: #cfcfcf;
+  padding: 0.55em 0.9em;
+  font-weight: 700;
+  font-size: 1.05em;
+}
+.proposition-title p {
+  margin: 0;
+}
+.proposition-body {
+  padding: 1.0em 1.25em 1.1em 1.25em;
+}
+.proposition-body > p:first-child {
+  margin-top: 0;
+}
+.proposition-body ol,
+.proposition-body ul {
+  margin-bottom: 0;
+}
+.proposition-body li {
+  margin: 0.25em 0;
+}
+.math-hi {
+  display: inline-block;
+  padding: 0.02em 0.18em;
+  border-radius: 3px;
+}
+.hi-est {
+  background: #E4E6FF;
+}
+.hi-target {
+  background: #FFF6C7;
+}
+.hi-bias {
+  background: #DDFBE1;
+}
+.hi-bc {
+  background: #FFE0E0;
+}
+.bias-proof {
+  margin: 0.9em 0 0.2em 0;
+  text-align: center;
+  line-height: 2.05;
+}
+.bias-proof .proof-line {
+  margin: 0.15em 0;
+}
+</style>
+
+```{r picture-helpers, include=FALSE}
+start_picture <- function() {
+  par(mar = c(0, 0, 0, 0), xaxs = "i", yaxs = "i")
+  plot.new()
+  plot.window(xlim = c(0, 1), ylim = c(0, 1))
+}
+
+draw_text <- function(x, y, label, cex = 1, font = 1, col = "#222222") {
+  lines <- strsplit(label, "\n", fixed = TRUE)[[1]]
+  line_height <- 0.070 * cex
+  offsets <- seq((length(lines) - 1) / 2, -(length(lines) - 1) / 2) *
+    line_height
+  text(rep(x, length(lines)), y + offsets, labels = lines,
+       cex = cex, font = font, col = col)
+}
+
+draw_box <- function(x, y, w, h, label, fill = "#FFFFFF",
+                     border = "#333333", lwd = 2, lty = 1,
+                     cex = 1, font = 1) {
+  rect(x - w / 2, y - h / 2, x + w / 2, y + h / 2,
+       col = fill, border = border, lwd = lwd, lty = lty)
+  draw_text(x, y, label, cex = cex, font = font)
+}
+
+draw_circle <- function(x, y, r, label, fill = "#FFFFFF",
+                        border = "#333333", lwd = 2, lty = 1,
+                        cex = 1, font = 1) {
+  symbols(x, y, circles = r, inches = FALSE, add = TRUE,
+          bg = fill, fg = border, lwd = lwd, lty = lty)
+  draw_text(x, y, label, cex = cex, font = font)
+}
+
+draw_arrow <- function(x0, y0, x1, y1, col = "#333333",
+                       lwd = 2, lty = 1) {
+  arrows(x0, y0, x1, y1, length = 0.08, lwd = lwd,
+         col = col, lty = lty)
+}
+
+draw_curve_arrow <- function(x0, y0, x1, y1, cx, cy,
+                             col = "#333333", lwd = 2, lty = 1) {
+  t <- seq(0, 1, length.out = 80)
+  x <- (1 - t)^2 * x0 + 2 * (1 - t) * t * cx + t^2 * x1
+  y <- (1 - t)^2 * y0 + 2 * (1 - t) * t * cy + t^2 * y1
+
+  lines(x, y, col = col, lwd = lwd, lty = lty)
+  arrows(
+    x[length(x) - 1], y[length(y) - 1],
+    x[length(x)], y[length(y)],
+    length = 0.08, lwd = lwd, col = col, lty = lty
+  )
+}
+```
+
+## Overview
+
+This document summarizes the technical content of Lectures 1-6 in the causal inference course. The running causal question is:
+
+> Is the risk of cardiovascular disease (CVD) different for smokers and non-smokers?
+
+We approach this question using the logic of the Causal Roadmap: first state the causal question, then define the counterfactual quantity of interest, evaluate the assumptions needed to identify that quantity from observed data, choose an estimation strategy, quantify uncertainty, and interpret the result carefully. The article by Nance, Petersen, van der Laan, and Balzer emphasizes this ordering because a causal analysis should not begin with a favorite algorithm. The method should follow from the question, the causal model, the available data, and the threats to validity.
+
+The analysis should be read as an estimand-first exercise. The scientific question is translated into a target-trial contrast between two static interventions, "set lifetime smoking indicator to 1" versus "set lifetime smoking indicator to 0." The observed-data estimators are then attempts to estimate the statistical functional that equals this causal contrast under the identification assumptions. This distinction matters because an estimator can be precisely computed and still fail to answer the causal question if the target population, treatment version, time ordering, missing-data mechanism, or confounding adjustment set is misspecified.
+
+The running example uses a classroom NHANES dataset. The exposure is a binary smoking indicator, where `smoker_indicator = 1` means that the participant reported having smoked at least 100 cigarettes in their life. The outcome is a binary CVD indicator, where `cvd_indicator = 1` means that the participant had CVD before the interview. The baseline covariates used for adjustment are age, gender, race/ethnicity, education, income-to-poverty ratio, and BMI.
+
+The lectures deliberately do not use NHANES survey weights. Therefore, the numerical results should be interpreted as estimates for the classroom analytic dataset, not as design-based estimates for the full United States population. Formally, the empirical covariate distribution in the analytic sample is being used as the standardizing distribution; the estimand is not the official NHANES finite-population or superpopulation estimand that would require design weights, strata, and primary sampling units.
+
+The course follows this roadmap:
+
+1. State the causal question, causal model, and causal estimand.
+2. Define the observed data available for the question.
+3. Assess identifiability using consistency, conditional exchangeability, and positivity.
+4. Translate the causal estimand into a statistical estimand.
+5. Choose statistical models and estimators: observed comparison, IPW, outcome regression, and doubly robust estimation, with bootstrap inference.
+6. Assess sensitivity to possible unmeasured confounding using the E-value.
+7. Interpret the evidence and compare what the different analysis strategies imply.
+
+```{r course-roadmap-picture, echo=FALSE, fig.width=8.8, fig.height=8.4}
+start_picture()
+
+draw_box(0.50, 0.965, 0.62, 0.055,
+         "Causal Roadmap for the smoking-CVD question",
+         fill = "#E8E8E8", cex = 0.78, font = 2)
+
+draw_box(0.27, 0.835, 0.34, 0.15,
+         "Step 1a\nCausal question / estimand\nE{Y(1)} versus E{Y(0)}",
+         fill = "#F1CE63", cex = 0.62, font = 2)
+
+draw_box(0.73, 0.835, 0.34, 0.15,
+         " ",
+         fill = "#FFFFFF", cex = 0.62, font = 2)
+draw_text(0.73, 0.895, "Step 1b", cex = 0.58, font = 2)
+draw_text(0.73, 0.870, "Causal model", cex = 0.58, font = 2)
+draw_text(0.72, 0.840, "X", cex = 0.50, font = 2)
+draw_text(0.64, 0.795, "T", cex = 0.50, font = 2)
+draw_text(0.81, 0.795, "Y", cex = 0.50, font = 2)
+draw_text(0.58, 0.840, "U?", cex = 0.46, font = 2, col = "#E15759")
+draw_arrow(0.70, 0.830, 0.66, 0.807)
+draw_arrow(0.74, 0.830, 0.79, 0.807)
+draw_arrow(0.66, 0.795, 0.79, 0.795, col = "#59A14F")
+draw_arrow(0.60, 0.832, 0.63, 0.807, col = "#E15759", lty = 2)
+draw_arrow(0.60, 0.842, 0.79, 0.807, col = "#E15759", lty = 2)
+draw_text(0.73, 0.775, "study type /\nbackground knowledge",
+          cex = 0.36, font = 2)
+
+draw_arrow(0.27, 0.755, 0.45, 0.690, col = "#78A641", lwd = 3)
+draw_arrow(0.73, 0.755, 0.55, 0.690, col = "#78A641", lwd = 3)
+
+draw_box(0.50, 0.660, 0.42, 0.085,
+         "Step 2: Observed data\nNHANES: T, Y, X",
+         fill = "#D9EAF7", cex = 0.56, font = 2)
+draw_arrow(0.50, 0.612, 0.50, 0.586, col = "#78A641", lwd = 3)
+
+draw_box(0.50, 0.540, 0.42, 0.095,
+         "Step 3: Identifiability\nconsistency, exchangeability, positivity",
+         fill = "#FCE4C6", cex = 0.49, font = 2)
+draw_arrow(0.50, 0.490, 0.50, 0.461, col = "#78A641", lwd = 3)
+
+draw_box(0.50, 0.420, 0.42, 0.095,
+         "Step 4: Statistical estimand\nE_X E(Y | T=t, X)",
+         fill = "#E6D9F2", cex = 0.52, font = 2)
+draw_arrow(0.50, 0.370, 0.50, 0.341, col = "#78A641", lwd = 3)
+
+draw_box(0.50, 0.300, 0.42, 0.095,
+         "Step 5: Model and estimator\nobserved, IPW, OR, DR; bootstrap",
+         fill = "#B7D7A8", cex = 0.49, font = 2)
+draw_arrow(0.50, 0.250, 0.50, 0.221, col = "#78A641", lwd = 3)
+
+draw_box(0.50, 0.180, 0.42, 0.095,
+         "Step 6: Sensitivity analysis\nE-values for hidden confounding",
+         fill = "#FCE4C6", cex = 0.50, font = 2)
+draw_arrow(0.50, 0.130, 0.50, 0.101, col = "#78A641", lwd = 3)
+
+draw_box(0.50, 0.055, 0.50, 0.080,
+         "Step 7: Interpret evidence\ncompare analysis strategies",
+         fill = "#FFFFFF", cex = 0.50, font = 2)
+
+draw_curve_arrow(0.25, 0.185, 0.25, 0.770, 0.05, 0.47,
+                 col = "#F2B134", lwd = 2.5)
+draw_text(0.11, 0.47, "revise design\nif assumptions\nare weak",
+          cex = 0.48, font = 2, col = "#8A5A00")
+```
+
+## Common Notation and Target Estimands
+
+For participant \(i = 1, \ldots, n\), let
+
+$$
+O_i = (X_i, T_i, Y_i),
+$$
+
+where \(X_i\) is the vector of measured baseline covariates, \(T_i \in \{0,1\}\) is smoking status, and \(Y_i \in \{0,1\}\) is CVD status.
+
+We treat \(O_1,\ldots,O_n\) as independent draws from an observed-data distribution \(P\) in a nonparametric statistical model \(\mathcal M\), unless a more restrictive working model is introduced for estimation. For any integrable function \(f(O)\), write
+
+$$
+P f = E\{f(O)\},
+\qquad
+\mathbb P_n f = \frac{1}{n}\sum_{i=1}^n f(O_i).
+$$
+
+This notation separates the population target \(P f\) from its empirical analog \(\mathbb P_n f\). It also makes clear that the regression models used below are nuisance-function estimators, not the causal estimand itself.
+
+The two potential outcomes are
+
+$$
+Y_i(1) = \text{CVD outcome if participant } i \text{ smoked}
+$$
+
+and
+
+$$
+Y_i(0) = \text{CVD outcome if participant } i \text{ did not smoke}.
+$$
+
+The observed outcome satisfies the consistency relation
+
+$$
+Y_i = T_iY_i(1) + (1 - T_i)Y_i(0).
+$$
+
+The main causal risks are
+
+$$
+\psi_1 = E\{Y(1)\}, \qquad \psi_0 = E\{Y(0)\}.
+$$
+
+These are marginal, population-level risks: \(\psi_1\) is the CVD risk if everyone in the target population were set to smoker, and \(\psi_0\) is the CVD risk if everyone were set to non-smoker.
+
+More formally, the causal parameter is a functional of the full-data distribution of \((X,Y(1),Y(0))\). The observed data contain only \(Y=TY(1)+(1-T)Y(0)\), so the parameter is not identified from the observed-data distribution alone without assumptions linking the full-data distribution to the observed-data distribution. Once identified, the statistical target is
+
+$$
+\Psi_t(P)
+=
+\int m(t,x)\,dP_X(x),
+\qquad
+m(t,x)=E(Y\mid T=t,X=x),
+$$
+
+with \(\psi_t=\Psi_t(P)\) under the assumptions in the next section. The risk difference and risk ratio are smooth transformations of \((\Psi_1,\Psi_0)\) when \(\Psi_0>0\).
+
+The lectures report both the causal risk difference
+
+$$
+RD = \psi_1 - \psi_0
+$$
+
+and the causal risk ratio
+
+$$
+RR = \frac{\psi_1}{\psi_0}.
+$$
+
+The risk difference is reported in percentage points. For example, \(RD = 0.03\) is reported as a 3 percentage-point higher risk under smoking than under non-smoking.
+
+## Identification Assumptions
+
+The observed data alone do not reveal both \(Y_i(1)\) and \(Y_i(0)\) for the same participant. The course therefore separates estimands from estimators and emphasizes the assumptions needed to identify causal effects from observational data.
+
+The causal identification assumptions are:
+
+::: {.proposition-box}
+::: {.proposition-title}
+Assumptions (Causal Identification)
+:::
+::: {.proposition-body}
+**A1. Consistency.** If \(T_i=t\), then \(Y_i=Y_i(t)\).
+
+**A2. Conditional exchangeability.** Conditional on measured baseline covariates,
+\[
+\{Y_i(1),Y_i(0)\}\perp T_i\mid X_i.
+\]
+
+**A3. Positivity.** For every covariate value \(x\) in the target population support,
+\[
+0<P(T_i=1\mid X_i=x)<1.
+\]
+
+These are identification assumptions about the causal contrast. Correct nuisance modeling is an estimation requirement for particular methods, not a fourth causal identification assumption.
+:::
+:::
+
+**1. Consistency.** If a participant's observed treatment is \(T_i=t\), then the observed outcome equals the potential outcome under that treatment: \(Y_i = Y_i(t)\). This also requires a sufficiently well-defined intervention and treatment version. In this example, "smoking" is a lifetime indicator rather than a randomized intervention with a single manipulable dose, timing, and duration, so consistency is partly a scientific approximation: the potential outcome \(Y_i(1)\) should be interpreted as tied to the exposure definition used in the classroom data.
+
+```{r consistency-assumption-picture, echo=FALSE, fig.width=8.8, fig.height=2.7}
+start_picture()
+
+draw_box(0.50, 0.89, 0.70, 0.11,
+         "Consistency: observed Y is the potential outcome under the treatment actually received",
+         fill = "#E8E8E8", cex = 0.55, font = 2)
+
+draw_box(0.20, 0.62, 0.23, 0.16,
+         "Observed smoker\nT_i = 1",
+         fill = "#F28E2B", cex = 0.58, font = 2)
+draw_box(0.50, 0.62, 0.23, 0.16,
+         "Actual outcome\nY_i",
+         fill = "#FFFFFF", cex = 0.58, font = 2)
+draw_box(0.80, 0.62, 0.23, 0.16,
+         "Matches\nY_i(1)",
+         fill = "#E15759", cex = 0.58, font = 2)
+draw_arrow(0.315, 0.62, 0.385, 0.62, lwd = 2.5)
+draw_arrow(0.615, 0.62, 0.685, 0.62, lwd = 2.5)
+
+draw_box(0.20, 0.34, 0.23, 0.16,
+         "Observed non-smoker\nT_i = 0",
+         fill = "#9ECAE1", cex = 0.58, font = 2)
+draw_box(0.50, 0.34, 0.23, 0.16,
+         "Actual outcome\nY_i",
+         fill = "#FFFFFF", cex = 0.58, font = 2)
+draw_box(0.80, 0.34, 0.23, 0.16,
+         "Matches\nY_i(0)",
+         fill = "#B7D7A8", cex = 0.58, font = 2)
+draw_arrow(0.315, 0.34, 0.385, 0.34, lwd = 2.5)
+draw_arrow(0.615, 0.34, 0.685, 0.34, lwd = 2.5)
+
+draw_text(0.50, 0.12,
+          "The unreceived potential outcome remains counterfactual; consistency says the received one is well-defined and observed.",
+          cex = 0.46, font = 2, col = "#555555")
+```
+
+**2. Conditional exchangeability.** After conditioning on measured baseline covariates, smoking is treated as if randomly assigned for the purpose of this teaching example:
+
+$$
+\{Y_i(1), Y_i(0)\} \perp T_i \mid X_i.
+$$
+
+Equivalently, within each covariate stratum \(X=x\), the distribution of the potential outcomes is the same among smokers and non-smokers:
+
+$$
+P\{Y(t)=1\mid T=1,X=x\}
+=
+P\{Y(t)=1\mid T=0,X=x\}
+=
+P\{Y(t)=1\mid X=x\}.
+$$
+
+This is a cross-world statement about unobserved potential outcomes, not a property that can be verified by standard regression output. Balance diagnostics can make the measured covariate distributions look comparable, but they cannot test whether all common causes of smoking and CVD have been measured and appropriately included.
+
+```{r exchangeability-assumption-picture, echo=FALSE, fig.width=8.8, fig.height=3.2}
+start_picture()
+
+draw_box(0.50, 0.90, 0.70, 0.10,
+         "Conditional exchangeability: compare smokers and non-smokers within the same measured X",
+         fill = "#E8E8E8", cex = 0.55, font = 2)
+
+draw_box(0.50, 0.70, 0.26, 0.13,
+         "Condition on\nX_i = x",
+         fill = "#F1CE63", cex = 0.60, font = 2)
+draw_arrow(0.43, 0.64, 0.29, 0.51, lwd = 2.5)
+draw_arrow(0.57, 0.64, 0.71, 0.51, lwd = 2.5)
+
+draw_box(0.25, 0.44, 0.25, 0.16,
+         "Smokers\nT_i = 1",
+         fill = "#F28E2B", cex = 0.62, font = 2)
+draw_box(0.75, 0.44, 0.25, 0.16,
+         "Non-smokers\nT_i = 0",
+         fill = "#9ECAE1", cex = 0.62, font = 2)
+
+draw_box(0.25, 0.20, 0.27, 0.13,
+         "Distribution of\n{Y_i(1), Y_i(0)}",
+         fill = "#FFFFFF", cex = 0.48, font = 2)
+draw_box(0.75, 0.20, 0.27, 0.13,
+         "Distribution of\n{Y_i(1), Y_i(0)}",
+         fill = "#FFFFFF", cex = 0.48, font = 2)
+draw_arrow(0.25, 0.36, 0.25, 0.275, lwd = 2.2)
+draw_arrow(0.75, 0.36, 0.75, 0.275, lwd = 2.2)
+arrows(0.40, 0.20, 0.60, 0.20, code = 3, length = 0.08,
+       lwd = 2.2, col = "#59A14F")
+draw_text(0.50, 0.275, "same after conditioning on X",
+          cex = 0.46, font = 2, col = "#4C7F38")
+
+draw_circle(0.50, 0.44, 0.055, "hidden\nU?",
+            fill = "#FFFFFF", border = "#E15759", lwd = 2, lty = 2,
+            cex = 0.42, font = 2)
+draw_text(0.50, 0.075,
+          "This is the no-unmeasured-confounding claim after measured X has been controlled.",
+          cex = 0.46, font = 2, col = "#555555")
+```
+
+**3. Positivity.** Each covariate pattern with positive density in the target population must have positive probability of both smoking and non-smoking:
+
+$$
+0 < P(T_i = 1 \mid X_i=x) < 1.
+$$
+
+For asymptotic arguments, one often strengthens this to practical positivity:
+
+$$
+\epsilon < e(X_i) < 1-\epsilon
+\quad \text{almost surely for some } \epsilon>0,
+$$
+
+where \(e(x)=P(T=1\mid X=x)\). Violations can be structural, such as a covariate pattern for which smoking never occurs, or practical, such as very small fitted propensities that produce unstable inverse-probability weights.
+
+```{r positivity-assumption-picture, echo=FALSE, fig.width=8.8, fig.height=3.1}
+start_picture()
+
+draw_box(0.50, 0.91, 0.70, 0.10,
+         "Positivity: every relevant covariate pattern must contain both exposure options",
+         fill = "#E8E8E8", cex = 0.55, font = 2)
+
+draw_box(0.22, 0.73, 0.22, 0.10, "Covariate pattern",
+         fill = "#F7F7F7", cex = 0.50, font = 2)
+draw_box(0.48, 0.73, 0.20, 0.10, "T = 0\navailable",
+         fill = "#9ECAE1", cex = 0.48, font = 2)
+draw_box(0.72, 0.73, 0.20, 0.10, "T = 1\navailable",
+         fill = "#F28E2B", cex = 0.48, font = 2)
+
+row_y <- c(0.57, 0.42, 0.27)
+row_lab <- c("X = x_a", "X = x_b", "X = x_c")
+for (j in seq_along(row_y)) {
+  draw_box(0.22, row_y[j], 0.22, 0.10, row_lab[j],
+           fill = "#FFFFFF", cex = 0.52, font = 2)
+  draw_box(0.48, row_y[j], 0.20, 0.10, "present",
+           fill = "#D9EAF7", cex = 0.50, font = 2)
+  draw_box(0.72, row_y[j], 0.20, 0.10, "present",
+           fill = "#FCE4C6", cex = 0.50, font = 2)
+}
+
+draw_box(0.50, 0.08, 0.52, 0.11,
+         "Both P(T_i = 1 | X_i = x) and P(T_i = 0 | X_i = x) are positive.",
+         fill = "#FFFFFF", cex = 0.49, font = 2)
+draw_arrow(0.72, 0.21, 0.65, 0.135, col = "#59A14F", lwd = 2.2)
+draw_arrow(0.48, 0.21, 0.41, 0.135, col = "#59A14F", lwd = 2.2)
+```
+
+Under consistency, conditional exchangeability, and positivity, the g-formula identifies the counterfactual risk:
+
+$$
+\psi_t
+=
+E\{Y(t)\}
+=
+E_X\left[E(Y \mid T=t, X)\right],
+\qquad t \in \{0,1\}.
+$$
+
+The identification steps are
+
+$$
+\begin{aligned}
+E\{Y(t)\}
+&= E_X\left[E\{Y(t)\mid X\}\right] \\
+&= E_X\left[E\{Y(t)\mid T=t,X\}\right] \\
+&= E_X\left[E(Y\mid T=t,X)\right].
+\end{aligned}
+$$
+
+The first line is the law of iterated expectations, the second uses conditional exchangeability, and the third uses consistency. Positivity ensures that the conditional mean \(E(Y\mid T=t,X=x)\) is learned from observed data throughout the relevant support of \(X\). The estimators in Lectures 2-4 are different ways of estimating this same marginal functional.
+
+### Estimation Conditions Are Separate
+
+Correct enough nuisance modeling is not a causal identification assumption. It is a statistical estimation condition that matters after the causal estimand has been identified.
+
+For IPW, the treatment model must estimate \(e(X)=P(T=1 \mid X)\) well enough to create stable and meaningful weights. For outcome regression, the outcome model must estimate \(m(t,X)=E(Y \mid T=t,X)\) well enough to support standardization. For doubly robust estimation, the estimator has its double-robustness property when either the treatment model or the outcome model is correctly specified enough, together with the causal identification assumptions above. If both nuisance models are badly wrong, the doubly robust estimator can still be biased.
+
+Let the nuisance functions be
+
+$$
+\eta = \{m(0,\cdot),m(1,\cdot),e(\cdot)\}.
+$$
+
+Parametric logistic regressions estimate these functions by imposing finite-dimensional working models. A modern semiparametric reading is broader: the models are tools for estimating nuisance functions that enter the target functional. For the AIPW estimator, first-order bias is removed if either \(m\) or \(e\) is consistently estimated, and the remaining bias is second order in the product of nuisance errors. In large samples, this is why doubly robust estimators can be stable under weaker nuisance convergence conditions than pure plug-in or pure weighting estimators, provided positivity is not weak.
+
+```{r identification-picture, echo=FALSE, fig.width=8.8, fig.height=4.8}
+start_picture()
+
+draw_box(0.50, 0.92, 0.62, 0.09,
+         "Identification goal: isolate the causal T -> Y comparison",
+         fill = "#E8E8E8", cex = 0.78, font = 2)
+
+draw_circle(0.50, 0.70, 0.060, "Measured\ncovariates\nX",
+            fill = "#F1CE63", cex = 0.62, font = 2)
+draw_circle(0.27, 0.43, 0.065, "Smoking\nT",
+            fill = "#F28E2B", cex = 0.68, font = 2)
+draw_circle(0.73, 0.43, 0.065, "CVD\nY",
+            fill = "#E15759", cex = 0.68, font = 2)
+draw_circle(0.50, 0.22, 0.052, "Possible\nhidden U",
+            fill = "#FFFFFF", border = "#777777", lty = 2,
+            cex = 0.54, font = 2)
+
+draw_arrow(0.47, 0.65, 0.32, 0.48)
+draw_arrow(0.53, 0.65, 0.68, 0.48)
+draw_arrow(0.34, 0.43, 0.66, 0.43, col = "#F28E2B", lwd = 3)
+draw_arrow(0.47, 0.24, 0.32, 0.38, col = "#777777", lty = 2)
+draw_arrow(0.53, 0.24, 0.68, 0.38, col = "#777777", lty = 2)
+
+draw_text(0.50, 0.07,
+          "Measured X is adjusted for. Hidden U motivates sensitivity analysis.",
+          cex = 0.72, font = 2)
+```
+
+## Lecture 1: Potential Outcomes and the Observed Association
+
+Lecture 1 introduces the fundamental problem of causal inference. For a single person, the individual causal effect would be
+
+$$
+\tau_i = Y_i(1) - Y_i(0),
+$$
+
+but only one component of \(\{Y_i(1),Y_i(0)\}\) is observed. If \(T_i=1\), we observe \(Y_i(1)\) and miss \(Y_i(0)\); if \(T_i=0\), we observe \(Y_i(0)\) and miss \(Y_i(1)\). Therefore, individual causal effects are not directly observed.
+
+The first empirical analysis computes the unadjusted observed risks:
+
+$$
+\hat P(Y=1 \mid T=1)
+=
+\frac{\sum_i T_iY_i}{\sum_i T_i},
+$$
+
+and
+
+$$
+\hat P(Y=1 \mid T=0)
+=
+\frac{\sum_i (1-T_i)Y_i}{\sum_i (1-T_i)}.
+$$
+
+The observed risk difference and observed risk ratio are
+
+$$
+\widehat{RD}_{obs}
+=
+\hat P(Y=1 \mid T=1)
+-
+\hat P(Y=1 \mid T=0),
+$$
+
+and
+
+$$
+\widehat{RR}_{obs}
+=
+\frac{\hat P(Y=1 \mid T=1)}
+       {\hat P(Y=1 \mid T=0)}.
+$$
+
+These estimators target observed-data associational parameters,
+
+$$
+\theta_1 = E(Y\mid T=1),
+\qquad
+\theta_0 = E(Y\mid T=0),
+$$
+
+not the causal parameters \(\psi_1\) and \(\psi_0\). The gap between \(\theta_1-\theta_0\) and \(\psi_1-\psi_0\) is the confounding problem. For example,
+
+$$
+E(Y\mid T=1)-E(Y\mid T=0)
+=
+E\{Y(1)\mid T=1\}-E\{Y(0)\mid T=0\},
+$$
+
+by consistency, but the causal risk difference is
+
+$$
+E\{Y(1)\}-E\{Y(0)\}.
+$$
+
+These are equal only if the treated and untreated groups have the same distributions of the relevant potential outcomes, either marginally or after appropriate adjustment.
+
+Using the Lecture 1 sample with observed smoking and CVD status, there are 8,349 participants: 3,422 smokers, 4,927 non-smokers, and 866 participants with CVD. The observed CVD risk is 6.98% among non-smokers and 15.25% among smokers. Thus the observed risk difference is 8.27 percentage points and the observed risk ratio is 2.185.
+
+```{r lecture1-observed-risk-picture, echo=FALSE, fig.width=7.6, fig.height=4.5}
+risk_percent <- c("Non-smoker" = 6.98, "Smoker" = 15.25)
+
+old_par <- par(mar = c(5, 5, 4, 1))
+bar_locations <- barplot(
+  risk_percent,
+  col = c("#A0CBE8", "#F28E2B"),
+  ylim = c(0, 18),
+  ylab = "Observed CVD risk (%)",
+  main = "Lecture 1: Observed Association"
+)
+
+text(
+  x = bar_locations,
+  y = risk_percent + 0.8,
+  labels = paste0(risk_percent, "%"),
+  cex = 0.90,
+  font = 2
+)
+
+segments(bar_locations[1], 16.7, bar_locations[2], 16.7, lwd = 2)
+segments(bar_locations[1], 16.4, bar_locations[1], 16.7, lwd = 2)
+segments(bar_locations[2], 16.4, bar_locations[2], 16.7, lwd = 2)
+text(mean(bar_locations), 17.4, "+8.27 percentage points", cex = 0.90, font = 2)
+par(old_par)
+```
+
+This is an association. It would equal a causal effect only under unconditional exchangeability,
+
+$$
+\{Y_i(1),Y_i(0)\} \perp T_i,
+$$
+
+which is plausible in a randomized trial but not automatically plausible in an observational smoking comparison. Smokers and non-smokers may differ in age, socioeconomic status, BMI, and other CVD risk factors before the outcome is measured.
+
+### Proof of When Statistical and Causal Contrasts Agree
+
+::: {.proposition-box}
+::: {.proposition-title}
+Proposition (When Statistical Estimands Identify Causal Risks)
+:::
+::: {.proposition-body}
+Under consistency and the relevant positivity condition:
+
+1. **Randomized trial.** If \(\{Y(1),Y(0)\}\perp T\), then
+
+$$
+E(Y\mid T=1)-E(Y\mid T=0)=E\{Y(1)\}-E\{Y(0)\}.
+$$
+
+2. **Observational study, IPW route.** If \(\{Y(1),Y(0)\}\perp T\mid X\) and \(e(X)=P(T=1\mid X)\), then
+
+$$
+E\left[\frac{TY}{e(X)}\right]=E\{Y(1)\},
+\qquad
+E\left[\frac{(1-T)Y}{1-e(X)}\right]=E\{Y(0)\}.
+$$
+
+3. **Observational study, outcome-regression route.** If \(\{Y(1),Y(0)\}\perp T\mid X\), then
+
+$$
+E_X[E(Y\mid T=t,X)]=E\{Y(t)\}.
+$$
+
+Thus IPW and outcome-regression standardization identify the same causal risks by using different observed-data functionals.
+:::
+:::
+
+A useful decomposition is
+
+$$
+\begin{aligned}
+\underbrace{E(Y\mid T=1)-E(Y\mid T=0)}_{\text{observed statistical contrast}}
+&=
+\underbrace{\left[E\{Y(1)\}-E\{Y(0)\}\right]}_{\text{causal risk difference}} \\
+&\quad +
+\underbrace{\left[E\{Y(1)\mid T=1\}-E\{Y(1)\}\right]}_{\text{selection term for }Y(1)} \\
+&\quad -
+\underbrace{\left[E\{Y(0)\mid T=0\}-E\{Y(0)\}\right]}_{\text{selection term for }Y(0)}.
+\end{aligned}
+$$
+
+For the crude observed comparison to equal the causal risk difference, the two underbraced selection terms must be zero:
+
+$$
+E\{Y(1)\mid T=1\}=E\{Y(1)\},
+\qquad
+E\{Y(0)\mid T=0\}=E\{Y(0)\}.
+$$
+
+These equalities generally **do not hold in observational studies**. They hold only under marginal exchangeability, meaning treatment status is independent of the potential outcomes without needing to condition on covariates. In observational studies, we usually aim for the weaker conditional version after adjusting for \(X\).
+
+**Case 1: Randomized trial.** In an ideal randomized trial, treatment assignment is generated independently of the potential outcomes:
+
+$$
+\{Y(1),Y(0)\}\perp T,
+$$
+
+together with the simple positivity condition \(0<P(T=t)<1\) for \(t=0,1\). Marginal exchangeability implies, for each \(t\),
+
+$$
+E\{Y(t)\mid T=t\}=E\{Y(t)\},
+$$
+
+because conditioning on \(T=t\) does not change the distribution of \(Y(t)\). Therefore,
+
+$$
+\begin{aligned}
+E\{Y(1)\mid T=1\}-E\{Y(1)\}
+&=0,\\
+E\{Y(0)\mid T=0\}-E\{Y(0)\}
+&=0.
+\end{aligned}
+$$
+
+Thus, in the randomized-trial case, the two underbraced selection terms are zero.
+
+**Case 2: Observational study.** In observational smoking data, the marginal equalities above generally do not hold. The reason is that smokers and non-smokers can have different baseline covariate distributions and therefore different baseline risks. In symbols, the crude mean
+
+$$
+E(Y\mid T=t)
+=
+\int E(Y\mid T=t,X=x)\,dP_{X\mid T=t}(x)
+$$
+
+averages over the covariate distribution among people who actually received \(T=t\). Because \(P_{X\mid T=1}\) and \(P_{X\mid T=0}\) can differ, the crude comparison can mix the effect of smoking with differences in \(X\).
+
+Adjustment replaces the marginal comparison with comparisons that first account for \(X\). The key assumption is conditional exchangeability,
+
+$$
+\{Y(1),Y(0)\}\perp T\mid X,
+$$
+
+with positivity,
+
+$$
+0<P(T=t\mid X=x)<1
+$$
+
+for covariate values \(x\) that occur in the target population. Conditional exchangeability says that, after fixing \(X=x\), treatment status no longer carries information about the potential outcome:
+
+$$
+E\{Y(t)\mid T=t,X=x\}=E\{Y(t)\mid X=x\}.
+$$
+
+Therefore the conditional selection term is zero within every covariate stratum:
+
+$$
+E\{Y(t)\mid T=t,X=x\}-E\{Y(t)\mid X=x\}=0.
+$$
+
+The lectures then use two estimation routes for the same causal risks.
+
+**Case 2-i: IPW route.** The IPW route identifies the two causal risks by weighting participants who actually received the relevant smoking level. Let \(e(X)=P(T=1\mid X)\). For the smoker-world risk,
+
+$$
+\begin{aligned}
+E\left[\frac{TY}{e(X)}\right]
+&=E\left[\frac{TY(1)}{e(X)}\right] \\
+&=E\left[
+E\left\{\frac{TY(1)}{e(X)}\mid X\right\}
+\right] \\
+&=E\left[
+\frac{E\{TY(1)\mid X\}}{e(X)}
+\right] \\
+&=E\left[
+\frac{P(T=1\mid X)E\{Y(1)\mid X\}}{e(X)}
+\right] \\
+&=E[E\{Y(1)\mid X\}] \\
+&=E\{Y(1)\}.
+\end{aligned}
+$$
+
+The first equality uses consistency. The fourth equality uses conditional exchangeability, because \(Y(1)\perp T\mid X\). Positivity ensures \(e(X)\) is nonzero. The non-smoker-world identity is parallel:
+
+$$
+E\left[\frac{(1-T)Y}{1-e(X)}\right]=E\{Y(0)\},
+$$
+
+where positivity ensures \(1-e(X)\) is nonzero. Thus IPW removes the difference between \(P_{X\mid T=t}\) and \(P_X\) by reweighting the observed treatment group. For the two smoking levels,
+
+$$
+E\left[\frac{TY}{e(X)}\right]=E\{Y(1)\},
+\qquad
+E\left[\frac{(1-T)Y}{1-e(X)}\right]=E\{Y(0)\},
+$$
+
+where \(e(X)=P(T=1\mid X)\). Therefore the IPW statistical contrast targets the causal risk difference:
+
+$$
+E\left[\frac{TY}{e(X)}\right]
+-
+E\left[\frac{(1-T)Y}{1-e(X)}\right]
+=
+E\{Y(1)\}-E\{Y(0)\}.
+$$
+
+**Case 2-ii: Outcome-regression standardization route.** The outcome-regression route identifies the same \(E\{Y(t)\}\) by modeling \(E(Y\mid T=t,X)\) and then averaging over the same target covariate distribution \(P_X\). Starting from the same conditional exchangeability equality,
+
+$$
+\int E\{Y(t)\mid T=t,X=x\}\,dP_X(x)
+=
+\int E\{Y(t)\mid X=x\}\,dP_X(x).
+$$
+
+The right-hand side is the marginal counterfactual mean by iterated expectation:
+
+$$
+\int E\{Y(t)\mid X=x\}\,dP_X(x)=E\{Y(t)\}.
+$$
+
+The left-hand side becomes observable by consistency:
+
+$$
+\int E\{Y(t)\mid T=t,X=x\}\,dP_X(x)
+=
+\int E(Y\mid T=t,X=x)\,dP_X(x).
+$$
+
+Combining these pieces gives the g-formula:
+
+$$
+E\{Y(t)\}
+=
+\int E(Y\mid T=t,X=x)\,dP_X(x)
+=
+E_X[E(Y\mid T=t,X)].
+$$
+
+Thus, for \(t=1\) and \(t=0\),
+
+$$
+\begin{aligned}
+E_X[E(Y\mid T=1,X)] &= E\{Y(1)\},\\
+E_X[E(Y\mid T=0,X)] &= E\{Y(0)\}.
+\end{aligned}
+$$
+
+Subtracting the two standardized means gives the adjusted risk-difference estimand:
+
+$$
+E_X[E(Y\mid T=1,X)]
+-
+E_X[E(Y\mid T=0,X)]
+=
+E\{Y(1)\}-E\{Y(0)\}.
+$$
+
+The main point is that IPW and outcome regression solve the same observational-study problem in two different ways. IPW reweights the observed treatment groups so that they represent the target covariate distribution. Outcome regression predicts each treatment condition across the target covariate distribution and averages the predictions. Both target the same causal risks under conditional exchangeability, consistency, and positivity.
+
+## Lectures 2-6 Complete-Case Analysis Sample
+
+Lectures 2-6 adjust for baseline covariates. They therefore use the complete-case sample for smoking, CVD, age, gender, race/ethnicity, education, income-to-poverty ratio, and BMI. Let \(C_i=1\) indicate that participant \(i\) is complete for all analysis variables. The adjusted estimators below are therefore computed in the \(C=1\) analytic sample. Unless the missingness mechanism is explicitly modeled or weighted, the target population should be read as the complete-case classroom population rather than all initially eligible NHANES participants. This distinction is harmless for a teaching example only if the scientific interpretation is kept aligned with the analytic sample.
+
+This sample contains 6,299 participants:
+
+| Quantity | Value |
+|:--|--:|
+| Number of participants | 6,299 |
+| Number of smokers | 2,559 |
+| Number of non-smokers | 3,740 |
+| Number with CVD | 646 |
+
+Within this complete-case sample, the raw observed comparison is:
+
+| Method | Non-smoker risk (%) | Smoker risk (%) | Difference (pp) | Risk ratio |
+|:--|--:|--:|--:|--:|
+| Observed comparison | 6.93 | 15.12 | 8.20 | 2.184 |
+
+The adjusted methods should be compared against this complete-case observed estimate.
+
+Formally, the standardizing distribution becomes \(P_{X\mid C=1}\), so the complete-case causal risks are
+
+$$
+\psi_{t,C=1}=E\{Y(t)\mid C=1\}.
+$$
+
+If \(C\) depends on \(X\), this estimand can differ from \(E\{Y(t)\}\) in the full eligible population even when there is no additional selection bias within the complete cases. If \(C\) depends on unobserved potential outcomes after conditioning on measured variables, complete-case analysis can also introduce selection bias.
+
+```{r adjusted-methods-picture, echo=FALSE, fig.width=9.0, fig.height=5.0}
+start_picture()
+
+draw_box(0.50, 0.91, 0.60, 0.10,
+         "Three adjustment strategies use the same target estimands",
+         fill = "#E8E8E8", cex = 0.86, font = 2)
+
+draw_box(0.18, 0.64, 0.25, 0.18,
+         "IPW\nmodel T | X",
+         fill = "#F28E2B", cex = 0.82, font = 2)
+draw_box(0.50, 0.64, 0.25, 0.18,
+         "Outcome regression\nmodel Y | T, X",
+         fill = "#59A14F", cex = 0.72, font = 2)
+draw_box(0.82, 0.64, 0.25, 0.18,
+         "Doubly robust\nmodel both",
+         fill = "#B7D7A8", cex = 0.78, font = 2)
+
+draw_box(0.18, 0.34, 0.25, 0.20,
+         "Weighted\npseudo-population",
+         fill = "#FFFFFF", cex = 0.72, font = 2)
+draw_box(0.50, 0.34, 0.25, 0.20,
+         "Predict both\nworlds for each\nperson",
+         fill = "#FFFFFF", cex = 0.68, font = 2)
+draw_box(0.82, 0.34, 0.25, 0.20,
+         "Prediction plus\nweighted residual\ncorrection",
+         fill = "#FFFFFF", cex = 0.66, font = 2)
+
+draw_arrow(0.18, 0.55, 0.18, 0.45)
+draw_arrow(0.50, 0.55, 0.50, 0.45)
+draw_arrow(0.82, 0.55, 0.82, 0.45)
+
+draw_box(0.50, 0.10, 0.55, 0.11,
+         "Output: marginal risks psi0 and psi1, then RD and RR",
+         fill = "#FCE4C6", cex = 0.78, font = 2)
+draw_arrow(0.18, 0.24, 0.39, 0.13)
+draw_arrow(0.50, 0.24, 0.50, 0.16)
+draw_arrow(0.82, 0.24, 0.61, 0.13)
+```
+
+## Lecture 2: Inverse Probability Weighting
+
+Lecture 2 introduces inverse probability weighting (IPW), which estimates the marginal counterfactual risks by reweighting observed participants. The treatment model is the propensity score:
+
+$$
+e(X_i) = P(T_i=1 \mid X_i).
+$$
+
+::: {.proposition-box}
+::: {.proposition-title}
+Estimator Summary (Inverse Probability Weighting)
+:::
+::: {.proposition-body}
+Under the causal identification assumptions, the population IPW identities are
+\[
+E\left\{\frac{TY}{e(X)}\right\}=E\{Y(1)\},
+\qquad
+E\left\{\frac{(1-T)Y}{1-e(X)}\right\}=E\{Y(0)\}.
+\]
+The lecture estimates \(e(X)\) with a propensity score model and uses normalized, or Hajek-type, sample analogs so that each treatment-specific set of weights sums to one.
+:::
+:::
+
+Under conditional exchangeability, the propensity score is a balancing score: within levels of \(e(X)\), the distribution of measured covariates \(X\) is the same in the treated and untreated groups. In practice, the fitted propensity score is used to construct a pseudo-population in which the measured covariate distribution is approximately balanced across smoking groups.
+
+The lecture estimates this probability using logistic regression:
+
+$$
+\text{logit}\{e(X_i)\}
+=
+\alpha_0 + \alpha^\top X_i.
+$$
+
+With fitted propensity scores \(\hat e_i\), the unstabilized inverse probability weight for participant \(i\) is
+
+$$
+w_i
+=
+\frac{T_i}{\hat e_i}
++
+\frac{1-T_i}{1-\hat e_i}.
+$$
+
+In words, participants receive larger weights when their observed smoking status was unlikely given their measured covariates. A smoker with a low fitted probability of smoking represents more smokers with similar covariates; a non-smoker with a high fitted probability of smoking represents more non-smokers with similar covariates.
+
+The normalized IPW risk estimators are
+
+$$
+\hat\psi_1^{IPW}
+=
+\frac{\sum_i T_iY_i/\hat e_i}{\sum_i T_i/\hat e_i},
+$$
+
+and
+
+$$
+\hat\psi_0^{IPW}
+=
+\frac{\sum_i (1-T_i)Y_i/(1-\hat e_i)}
+       {\sum_i (1-T_i)/(1-\hat e_i)}.
+$$
+
+These are Hájek-type ratio estimators. The corresponding Horvitz-Thompson form would use
+
+$$
+\tilde\psi_1^{IPW}
+=
+\mathbb P_n\left\{\frac{TY}{\hat e(X)}\right\},
+\qquad
+\tilde\psi_0^{IPW}
+=
+\mathbb P_n\left\{\frac{(1-T)Y}{1-\hat e(X)}\right\}.
+$$
+
+The Horvitz-Thompson form is directly unbiased in ideal finite-population randomization settings with known probabilities, but it can be more variable. The Hájek form used in the lecture normalizes the weights within treatment groups, often improving finite-sample stability at the cost of a small ratio-estimator bias.
+
+The corresponding IPW risk difference and risk ratio are
+
+$$
+\widehat{RD}^{IPW}
+=
+\hat\psi_1^{IPW} - \hat\psi_0^{IPW},
+\qquad
+\widehat{RR}^{IPW}
+=
+\frac{\hat\psi_1^{IPW}}{\hat\psi_0^{IPW}}.
+$$
+
+The lecture checks whether IPW balances covariates using absolute standardized mean differences (SMDs). For a numeric covariate \(Z\), the weighted SMD compares the weighted mean among smokers to the weighted mean among non-smokers and divides by a pooled weighted standard deviation:
+
+$$
+\text{SMD}
+=
+\left|
+\frac{\bar Z_1^w - \bar Z_0^w}{s_{pooled}^w}
+\right|.
+$$
+
+Here \(Z_i\) is the covariate being checked for participant \(i\). For example, \(Z_i\) could be age, BMI, income-to-poverty ratio, or a 0/1 indicator for a category such as male or college graduate.
+
+The weighted mean of \(Z\) among smokers is
+
+$$
+\bar Z_1^w
+=
+\frac{\sum_{i=1}^n T_i w_i Z_i}
+       {\sum_{i=1}^n T_i w_i}.
+$$
+
+The weighted mean of \(Z\) among non-smokers is
+
+$$
+\bar Z_0^w
+=
+\frac{\sum_{i=1}^n (1-T_i) w_i Z_i}
+       {\sum_{i=1}^n (1-T_i) w_i}.
+$$
+
+Thus \(\bar Z_1^w - \bar Z_0^w\) is the weighted difference in the covariate mean between smokers and non-smokers. Dividing by \(s_{pooled}^w\) puts that difference on a standard-deviation scale, so different covariates can be compared using the same balance metric. At a deeper level, mean balance is only a low-dimensional diagnostic. Causal identification requires balance of the conditional outcome surface \(m(t,X)\), not merely balance of marginal covariate means. For continuous or high-dimensional \(X\), one may also examine higher moments, interactions, propensity-score overlap plots, effective sample size, and the tail behavior of the weights.
+
+In the complete-case sample, the largest absolute SMD before weighting is 0.401 and the average absolute SMD is 0.190. After IPW, the largest absolute SMD is 0.016 and the average absolute SMD is 0.009. This indicates strong balance on the measured covariates included in the propensity model. The fitted propensity scores range from 0.054 to 0.860, and the IPW weights range from 1.057 to 14.653, so there is no obvious positivity breakdown in this teaching dataset, though the maximum weight is still worth monitoring.
+
+```{r ipw-balance-summary-picture, echo=FALSE, fig.width=7.8, fig.height=4.6}
+balance_matrix <- rbind(
+  "Largest absolute SMD" = c("Before weighting" = 0.401, "After IPW" = 0.016),
+  "Average absolute SMD" = c("Before weighting" = 0.190, "After IPW" = 0.009)
+)
+
+old_par <- par(mar = c(5, 5, 4, 1))
+bar_locations <- barplot(
+  t(balance_matrix),
+  beside = TRUE,
+  col = c("#E15759", "#2E86C1"),
+  ylim = c(0, 0.45),
+  ylab = "Absolute standardized mean difference",
+  main = "Covariate Balance Before and After IPW",
+  cex.names = 0.85
+)
+
+abline(h = 0.10, col = "#555555", lty = 2, lwd = 2)
+text(1.0, 0.115, "0.10 guide", cex = 0.75, pos = 4, col = "#444444")
+
+text(
+  x = bar_locations,
+  y = t(balance_matrix) + 0.018,
+  labels = round(t(balance_matrix), 3),
+  cex = 0.75
+)
+
+legend(
+  "topright",
+  legend = c("Before weighting", "After IPW"),
+  fill = c("#E15759", "#2E86C1"),
+  bty = "n"
+)
+par(old_par)
+```
+
+The IPW-adjusted empirical result is:
+
+| Method | Non-smoker risk (%) | Smoker risk (%) | Difference (pp) | Risk ratio |
+|:--|--:|--:|--:|--:|
+| IPW | 8.71 | 11.70 | 2.99 | 1.343 |
+
+The main technical point is that adjustment substantially attenuates the raw association. The raw complete-case difference is 8.20 percentage points, whereas the IPW-adjusted difference is 2.99 percentage points. This suggests that part of the unadjusted smoker/non-smoker gap is explained by measured baseline covariate imbalance.
+
+The asymptotic validity of this IPW analysis depends on correct or sufficiently accurate estimation of \(e(X)\), empirical overlap, and regularity conditions ensuring that extreme weights do not dominate \(\mathbb P_n\). If \(\hat e(X)\) is close to 0 or 1 for some participants, the estimator becomes sensitive to a small number of observations and the nominal bootstrap standard errors may understate design fragility. Weight truncation or alternative estimators may reduce variance but changes the estimand or introduces bias, so it should be treated as a sensitivity analysis rather than an automatic fix.
+
+## Lecture 3: Outcome Regression Standardization
+
+Lecture 3 introduces outcome regression standardization, also known as parametric g-computation. Rather than modeling treatment assignment, this approach models the outcome:
+
+$$
+m(t,X_i) = P(Y_i=1 \mid T_i=t, X_i).
+$$
+
+Because CVD is binary, the lecture uses logistic regression:
+
+$$
+\text{logit}\{m(T_i,X_i)\}
+=
+\beta_0 + \beta_1T_i + \beta^\top X_i.
+$$
+
+The important technical distinction is that the model coefficient \(\beta_1\) is not the final causal estimand. Logistic regression coefficients are conditional log odds ratios, and odds ratios are noncollapsible. Even if the outcome model were correctly specified, \(\exp(\beta_1)\) would not generally equal the marginal causal risk ratio. The course instead uses the fitted model to estimate marginal risks on the risk scale.
+
+In functional notation, outcome regression estimates
+
+$$
+\Psi_t(P)=P_X\{m(t,X)\}
+$$
+
+by plugging in \(\hat m(t,X)\) and the empirical covariate distribution:
+
+$$
+\hat\psi_t^{OR}
+=
+\mathbb P_n\{\hat m(t,X)\}.
+$$
+
+::: {.proposition-box}
+::: {.proposition-title}
+Estimator Summary (Outcome Regression Standardization)
+:::
+::: {.proposition-body}
+Under the causal identification assumptions, the population outcome-regression, or g-formula, identities are
+\[
+E_X\!\left\{E(Y\mid T=1,X)\right\}=E\{Y(1)\},
+\qquad
+E_X\!\left\{E(Y\mid T=0,X)\right\}=E\{Y(0)\}.
+\]
+Thus outcome regression targets the same marginal causal risks as IPW, but through the conditional outcome mean rather than through inverse probability weights.
+
+The lecture estimates \(m(t,X)=E(Y\mid T=t,X)\) and plugs the fitted values into the empirical covariate distribution:
+\[
+\hat\psi_t^{OR}=\frac{1}{n}\sum_{i=1}^n \hat m(t,X_i),\qquad t\in\{0,1\}.
+\]
+The regression coefficient for \(T\) is not the target estimand; the target is the marginal risk obtained after standardization.
+:::
+:::
+
+Thus outcome regression is a plug-in estimator of the identified g-formula functional.
+
+After fitting the outcome model, each participant is copied into two counterfactual datasets:
+
+1. Set \(T_i=0\) for everyone and predict \(\hat m(0,X_i)\).
+2. Set \(T_i=1\) for everyone and predict \(\hat m(1,X_i)\).
+
+The standardized risks are then
+
+$$
+\hat\psi_0^{OR}
+=
+\frac{1}{n}\sum_{i=1}^n \hat m(0,X_i),
+\qquad
+\hat\psi_1^{OR}
+=
+\frac{1}{n}\sum_{i=1}^n \hat m(1,X_i).
+$$
+
+Thus the comparison holds the empirical covariate distribution fixed and changes only smoking status. This is the model-based analog of asking what would happen to the same study population under two exposure regimes.
+
+The price of this smooth plug-in approach is dependence on extrapolation. If the data contain few smokers for some covariate pattern \(X=x\), then \(\hat m(1,x)\) is driven by the parametric model rather than by direct local information. Positivity problems therefore affect outcome regression too, even though they may be less visible than they are in IPW weights.
+
+```{r outcome-regression-standardization-picture, echo=FALSE, fig.width=8.8, fig.height=4.8}
+start_picture()
+
+draw_box(0.16, 0.58, 0.24, 0.20,
+         "Observed\ncovariates\nX1,...,Xn",
+         fill = "#F1CE63", cex = 0.78, font = 2)
+draw_box(0.47, 0.75, 0.27, 0.18,
+         "Set everyone\nT = 0",
+         fill = "#A0CBE8", cex = 0.82, font = 2)
+draw_box(0.47, 0.41, 0.27, 0.18,
+         "Set everyone\nT = 1",
+         fill = "#F28E2B", cex = 0.82, font = 2)
+draw_box(0.80, 0.75, 0.25, 0.18,
+         "Average\nmhat(0, X)",
+         fill = "#FFFFFF", cex = 0.78, font = 2)
+draw_box(0.80, 0.41, 0.25, 0.18,
+         "Average\nmhat(1, X)",
+         fill = "#FFFFFF", cex = 0.78, font = 2)
+
+draw_arrow(0.28, 0.62, 0.34, 0.72)
+draw_arrow(0.28, 0.54, 0.34, 0.44)
+draw_arrow(0.61, 0.75, 0.67, 0.75)
+draw_arrow(0.61, 0.41, 0.67, 0.41)
+
+draw_text(0.50, 0.15,
+          "The covariate distribution stays fixed; only the intervention value T changes.",
+          cex = 0.82, font = 2)
+```
+
+The outcome-regression standardized result is:
+
+| Method | Non-smoker risk (%) | Smoker risk (%) | Difference (pp) | Risk ratio |
+|:--|--:|--:|--:|--:|
+| Outcome regression | 8.53 | 11.98 | 3.45 | 1.405 |
+
+This estimate is close to the IPW estimate, but it relies on a different nuisance model. IPW is vulnerable to misspecification of \(e(X)\); outcome regression is vulnerable to misspecification of \(m(t,X)\). Similar answers from both methods are reassuring but do not prove that either model is correct.
+
+For a deeper technical reading, the outcome model should be judged as an approximation to the full conditional expectation surface, including nonlinearities and effect modification. A main-terms logistic model is a working model, not a guarantee that the g-formula has been consistently estimated. Residual checks, flexible basis expansions, prespecified interactions, or machine-learning nuisance estimation can be useful, but they require careful inference strategies such as cross-fitting when the same data are used for nuisance learning and target-parameter estimation.
+
+## Lecture 4: Doubly Robust Estimation
+
+Lecture 4 combines the treatment model and outcome model through a doubly robust, or augmented inverse probability weighted (AIPW), estimator. Let
+
+$$
+\hat e_i = \hat P(T_i=1 \mid X_i),
+$$
+
+and
+
+$$
+\hat m(t,X_i)=\hat P(Y_i=1 \mid T_i=t,X_i).
+$$
+
+### Derivation of the Doubly Robust Estimator
+
+::: {.proposition-box}
+::: {.proposition-title}
+Proposition (Bias-Corrected Outcome Regression for the Smoking-CVD Risks)
+:::
+::: {.proposition-body}
+Let \(\psi_t=E\{Y(t)\}\) be the marginal counterfactual CVD risk under \(T=t\), where \(t=1\) denotes smoking and \(t=0\) denotes non-smoking. Let \(e(X)=P(T=1\mid X)\). For any working outcome prediction \(\tilde m(t,X)\), define
+\[
+\Psi_1^{DR}(\tilde m,e)
+=
+E\left[
+\tilde m(1,X)
++
+\frac{T}{e(X)}
+\{Y-\tilde m(1,X)\}
+\right]
+\]
+and
+\[
+\Psi_0^{DR}(\tilde m,e)
+=
+E\left[
+\tilde m(0,X)
++
+\frac{1-T}{1-e(X)}
+\{Y-\tilde m(0,X)\}
+\right].
+\]
+Under consistency, conditional exchangeability, and positivity, \(\Psi_1^{DR}(\tilde m,e)=\psi_1\) and \(\Psi_0^{DR}(\tilde m,e)=\psi_0\) if either the propensity score \(e(X)\) is correct or the outcome prediction \(\tilde m(t,X)\) equals \(E(Y\mid T=t,X)\) for the relevant treatment level. The finite-sample estimator replaces \(e\) and \(\tilde m\) by \(\hat e\) and \(\hat m\), then averages the displayed quantities over the analytic sample.
+:::
+:::
+
+::: {.proposition-box}
+::: {.proposition-title}
+Construction of a Bias-Corrected Estimator (General)
+:::
+::: {.proposition-body}
+Let <span class="math-hi hi-est">\(\hat\theta\)</span> be an estimator of <span class="math-hi hi-target">\(\theta\)</span>, which may be biased. Define the bias of <span class="math-hi hi-est">\(\hat\theta\)</span> as
+
+<div class="bias-proof">
+<span class="math-hi hi-bias">\(B(\hat\theta,\theta)\)</span>
+\(:=\mathbb E[\)<span class="math-hi hi-est">\(\hat\theta\)</span>\(]-\)<span class="math-hi hi-target">\(\theta\)</span>\(.\)
+</div>
+
+Suppose the bias can be estimated from the observed data, and let <span class="math-hi hi-bias">\(\hat B(\hat\theta,\theta)\)</span> denote an estimator whose expectation equals \(B(\hat\theta,\theta)\). Define the bias-corrected estimator as
+
+<div class="bias-proof">
+<span class="math-hi hi-bc">\(\hat\theta_{bc}\)</span>
+\(:=\)
+<span class="math-hi hi-est">\(\hat\theta\)</span>
+\(-\)
+<span class="math-hi hi-bias">\(\hat B(\hat\theta,\theta)\)</span>\(.\)
+</div>
+
+Then the bias-corrected estimator is centered at the target:
+
+<div class="bias-proof">
+<div class="proof-line">
+\(\mathbb E(\)<span class="math-hi hi-bc">\(\hat\theta_{bc}\)</span>\()\)
+\(=\mathbb E\{\)<span class="math-hi hi-est">\(\hat\theta\)</span>\(-\)<span class="math-hi hi-bias">\(\hat B(\hat\theta,\theta)\)</span>\(\}\)
+</div>
+<div class="proof-line">
+\(=\mathbb E(\)<span class="math-hi hi-est">\(\hat\theta\)</span>\()\)
+\(-\mathbb E\{\)<span class="math-hi hi-bias">\(\hat B(\hat\theta,\theta)\)</span>\(\}\)
+</div>
+<div class="proof-line">
+\(=\mathbb E(\)<span class="math-hi hi-est">\(\hat\theta\)</span>\()\)
+\(-\{\mathbb E(\)<span class="math-hi hi-est">\(\hat\theta\)</span>\()-\)<span class="math-hi hi-target">\(\theta\)</span>\(\}\)
+\(=\)<span class="math-hi hi-target">\(\theta\)</span>\(.\)
+</div>
+</div>
+
+In the smoking-CVD doubly robust estimator, the outcome-regression plug-in risk plays the role of <span class="math-hi hi-est">\(\hat\theta\)</span>, the IPW residual term estimates the needed bias correction, and the resulting AIPW risk plays the role of <span class="math-hi hi-bc">\(\hat\theta_{bc}\)</span>.
+:::
+:::
+
+Apply this template by beginning with a possibly misspecified outcome-regression plug-in functional
+
+<div class="bias-proof">
+<span class="math-hi hi-est">\(\displaystyle \Psi_t^{OR}(\tilde m)\)</span>
+\(\displaystyle =E\{\tilde m(t,X)\}.\)
+</div>
+
+Let the identified conditional mean be
+
+$$
+m(t,X)=E(Y\mid T=t,X),
+$$
+
+so that, under the identification assumptions,
+
+<div class="bias-proof">
+<span class="math-hi hi-target">\(\displaystyle \psi_t\)</span>
+\(\displaystyle =E\{m(t,X)\}.\)
+</div>
+
+The plug-in bias is therefore
+
+<div class="bias-proof">
+<span class="math-hi hi-bias">\(\displaystyle B_t^{OR}(\tilde m)\)</span>
+\(\displaystyle :=\)
+<span class="math-hi hi-est">\(\displaystyle \Psi_t^{OR}(\tilde m)\)</span>
+\(\displaystyle -\)
+<span class="math-hi hi-target">\(\displaystyle \psi_t\)</span>
+\(\displaystyle
+=E\{\tilde m(t,X)-m(t,X)\}.
+\)
+</div>
+
+The quantity that must be added to the outcome-regression estimator is the negative of this error:
+
+<div class="bias-proof">
+<span class="math-hi hi-bias">\(\displaystyle -B_t^{OR}(\tilde m)\)</span>
+\(\displaystyle =E\{m(t,X)-\tilde m(t,X)\}.\)
+</div>
+
+If the propensity score is correct, this correction is observable through an IPW residual identity. For the smoker-world risk,
+
+<div class="bias-proof">
+<div class="proof-line">
+<span class="math-hi hi-bias">\(\displaystyle
+E\!\left[\frac{T}{e(X)}\{Y-\tilde m(1,X)\}\right]
+\)</span>
+\(\displaystyle
+=E\!\left[
+E\!\left\{\frac{T}{e(X)}\{Y-\tilde m(1,X)\}\mid X\right\}
+\right]
+\)
+</div>
+<div class="proof-line">
+\(\displaystyle
+=E\!\left[
+\frac{P(T=1\mid X)}{e(X)}
+\{E(Y\mid T=1,X)-\tilde m(1,X)\}
+\right]
+\)
+</div>
+<div class="proof-line">
+\(\displaystyle
+=
+\)
+<span class="math-hi hi-bias">\(\displaystyle E\{m(1,X)-\tilde m(1,X)\}\)</span>\(\displaystyle .\)
+</div>
+</div>
+
+For the non-smoker-world risk, the analogous identity is
+
+<div class="bias-proof">
+<span class="math-hi hi-bias">\(\displaystyle
+E\!\left[
+\frac{1-T}{1-e(X)}
+\{Y-\tilde m(0,X)\}
+\right]
+\)</span>
+\(\displaystyle
+=
+\)
+<span class="math-hi hi-bias">\(\displaystyle E\{m(0,X)-\tilde m(0,X)\}\)</span>\(\displaystyle .\)
+</div>
+
+Thus the bias-corrected outcome-regression functionals are
+
+<div class="bias-proof">
+<span class="math-hi hi-bc">\(\displaystyle \Psi_1^{DR}(\tilde m,e)\)</span>
+\(\displaystyle
+=
+\)
+<span class="math-hi hi-est">\(\displaystyle \Psi_1^{OR}(\tilde m)\)</span>
+\(\displaystyle
++
+\)
+<span class="math-hi hi-bias">\(\displaystyle
+E\!\left[
+\frac{T}{e(X)}
+\{Y-\tilde m(1,X)\}
+\right]
+\)</span>
+\(\displaystyle
+=
+\)
+<span class="math-hi hi-target">\(\displaystyle \psi_1\)</span>
+</div>
+
+and
+
+<div class="bias-proof">
+<span class="math-hi hi-bc">\(\displaystyle \Psi_0^{DR}(\tilde m,e)\)</span>
+\(\displaystyle
+=
+\)
+<span class="math-hi hi-est">\(\displaystyle \Psi_0^{OR}(\tilde m)\)</span>
+\(\displaystyle
++
+\)
+<span class="math-hi hi-bias">\(\displaystyle
+E\!\left[
+\frac{1-T}{1-e(X)}
+\{Y-\tilde m(0,X)\}
+\right]
+\)</span>
+\(\displaystyle
+=
+\)
+<span class="math-hi hi-target">\(\displaystyle \psi_0\)</span>\(\displaystyle .\)
+</div>
+
+This derivation shows why the residual term is not an arbitrary add-on. It estimates the amount by which the outcome-regression plug-in estimator misses the marginal risk, using treatment-model weights to move the residuals back to the target covariate distribution. If the outcome model is already correct, then \(E\{Y-m(t,X)\mid T=t,X\}=0\), so the residual correction has mean zero even if the treatment model is misspecified. If the treatment model is correct, the residual correction removes the plug-in bias even when \(\tilde m(t,X)\) is misspecified. This is the double robustness property.
+
+The doubly robust estimator for the smoker-world risk is
+
+<div class="bias-proof">
+<span class="math-hi hi-bc">\(\displaystyle \hat\psi_1^{DR}\)</span>
+\(\displaystyle
+=
+\frac{1}{n}\sum_{i=1}^n
+\bigl[
+\)
+<span class="math-hi hi-est">\(\displaystyle \hat m(1,X_i)\)</span>
+\(\displaystyle
++
+\)
+<span class="math-hi hi-bias">\(\displaystyle
+\frac{T_i}{\hat e_i}
+\{Y_i-\hat m(1,X_i)\}
+\)</span>
+\(\displaystyle
+\bigr].
+\)
+</div>
+
+The estimator for the non-smoker-world risk is
+
+<div class="bias-proof">
+<span class="math-hi hi-bc">\(\displaystyle \hat\psi_0^{DR}\)</span>
+\(\displaystyle
+=
+\frac{1}{n}\sum_{i=1}^n
+\bigl[
+\)
+<span class="math-hi hi-est">\(\displaystyle \hat m(0,X_i)\)</span>
+\(\displaystyle
++
+\)
+<span class="math-hi hi-bias">\(\displaystyle
+\frac{1-T_i}{1-\hat e_i}
+\{Y_i-\hat m(0,X_i)\}
+\)</span>
+\(\displaystyle
+\bigr].
+\)
+</div>
+
+Each expression has two parts. The <span class="math-hi hi-est">outcome-model prediction</span> is the plug-in piece, and the <span class="math-hi hi-bias">inverse-probability weighted residual correction</span> estimates the missing plug-in bias. If the outcome model is correctly specified, then the residual correction has conditional mean zero. If the treatment model is correctly specified, the inverse-probability term reweights the observed treated or untreated participants to represent the full covariate distribution. This is the basis of double robustness.
+
+### Efficient Influence Function Derivation of the Doubly Robust Estimator
+
+The same estimator can be derived from the efficient influence function for the identified risk functional. This route is useful because it explains why the estimator has the form "plug-in prediction plus weighted residual correction," rather than treating the residual term as an ad hoc adjustment.
+
+Let \(O=(X,T,Y)\) denote one observed participant record, and define
+
+$$
+m(t,X)=E(Y\mid T=t,X).
+$$
+
+For the nonparametric observed-data model, the efficient influence functions for the two marginal risks are
+
+$$
+D_1(O;\eta,\psi_1)
+=
+\frac{T}{e(X)}
+\{Y-m(1,X)\}
++
+m(1,X)-\psi_1
+$$
+
+and
+
+$$
+D_0(O;\eta,\psi_0)
+=
+\frac{1-T}{1-e(X)}
+\{Y-m(0,X)\}
++
+m(0,X)-\psi_0.
+$$
+
+At the true nuisance functions and the true target value, these functions have mean zero:
+
+$$
+E\{D_t(O;\eta,\psi_t)\}=0,\qquad t\in\{0,1\}.
+$$
+
+The one-step, or AIPW, estimator replaces the unknown nuisance functions by \(\hat\eta=\{\hat m,\hat e\}\) and solves the empirical EIF equation
+
+$$
+\mathbb P_n D_t(O;\hat\eta,\psi_t)=0.
+$$
+
+For the smoker-world risk, this equation is
+
+$$
+0
+=
+\mathbb P_n
+\left[
+\frac{T}{\hat e(X)}
+\{Y-\hat m(1,X)\}
++
+\hat m(1,X)
+-
+\psi_1
+\right].
+$$
+
+Solving this linear equation for \(\psi_1\) gives
+
+$$
+\hat\psi_1^{DR}
+=
+\mathbb P_n
+\left[
+\hat m(1,X)
++
+\frac{T}{\hat e(X)}
+\{Y-\hat m(1,X)\}
+\right].
+$$
+
+For the non-smoker-world risk, the empirical EIF equation is
+
+$$
+0
+=
+\mathbb P_n
+\left[
+\frac{1-T}{1-\hat e(X)}
+\{Y-\hat m(0,X)\}
++
+\hat m(0,X)
+-
+\psi_0
+\right],
+$$
+
+so
+
+$$
+\hat\psi_0^{DR}
+=
+\mathbb P_n
+\left[
+\hat m(0,X)
++
+\frac{1-T}{1-\hat e(X)}
+\{Y-\hat m(0,X)\}
+\right].
+$$
+
+Thus the finite-sample formulas above are exactly the solutions to the empirical efficient-influence-function equations. This influence-function representation also explains why the estimator is locally insensitive to first-order errors in the nuisance functions: the residual term corrects the plug-in estimator, and the plug-in term stabilizes the pure weighting estimator.
+
+```{r doubly-robust-components-picture, echo=FALSE, fig.width=8.8, fig.height=4.8}
+start_picture()
+
+draw_box(0.50, 0.92, 0.52, 0.09,
+         "Doubly robust estimator = prediction + correction",
+         fill = "#E8E8E8", cex = 0.78, font = 2)
+
+draw_box(0.30, 0.70, 0.30, 0.18,
+         "Outcome model\nprediction\nmhat(t,X)",
+         fill = "#59A14F", cex = 0.74, font = 2)
+draw_box(0.70, 0.70, 0.30, 0.18,
+         "Weighted residual\nT/ehat(X) or\n(1-T)/(1-ehat(X))\n{Y - mhat}",
+         fill = "#A0CBE8", cex = 0.48, font = 2)
+draw_text(0.50, 0.70, "+", cex = 1.60, font = 2)
+
+draw_box(0.50, 0.42, 0.34, 0.16,
+         "Doubly robust\nrisk estimate",
+         fill = "#B7D7A8", cex = 0.80, font = 2)
+
+draw_arrow(0.30, 0.61, 0.43, 0.50)
+draw_arrow(0.70, 0.61, 0.57, 0.50)
+
+draw_box(0.50, 0.15, 0.72, 0.13,
+         "Protection: consistent if either the treatment model\nor outcome model is correct enough",
+         fill = "#FCE4C6", cex = 0.68, font = 2)
+draw_arrow(0.50, 0.34, 0.50, 0.235)
+```
+
+More formally, for the \(t=1\) risk, if \(m(1,X)\) is correct,
+
+$$
+E\{Y-m(1,X)\mid T=1,X\}=0,
+$$
+
+so the augmentation term is centered at zero. If \(e(X)\) is correct, then
+
+$$
+E\left[\frac{T}{e(X)}Y\right] = E\{Y(1)\},
+$$
+
+under consistency and conditional exchangeability. Parallel statements hold for \(t=0\).
+
+### Second-Order Remainder and Product Bias
+
+The efficient influence function gives a first-order, distributional Taylor expansion of the target functional. In the notation of Kennedy's semiparametric review, an influence-function based estimator can be decomposed schematically as
+
+$$
+\hat\psi_t-\psi_t
+=
+\underbrace{(\mathbb P_n-P)D_t(O;\eta,\psi_t)}_{\text{first-order empirical average}}
++
+\underbrace{(\mathbb P_n-P)\{D_t(O;\hat\eta,\hat\psi_t)-D_t(O;\eta,\psi_t)\}}_{\text{empirical-process term}}
++
+\underbrace{R_t(\hat\eta,\eta)}_{\text{second-order remainder}}.
+$$
+
+The technical goal is to prove the asymptotic linear representation
+
+$$
+\hat\psi_t-\psi_t
+=
+(\mathbb P_n-P)D_t(O;\eta,\psi_t)
++
+o_p(n^{-1/2}).
+$$
+
+That representation says: keep the first-order empirical average, and make the other two terms asymptotically negligible. A systematic way to organize the argument is:
+
+1. **First-order empirical average: keep this term.**  
+   The first-order term is the part of the expansion that remains after the nuisance-estimation terms have been made negligible. The logic has four pieces.
+
+   **Mean-zero property.** The efficient influence function is centered at the true distribution. For the smoker-world risk,
+   $$
+   D_1(O;\eta,\psi_1)
+   =
+   \frac{T}{e(X)}\{Y-m(1,X)\}
+   +
+   m(1,X)-\psi_1.
+   $$
+   Hence
+   $$
+   \begin{aligned}
+   P D_1(O;\eta,\psi_1)
+   &=
+   E\left[
+   \frac{T}{e(X)}\{Y-m(1,X)\}
+   +m(1,X)-\psi_1
+   \right]  \\
+   &=
+   E\left[
+   E\left\{
+   \frac{T}{e(X)}\{Y-m(1,X)\}
+   \mid X
+   \right\}
+   \right]
+   +E\{m(1,X)\}-\psi_1  \\
+   &=
+   0+\psi_1-\psi_1
+   =
+   0.
+   \end{aligned}
+   $$
+   The same argument gives \(P D_0(O;\eta,\psi_0)=0\).
+
+   **CLT term.** Because \(P D_t=0\), the centered empirical-process notation equals a simple sample average:
+   $$
+   \sqrt n(\mathbb P_n-P)D_t(O;\eta,\psi_t)
+   =
+   \frac{1}{\sqrt n}\sum_{i=1}^n D_t(O_i;\eta,\psi_t)
+   \rightsquigarrow
+   N(0,\sigma_t^2),
+   $$
+   where
+   $$
+   \sigma_t^2
+   =
+   P\{D_t(O;\eta,\psi_t)^2\}
+   =
+   \operatorname{Var}\{D_t(O;\eta,\psi_t)\}.
+   $$
+
+   **Estimated EIF contributions.** In the data analysis, the unknown nuisance functions and risks are replaced by their estimates:
+   $$
+   \widehat D_{1i}
+   =
+   \frac{T_i}{\hat e_i}
+   \{Y_i-\hat m(1,X_i)\}
+   +
+   \hat m(1,X_i)
+   -
+   \hat\psi_1^{DR},
+   $$
+   and
+   $$
+   \widehat D_{0i}
+   =
+   \frac{1-T_i}{1-\hat e_i}
+   \{Y_i-\hat m(0,X_i)\}
+   +
+   \hat m(0,X_i)
+   -
+   \hat\psi_0^{DR}.
+   $$
+   Since \(\hat\psi_t^{DR}\) solves the empirical EIF equation, \(\mathbb P_n\widehat D_t=0\). Therefore the empirical second moment is also the empirical variance:
+   $$
+   \hat\sigma_t^2
+   =
+   \mathbb P_n\{\widehat D_t^2\}
+   =
+   \frac{1}{n}\sum_{i=1}^n \widehat D_{ti}^{\,2},
+   \qquad
+   \widehat{SE}(\hat\psi_t^{DR})
+   =
+   \sqrt{\frac{\hat\sigma_t^2}{n}}
+   =
+   \sqrt{\frac{1}{n^2}\sum_{i=1}^n \widehat D_{ti}^{\,2}}.
+   $$
+
+   **Risk-difference inference.** For the causal risk difference, the target is \(\Delta=\psi_1-\psi_0\), so the first-order contribution is the combined EIF
+   $$
+   D_\Delta(O)=D_1(O)-D_0(O).
+   $$
+   The estimated subject-level contribution is
+   $$
+   \widehat D_{\Delta i}
+   =
+   \widehat D_{1i}-\widehat D_{0i}.
+   $$
+   Thus
+   $$
+   \hat\sigma_\Delta^2
+   =
+   \frac{1}{n}\sum_{i=1}^n \widehat D_{\Delta i}^{\,2},
+   \qquad
+   \widehat{SE}(\hat\Delta^{DR})
+   =
+   \sqrt{\frac{1}{n^2}\sum_{i=1}^n \widehat D_{\Delta i}^{\,2}}.
+   $$
+   This combined-EIF variance automatically includes the covariance between \(\widehat D_{1i}\) and \(\widehat D_{0i}\), so it is the correct first-order variance for the risk difference.
+
+2. **Empirical-process term: make this term \(o_p(n^{-1/2})\).**  
+   The problematic term is
+   $$
+   (\mathbb P_n-P)\{D_t(O;\hat\eta,\hat\psi_t)-D_t(O;\eta,\psi_t)\}.
+   $$
+   It appears because the same sample is used both to estimate the nuisance functions and to average the estimated influence function. There are two standard ways to control it:
+
+   - **Classical route:** restrict the nuisance estimators to sufficiently regular function classes, often described through Donsker or entropy conditions. This is natural for low-dimensional parametric working models.
+   - **Cross-fitting route:** split the sample into folds, estimate \(\hat m\) and \(\hat e\) on the training folds, and evaluate the EIF contribution on the held-out fold. This removes the most delicate "double use" of the same observation and allows much more flexible nuisance learners, provided the nuisance estimates are consistent enough.
+
+   In this lecture document, the nuisance functions are estimated by simple parametric working models, so the empirical-process issue is less prominent than it would be with highly adaptive machine learning. The bootstrap remains the practical inferential tool used in the classroom analysis.
+
+3. **Second-order remainder: make this product bias \(o_p(n^{-1/2})\).**  
+   The remainder is the key bias term. For AIPW, it is second order because it is a product of the outcome-regression error and the propensity-score error, not a first-order sum of the two errors.
+
+For the smoker-world risk, the product remainder has the form
+
+$$
+R_1(\hat\eta,\eta)
+=
+E\left[
+\{\hat m(1,X)-m(1,X)\}
+\frac{\hat e(X)-e(X)}{\hat e(X)}
+\right]
+$$
+
+and for the non-smoker-world risk,
+
+$$
+R_0(\hat\eta,\eta)
+=
+E\left[
+\{\hat m(0,X)-m(0,X)\}
+\frac{\{1-\hat e(X)\}-\{1-e(X)\}}{1-\hat e(X)}
+\right].
+$$
+
+This display makes the double-robustness logic precise:
+
+- If the outcome-regression limit is correct, then \(\hat m(t,X)-m(t,X)\) vanishes asymptotically, so the product remainder vanishes even if the propensity model is not perfectly specified.
+- If the propensity-score limit is correct, then \(\hat e(X)-e(X)\) vanishes asymptotically, so the product remainder vanishes even if the outcome model is not perfectly specified.
+- If both nuisance functions are estimated with some error, the leading bias is their product rather than their sum.
+
+Under a positivity condition such as \(\epsilon \le \hat e(X)\le 1-\epsilon\), the Cauchy-Schwarz inequality gives the useful rate bound
+
+$$
+|R_1(\hat\eta,\eta)|
+\le
+\epsilon^{-1}
+\|\hat m(1,\cdot)-m(1,\cdot)\|_{2,P_X}
+\|\hat e-e\|_{2,P_X},
+$$
+
+and similarly
+
+$$
+|R_0(\hat\eta,\eta)|
+\le
+\epsilon^{-1}
+\|\hat m(0,\cdot)-m(0,\cdot)\|_{2,P_X}
+\|\hat e-e\|_{2,P_X}.
+$$
+
+Therefore, after the empirical-process term has been controlled, root-\(n\) inference is available when this product is \(o_p(n^{-1/2})\). A common sufficient condition is
+
+$$
+\|\hat m(t,\cdot)-m(t,\cdot)\|_{2,P_X}=o_p(n^{-1/4}),
+\qquad
+\|\hat e-e\|_{2,P_X}=o_p(n^{-1/4}),
+$$
+
+because \(n^{-1/4}\times n^{-1/4}=n^{-1/2}\). The two nuisance rates do not need to be identical; any pair of rates whose product is \(o_p(n^{-1/2})\) is enough. This is the technical reason that doubly robust estimators can tolerate slower nuisance estimation than a naive plug-in estimator, whose bias would usually be first order in the outcome-regression error.
+
+```{r second-order-remainder-picture, echo=FALSE, fig.width=8.8, fig.height=4.2}
+start_picture()
+
+draw_box(0.50, 0.90, 0.58, 0.10,
+         "Second-order remainder = product of nuisance errors",
+         fill = "#E8E8E8", cex = 0.76, font = 2)
+
+draw_box(0.22, 0.62, 0.28, 0.18,
+         "Outcome error\n||mhat(t,.) - m(t,.)||",
+         fill = "#DDDDF7", cex = 0.62, font = 2)
+draw_box(0.50, 0.62, 0.08, 0.18,
+         "x",
+         fill = "#FFFFFF", cex = 1.15, font = 2)
+draw_box(0.78, 0.62, 0.28, 0.18,
+         "Propensity error\n||ehat - e||",
+         fill = "#D8F5DA", cex = 0.62, font = 2)
+
+draw_arrow(0.34, 0.52, 0.46, 0.39)
+draw_arrow(0.66, 0.52, 0.54, 0.39)
+
+draw_box(0.50, 0.31, 0.36, 0.16,
+         "Remainder bias\nR_t(hat eta, eta)",
+         fill = "#FADCDC", cex = 0.68, font = 2)
+
+draw_arrow(0.50, 0.22, 0.50, 0.14)
+draw_box(0.50, 0.08, 0.70, 0.11,
+         "If the product is o_p(n^{-1/2}), the EIF empirical average dominates.",
+         fill = "#FCE4C6", cex = 0.62, font = 2)
+```
+
+The takeaway is that the two technical obstacles are resolved differently. The empirical-process term is handled by regularity conditions or cross-fitting. The second-order remainder is handled by product-rate conditions plus positivity. Once both are \(o_p(n^{-1/2})\), the EIF empirical average dominates and standard root-\(n\) inference is justified.
+
+### Result of the Doubly Robust Analysis
+
+The doubly robust result is:
+
+| Method | Non-smoker risk (%) | Smoker risk (%) | Difference (pp) | Risk ratio |
+|:--|--:|--:|--:|--:|
+| Doubly robust | 8.56 | 11.82 | 3.25 | 1.380 |
+
+The doubly robust estimate is close to both IPW and outcome regression. The lecture correctly emphasizes that "doubly robust" does not mean "always correct." It means the estimator can remain consistent if either the propensity score model or the outcome regression model is correct enough, assuming the causal identification conditions are also true. It does not protect against violations of consistency, hidden confounding, interference, selection induced by complete-case restriction, or severe positivity problems.
+
+## Lecture 5: Bootstrap Uncertainty and Hypothesis Testing
+
+Lecture 5 turns point estimates into inferential summaries. For each participant,
+
+$$
+O_i = (Y_i,T_i,X_i).
+$$
+
+The empirical distribution is
+
+$$
+\hat F_n = \frac{1}{n}\sum_{i=1}^n \delta_{O_i}.
+$$
+
+A bootstrap sample is drawn with replacement:
+
+$$
+O_1^{*(b)}, \ldots, O_n^{*(b)}
+\overset{iid}{\sim}
+\hat F_n,
+\qquad b=1,\ldots,B.
+$$
+
+::: {.proposition-box}
+::: {.proposition-title}
+Inference Summary (Nonparametric Bootstrap)
+:::
+::: {.proposition-body}
+Each bootstrap replicate resamples participants, refits the propensity and outcome models, and recomputes the causal estimators. Thus the bootstrap targets the sampling distribution of the entire analysis algorithm, including nuisance-model estimation, rather than treating fitted nuisance functions as fixed.
+:::
+:::
+
+The lecture uses \(B=300\) bootstrap samples. Importantly, the entire analysis is repeated in each bootstrap sample: the propensity score model is refit, the outcome model is refit, and the IPW, outcome-regression, and doubly robust estimates are recomputed. This is essential because uncertainty in the nuisance models is part of the uncertainty in the final causal estimators.
+
+The target of the bootstrap is the sampling distribution of the full estimator-as-algorithm, not merely the final arithmetic applied to fixed fitted regressions. For regular asymptotically linear estimators,
+
+$$
+\sqrt n(\hat\psi-\psi_0)
+=
+\frac{1}{\sqrt n}\sum_{i=1}^n D(O_i) + o_p(1),
+$$
+
+where \(D(O)\) is the relevant influence function. The nonparametric bootstrap approximates the distribution of this empirical process by resampling observations. For AIPW, this approximation is most straightforward when the nuisance estimators are regular enough; with highly adaptive machine learning, cross-fitting and influence-function based standard errors are often preferred.
+
+For method \(m\), let \(\hat\Delta_m\) be the original risk-difference estimate and \(\hat\Delta_m^{*(b)}\) the bootstrap estimate from sample \(b\). The bootstrap standard error is
+
+$$
+\widehat{SE}_{boot}(\hat\Delta_m)
+=
+\sqrt{
+\frac{1}{B-1}
+\sum_{b=1}^B
+\left(
+\hat\Delta_m^{*(b)}-\bar\Delta_m^*
+\right)^2
+},
+$$
+
+where
+
+$$
+\bar\Delta_m^* = \frac{1}{B}\sum_{b=1}^B \hat\Delta_m^{*(b)}.
+$$
+
+The percentile bootstrap 95% confidence interval is
+
+$$
+\left[
+q_{0.025,m}^*,
+q_{0.975,m}^*
+\right],
+$$
+
+where the endpoints are the 2.5th and 97.5th percentiles of the bootstrap distribution.
+
+With \(B=300\), the bootstrap standard errors are usually adequate for a classroom illustration, but the extreme percentiles have nontrivial Monte Carlo noise. A research analysis would usually use a larger \(B\), inspect bootstrap failures or extreme estimates, and consider transformations such as the log risk ratio for strictly positive ratio parameters.
+
+The lecture also uses a bootstrap standard-error test of
+
+$$
+H_0:\Delta_m=0
+\qquad \text{versus} \qquad
+H_1:\Delta_m \ne 0.
+$$
+
+The test statistic is
+
+$$
+z_m = \frac{\hat\Delta_m}{\widehat{SE}_{boot}(\hat\Delta_m)},
+$$
+
+with two-sided p-value
+
+$$
+p_m = 2\{1-\Phi(|z_m|)\}.
+$$
+
+This Wald-type test uses the bootstrap standard error but a normal reference distribution. It is testing a statistical null for the risk-difference functional under the fitted analysis plan; it is not a test of no unmeasured confounding, no selection bias, correct model specification, or transportability to the United States population.
+
+The bootstrap risk-difference inference is:
+
+| Method | Estimate (pp) | Bootstrap SE (pp) | 95% CI lower (pp) | 95% CI upper (pp) | p-value |
+|:--|--:|--:|--:|--:|--:|
+| IPW | 2.99 | 0.79 | 1.62 | 4.56 | 0.0001708 |
+| Outcome regression | 3.45 | 0.79 | 2.11 | 5.02 | 0.00001217 |
+| Doubly robust | 3.25 | 0.80 | 1.94 | 4.92 | 0.00004570 |
+
+```{r bootstrap-ci-picture, echo=FALSE, fig.width=8.8, fig.height=4.8}
+estimate_pp <- c(IPW = 2.99, "Outcome regression" = 3.45, "Doubly robust" = 3.25)
+lower_pp <- c(IPW = 1.62, "Outcome regression" = 2.11, "Doubly robust" = 1.94)
+upper_pp <- c(IPW = 4.56, "Outcome regression" = 5.02, "Doubly robust" = 4.92)
+plot_order <- c("Doubly robust", "Outcome regression", "IPW")
+plot_y <- seq_along(plot_order)
+method_cols <- c("Doubly robust" = "#B7D7A8",
+                 "Outcome regression" = "#59A14F",
+                 "IPW" = "#F28E2B")
+
+old_par <- par(mar = c(5, 9, 4, 1))
+plot(
+  estimate_pp[plot_order],
+  plot_y,
+  xlim = c(0, 5.6),
+  ylim = c(0.5, 3.5),
+  yaxt = "n",
+  xlab = "Risk difference: smoker minus non-smoker (percentage points)",
+  ylab = "",
+  pch = 19,
+  cex = 1.5,
+  col = method_cols[plot_order],
+  main = "Lecture 5: Bootstrap 95% Confidence Intervals"
+)
+
+segments(lower_pp[plot_order], plot_y, upper_pp[plot_order], plot_y,
+         lwd = 3, col = method_cols[plot_order])
+segments(lower_pp[plot_order], plot_y - 0.08,
+         lower_pp[plot_order], plot_y + 0.08,
+         lwd = 3, col = method_cols[plot_order])
+segments(upper_pp[plot_order], plot_y - 0.08,
+         upper_pp[plot_order], plot_y + 0.08,
+         lwd = 3, col = method_cols[plot_order])
+abline(v = 0, lwd = 2, lty = 2, col = "#555555")
+axis(2, at = plot_y, labels = plot_order, las = 1)
+text(estimate_pp[plot_order], plot_y + 0.20,
+     labels = paste0(estimate_pp[plot_order], " pp"), cex = 0.82)
+par(old_par)
+```
+
+All three intervals exclude zero and all three p-values are below 0.05. Within the fitted modeling framework and the complete-case classroom data, this is evidence that adjusted CVD risk is higher under smoking than under non-smoking. However, the bootstrap quantifies sampling variability conditional on the analysis design; it does not validate exchangeability, fix unmeasured confounding, account for model selection, account for the omitted NHANES survey design, or repair a changed target population due to complete-case restriction.
+
+## Lecture 6: E-values and Sensitivity to Unmeasured Confounding
+
+Lecture 6 asks how strong an unmeasured confounder would need to be to explain away the adjusted risk-ratio association. The E-value is calculated on the risk-ratio scale.
+
+The E-value is not a model for a particular unmeasured confounder. It is a sharp bound: among all possible unmeasured confounders, it reports the minimum joint strength of association with exposure and outcome that would be sufficient to move the observed risk ratio to a specified value, usually the null. The calculation assumes the measured covariates have already been conditioned on and that the relevant sensitivity parameters are interpreted within levels of those covariates.
+
+Suppose the observed adjusted risk ratio is \(RR_{obs}>1\). Let \(U\) be an unmeasured confounder. VanderWeele and Ding describe two sensitivity parameters:
+
+$$
+RR_{EU}
+=
+\text{strength of association between exposure and } U,
+$$
+
+and
+
+$$
+RR_{UD}
+=
+\text{strength of association between } U \text{ and outcome}.
+$$
+
+These associations are interpreted after adjustment for the measured covariates \(X\). A risk-ratio bias factor is
+
+$$
+B =
+\frac{RR_{EU}RR_{UD}}
+     {RR_{EU}+RR_{UD}-1}.
+$$
+
+The adjusted risk ratio could be reduced to the null if
+
+$$
+\frac{RR_{obs}}{B} \le 1,
+$$
+
+or equivalently \(B \ge RR_{obs}\). The E-value reports the minimum common strength required when \(RR_{EU}=RR_{UD}=r\). Setting
+
+$$
+\frac{r^2}{2r-1}=RR_{obs}
+$$
+
+and solving gives
+
+$$
+\text{E-value}
+=
+RR_{obs}
++
+\sqrt{RR_{obs}(RR_{obs}-1)}.
+$$
+
+For a protective association with \(RR_{obs}<1\), one first inverts the risk ratio and applies the same formula to \(1/RR_{obs}\).
+
+::: {.proposition-box}
+::: {.proposition-title}
+Sensitivity Summary (E-value)
+:::
+::: {.proposition-body}
+The point-estimate E-value is the minimum common risk-ratio association that an unmeasured confounder would need to have with both smoking and CVD, after adjustment for measured covariates, to move the adjusted risk ratio to the null. It is a sensitivity benchmark for unmeasured confounding; it is not a test of the causal assumptions.
+:::
+:::
+
+For confidence intervals, the same formula can be applied to the confidence-limit closest to the null. If the entire interval is above 1, the lower confidence limit \(RR_L\) gives the E-value for moving the interval to include the null:
+
+$$
+\text{E-value}_{CI}
+=
+RR_L+\sqrt{RR_L(RR_L-1)}.
+$$
+
+This confidence-limit E-value is usually more conservative than the point-estimate E-value.
+
+The Lecture 6 risk-ratio and E-value results are:
+
+| Method | Risk ratio | 95% CI lower | 95% CI upper | p-value | E-value |
+|:--|--:|--:|--:|--:|--:|
+| IPW | 1.343 | 1.170 | 1.576 | 0.0001060 | 2.021 |
+| Outcome regression | 1.405 | 1.224 | 1.640 | 0.000005247 | 2.159 |
+| Doubly robust | 1.380 | 1.209 | 1.629 | 0.00002341 | 2.104 |
+
+```{r evalue-picture, echo=FALSE, fig.width=8.8, fig.height=4.8}
+evalues <- c(IPW = 2.021, "Outcome regression" = 2.159, "Doubly robust" = 2.104)
+plot_order <- c("Doubly robust", "Outcome regression", "IPW")
+plot_y <- seq_along(plot_order)
+
+old_par <- par(mar = c(5, 9, 4, 1))
+plot(
+  evalues[plot_order],
+  plot_y,
+  xlim = c(1, 2.45),
+  ylim = c(0.5, 3.5),
+  yaxt = "n",
+  xlab = "Minimum hidden-confounder strength on risk-ratio scale",
+  ylab = "",
+  pch = 19,
+  cex = 1.6,
+  col = "#E15759",
+  main = "Lecture 6: E-values for Unmeasured Confounding"
+)
+
+segments(1, plot_y, evalues[plot_order], plot_y,
+         lwd = 4, col = "#FCE4C6")
+abline(v = 1, lwd = 2, lty = 2, col = "#555555")
+abline(v = 2, lwd = 2, lty = 3, col = "#777777")
+axis(2, at = plot_y, labels = plot_order, las = 1)
+text(evalues[plot_order], plot_y + 0.18,
+     labels = round(evalues[plot_order], 2), cex = 0.86)
+legend(
+  "bottomright",
+  legend = c("Point-estimate E-value", "Reference: 2-fold"),
+  pch = c(19, NA),
+  lty = c(NA, 3),
+  lwd = c(NA, 2),
+  col = c("#E15759", "#777777"),
+  bty = "n"
+)
+par(old_par)
+```
+
+Thus the point-estimate E-values are about 2.0 to 2.2. A hidden confounder would need to be associated with both lifetime smoking and CVD by roughly a 2-fold risk ratio each, above and beyond the measured covariates, to fully explain away the point estimates. If one of the two hidden-confounder links were weaker than that, the other would need to be stronger. Applying the same formula to the lower confidence limits gives approximate confidence-limit E-values of 1.62 for IPW, 1.75 for outcome regression, and 1.71 for doubly robust estimation. These values describe the confounding strength needed to move the corresponding confidence interval to include the null.
+
+This is a sensitivity analysis, not proof of causality. A large E-value does not guarantee exchangeability, and a small E-value does not prove the effect is absent. The E-value only translates a vague concern about unmeasured confounding into a scale that can be judged against substantive knowledge. It also addresses only unmeasured confounding of the exposure-outcome relation; it does not address measurement error in smoking, outcome misclassification, interference, selection bias, model misspecification, or the absence of NHANES design weighting.
+
+## Integrated Interpretation Across Lectures
+
+The raw complete-case association is large: smokers have a CVD risk of 15.12% compared with 6.93% for non-smokers, a difference of 8.20 percentage points and a risk ratio of 2.184. After adjustment for measured baseline covariates, the estimated risk difference is much smaller:
+
+| Method | Non-smoker risk (%) | Smoker risk (%) | Difference (pp) | Risk ratio |
+|:--|--:|--:|--:|--:|
+| Observed comparison | 6.93 | 15.12 | 8.20 | 2.184 |
+| IPW | 8.71 | 11.70 | 2.99 | 1.343 |
+| Outcome regression | 8.53 | 11.98 | 3.45 | 1.405 |
+| Doubly robust | 8.56 | 11.82 | 3.25 | 1.380 |
+
+```{r integrated-risk-difference-picture, echo=FALSE, fig.width=8.8, fig.height=4.8}
+rd_pp <- c(
+  "Observed" = 8.20,
+  "IPW" = 2.99,
+  "Outcome\nregression" = 3.45,
+  "Doubly\nrobust" = 3.25
+)
+
+old_par <- par(mar = c(6, 5, 4, 1))
+bar_locations <- barplot(
+  rd_pp,
+  col = c("#A0CBE8", "#F28E2B", "#59A14F", "#B7D7A8"),
+  ylim = c(0, 9.5),
+  ylab = "Risk difference (percentage points)",
+  main = "Adjusted Methods Attenuate the Raw Association",
+  cex.names = 0.88
+)
+
+text(
+  x = bar_locations,
+  y = rd_pp + 0.35,
+  labels = paste0(rd_pp, " pp"),
+  cex = 0.82,
+  font = 2
+)
+
+arrows(bar_locations[1] + 0.15, 7.4, bar_locations[4] - 0.15, 4.1,
+       length = 0.08, lwd = 2.5, col = "#555555")
+text(mean(bar_locations[c(1, 4)]), 6.25,
+     "adjustment for measured X", cex = 0.82, font = 2, col = "#444444")
+par(old_par)
+```
+
+The three adjusted methods agree closely. They estimate that, in the complete-case classroom sample, setting everyone to smoker would raise CVD risk by about 3.0 to 3.5 percentage points compared with setting everyone to non-smoker. On the risk-ratio scale, the adjusted smoker-versus-non-smoker CVD risk is about 1.34 to 1.41 times as large.
+
+The agreement across IPW, outcome regression, and doubly robust estimation strengthens the empirical story because the methods use different modeling strategies. IPW tries to construct a weighted pseudo-population with balanced measured covariates. Outcome regression predicts both treatment worlds under a fitted outcome model and averages over the observed covariate distribution. Doubly robust estimation combines both approaches through an augmented inverse-probability correction.
+
+This agreement should be interpreted as triangulation over nuisance-model choices, not as a proof of causal validity. All three estimators target the same identified functional only after the assumptions are accepted. The main residual uncertainty can be organized into six layers:
+
+1. **Intervention definition:** lifetime smoking is an exposure definition, not a randomized treatment protocol with a single version.
+2. **Exchangeability:** the measured adjustment set may not block every common cause of smoking and CVD.
+3. **Support:** the data must contain meaningful smoker and non-smoker comparisons across the relevant covariate distribution.
+4. **Missingness:** complete-case analysis targets the complete-case population unless missingness is otherwise addressed.
+5. **Nuisance estimation:** logistic working models may miss nonlinearities, interactions, or effect modification.
+6. **Sampling and transport:** the bootstrap captures sampling variability for the classroom analytic sample, not NHANES design-based population inference.
+
+The most important caution is that all adjusted analyses depend on the quality of the measured covariates and the identification assumptions. The lectures adjust for age, gender, race/ethnicity, education, income-to-poverty ratio, and BMI, but unmeasured confounding may remain. The E-value analysis says that, to explain away the adjusted point estimates completely, an unmeasured confounder would need roughly 2-fold associations with both smoking and CVD after adjustment for the measured covariates. Whether that is plausible is a substantive epidemiologic question, not a purely statistical one.
+
+Therefore, the final causal statement should be conditional: if the smoking contrast is treated as sufficiently well-defined, if complete cases are the intended target population, if the measured covariates are sufficient for exchangeability, if positivity holds, and if the nuisance models are adequate enough for estimation, then the classroom analysis supports a higher CVD risk under smoking than under non-smoking. The statistical evidence is strong for the adjusted association; the causal strength depends on whether those scientific and design assumptions are credible.
+
+## References
+
+Austin, P. C., & Stuart, E. A. (2015). Moving towards best practice when using inverse probability of treatment weighting using the propensity score to estimate causal treatment effects in observational studies. *Statistics in Medicine*, 34(28), 3661-3679.
+
+Bang, H., & Robins, J. M. (2005). Doubly robust estimation in missing data and causal inference models. *Biometrics*, 61(4), 962-973.
+
+Bickel, P. J., Klaassen, C. A. J., Ritov, Y., & Wellner, J. A. (1993). *Efficient and Adaptive Estimation for Semiparametric Models*. Johns Hopkins University Press.
+
+Cole, S. R., & Hernan, M. A. (2008). Constructing inverse probability weights for marginal structural models. *American Journal of Epidemiology*, 168(6), 656-664.
+
+Dang, L. E., Gruber, S., Lee, H., et al. (2023). A causal roadmap for generating high-quality real-world evidence. *Journal of Clinical and Translational Science*, 7, e212. https://doi.org/10.1017/cts.2023.635
+
+Ding, P., & VanderWeele, T. J. (2016). Sensitivity analysis without assumptions. *Epidemiology*, 27(3), 368-377.
+
+Efron, B. (1979). Bootstrap methods: Another look at the jackknife. *The Annals of Statistics*, 7(1), 1-26.
+
+Efron, B., & Tibshirani, R. J. (1993). *An Introduction to the Bootstrap*. Chapman & Hall/CRC.
+
+Hernan, M. A., & Robins, J. M. (2020). *Causal Inference: What If*. Chapman & Hall/CRC.
+
+Holland, P. W. (1986). Statistics and causal inference. *Journal of the American Statistical Association*, 81(396), 945-960.
+
+Imbens, G. W., & Rubin, D. B. (2015). *Causal Inference for Statistics, Social, and Biomedical Sciences: An Introduction*. Cambridge University Press.
+
+Kennedy, E. H. (2022). Semiparametric doubly robust targeted double machine learning: A review. *Foundations and Trends in Econometrics*, 13(3-4), 243-380.
+
+Nance, N., Petersen, M. L., van der Laan, M., & Balzer, L. B. (2024). The Causal Roadmap and simulations to improve the rigor and reproducibility of real-data applications. *Epidemiology*, 35(6), 791-800. https://doi.org/10.1097/EDE.0000000000001773
+
+Robins, J. M., Rotnitzky, A., & Zhao, L. P. (1994). Estimation of regression coefficients when some regressors are not always observed. *Journal of the American Statistical Association*, 89(427), 846-866.
+
+Rosenbaum, P. R., & Rubin, D. B. (1983). The central role of the propensity score in observational studies for causal effects. *Biometrika*, 70(1), 41-55.
+
+Rubin, D. B. (1974). Estimating causal effects of treatments in randomized and nonrandomized studies. *Journal of Educational Psychology*, 66(5), 688-701.
+
+Snowden, J. M., Rose, S., & Mortimer, K. M. (2011). Implementation of g-computation on a simulated data set: Demonstration of a causal inference technique. *American Journal of Epidemiology*, 173(7), 731-738.
+
+Tsiatis, A. A. (2006). *Semiparametric Theory and Missing Data*. Springer.
+
+van der Laan, M. J., & Robins, J. M. (2003). *Unified Methods for Censored Longitudinal Data and Causality*. Springer.
+
+van der Laan, M. J., & Rose, S. (2011). *Targeted Learning: Causal Inference for Observational and Experimental Data*. Springer.
+
+VanderWeele, T. J., & Ding, P. (2017). Sensitivity analysis in observational research: Introducing the E-value. *Annals of Internal Medicine*, 167(4), 268-274.
