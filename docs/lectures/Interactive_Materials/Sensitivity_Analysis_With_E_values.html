@@ -1,0 +1,834 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sensitivity Analysis With E-values — Se Yoon Lee, Ph.D.</title>
+<style>
+:root{
+  color-scheme:light;
+  --ink:#162033;--muted:#667085;--line:#D7DEE8;--panel:#FFFFFF;--bg:#F4F7FB;
+  --accent:#7057E8;--accent2:#4D72C8;--orange:#E56B2F;--blue:#2F6EA5;
+  --green:#208A62;--danger:#C23B3B;--amber:#B66A00;--teal:#167C86;
+  --soft-purple:#F2EEFF;--soft-blue:#EAF3FB;--soft-orange:#FFF1E8;
+  --soft-green:#EAF8F2;--soft-red:#FFF0F1;--soft-amber:#FFF8E8;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif}
+body{min-width:320px}
+button,select,input{font:inherit}
+button{cursor:pointer}
+.hero{padding:29px clamp(18px,4vw,58px) 23px;background:linear-gradient(135deg,#FFFFFF 0%,#F7F3FF 53%,#EDF7FA 100%);border-bottom:1px solid var(--line)}
+.hero-inner{max-width:1780px;margin:0 auto;display:flex;gap:26px;align-items:flex-start;justify-content:space-between}
+.hero h1{margin:0 0 8px;font-size:clamp(29px,3.1vw,49px);line-height:1.05;letter-spacing:-.75px}
+.hero .author{font-weight:600;white-space:nowrap}
+.hero p{margin:0;max-width:1120px;color:var(--muted);font-size:clamp(15px,1.4vw,19px);line-height:1.55}
+.clarifier{margin-top:13px;display:inline-flex;gap:9px;align-items:center;padding:9px 13px;border:1px solid #C1C9D7;border-radius:12px;background:rgba(255,255,255,.86);font-size:14px;font-weight:650;line-height:1.45}
+.clarifier b{color:var(--accent)}
+.hero-badge{flex:0 0 auto;padding:11px 15px;border-radius:999px;border:1px solid #CFC5FF;background:#FFF;color:#5B45C8;font-weight:850;font-size:12px;letter-spacing:.42px;white-space:nowrap}
+.app{max-width:1780px;margin:0 auto;padding:18px;display:grid;grid-template-columns:346px minmax(0,1fr);gap:18px;align-items:start}
+.controls{position:sticky;top:12px;max-height:calc(100vh - 24px);overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:20px;box-shadow:0 10px 28px rgba(20,32,55,.08)}
+.controls-head{padding:18px 18px 14px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#fff,#FAFBFD)}
+.controls-head h2{margin:0 0 5px;font-size:19px}
+.controls-head p{margin:0;color:var(--muted);font-size:13px;line-height:1.45}
+.control-section{padding:15px 18px;border-bottom:1px solid #E7EBF1}
+.control-section:last-child{border-bottom:0}
+.section-label{font-size:11px;letter-spacing:.8px;text-transform:uppercase;color:#7B8495;font-weight:850;margin-bottom:10px}
+.preset-row{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.preset{border:1px solid var(--line);background:#fff;border-radius:11px;padding:8px 9px;font-size:11px;font-weight:780;color:#344054;line-height:1.35}
+.preset:hover,.preset.active{border-color:var(--accent);color:#5840C8;background:#FAF8FF}
+.control{margin:0 0 14px}
+.control:last-child{margin-bottom:0}
+.control-top{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:6px}
+.control label{font-size:13px;font-weight:720}
+.value{font-size:12px;color:#5B45C8;font-weight:850;font-variant-numeric:tabular-nums}
+input[type="range"]{width:100%;accent-color:var(--accent)}
+input[type="number"]{width:100%;border:1px solid var(--line);border-radius:10px;padding:8px 9px;color:var(--ink);background:#fff;font-variant-numeric:tabular-nums}
+.range-ends{display:flex;justify-content:space-between;color:#98A2B3;font-size:10px;margin-top:2px;gap:8px}
+.input-pair{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.input-pair .mini-field label{display:block;font-size:10px;color:#667085;text-transform:uppercase;letter-spacing:.45px;font-weight:850;margin-bottom:4px}
+select{width:100%;border:1px solid var(--line);border-radius:10px;background:#fff;padding:9px 10px;color:var(--ink)}
+.checkrow{display:flex;gap:9px;align-items:flex-start;font-size:12px;color:#475467;line-height:1.4}
+.checkrow input{margin-top:2px;accent-color:var(--accent)}
+.primary-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.primary,.secondary{border-radius:11px;padding:9px 10px;font-weight:780;font-size:12px}
+.primary{border:1px solid var(--accent);background:var(--accent);color:#fff}
+.secondary{border:1px solid var(--line);background:#fff;color:#344054}
+.primary:hover{filter:brightness(.96)}
+.secondary:hover{border-color:var(--accent);color:#5B45C8}
+.teaching-note{font-size:11px;line-height:1.5;color:#667085;background:#F7F8FB;border-radius:10px;padding:9px 10px;margin-top:10px}
+.workspace{min-width:0}
+.metrics{display:grid;grid-template-columns:repeat(6,minmax(116px,1fr));gap:10px;margin-bottom:12px}
+.metric{background:#fff;border:1px solid var(--line);border-radius:15px;padding:11px 13px;min-width:0;box-shadow:0 3px 12px rgba(20,32,55,.04)}
+.metric .k{font-size:10px;color:#7B8495;text-transform:uppercase;font-weight:850;letter-spacing:.52px;white-space:nowrap}
+.metric .v{margin-top:4px;font-size:19px;font-weight:880;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.metric .sub{font-size:9px;color:#7B8495;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.selected-u-status{margin:0 0 12px;border-radius:14px;padding:12px 14px;border:1px solid var(--line);background:#fff;display:grid;grid-template-columns:auto minmax(0,1fr);gap:11px;align-items:start;box-shadow:0 3px 12px rgba(20,32,55,.035)}
+.selected-u-status.good{border-color:#A9DCC8;background:#F2FBF7}
+.selected-u-status.bad{border-color:#F0BBBB;background:#FFF5F5}
+.selected-u-icon{width:27px;height:27px;border-radius:50%;display:grid;place-items:center;font-size:14px;font-weight:900;margin-top:1px}
+.selected-u-status.good .selected-u-icon{background:#DDF4EA;color:#176A4C}
+.selected-u-status.bad .selected-u-icon{background:#FBE1E1;color:#A52D2D}
+.selected-u-title{font-size:13px;font-weight:880;line-height:1.35;color:var(--ink)}
+.selected-u-detail{font-size:11px;line-height:1.55;color:#5F6B7B;margin-top:3px}
+.selected-u-equation{display:inline-block;border:1px solid rgba(91,69,200,.20);background:rgba(255,255,255,.76);border-radius:999px;padding:3px 7px;margin:2px 3px 0 0;font-variant-numeric:tabular-nums;font-weight:780;color:#344054;white-space:nowrap}
+@media(max-width:650px){.selected-u-status{grid-template-columns:1fr}.selected-u-icon{display:none}}
+.card{background:#fff;border:1px solid var(--line);border-radius:18px;box-shadow:0 6px 20px rgba(20,32,55,.055);min-width:0;overflow:hidden}
+.card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:15px 16px 10px}
+.card-head h3{margin:0 0 4px;font-size:17px;line-height:1.25}
+.card-head p{margin:0;color:var(--muted);font-size:12px;line-height:1.45}
+.grid-two{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+.grid-top{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(320px,.85fr);gap:12px;margin-bottom:12px}
+.full-card{margin-bottom:12px}
+.mini-controls{display:flex;gap:7px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.mini-controls label{font-size:10px;font-weight:800;color:#667085}
+.mini-controls select{width:auto;min-width:120px;padding:6px 8px;font-size:11px}
+.legend{display:flex;flex-wrap:wrap;gap:12px;padding:0 16px 8px;color:#667085;font-size:11px}
+.legend span{display:inline-flex;align-items:center;gap:5px}
+.dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+.line-key{width:17px;height:0;border-top:3px solid;display:inline-block}
+.dash-key{width:18px;height:0;border-top:2px dashed #111827;display:inline-block}
+svg.chart{display:block;width:100%;height:auto;overflow:visible;touch-action:none}
+.chart-wrap{position:relative;padding:0 8px 10px}
+.chart-note{padding:0 16px 13px;color:#667085;font-size:11px;line-height:1.5}
+.chart-note strong{color:var(--ink)}
+math{font-family:"Cambria Math","STIX Two Math","Times New Roman",serif;color:var(--ink)}
+.math-card{margin-bottom:12px;border-top:3px solid var(--accent)}
+.math-tabs{display:flex;gap:7px;flex-wrap:wrap;padding:0 16px 12px;border-bottom:1px solid #E7EBF1}
+.math-tab{border:1px solid var(--line);background:#fff;color:#475467;border-radius:10px;padding:8px 11px;font-size:11px;font-weight:820}
+.math-tab:hover{border-color:#B7A9FF;color:#5B45C8;background:#FAF8FF}
+.math-tab[aria-selected="true"]{border-color:var(--accent);background:var(--accent);color:#fff}
+.math-panel{display:none;padding:16px}
+.math-panel.active{display:block}
+.math-scroll{overflow-x:auto;overflow-y:hidden;padding:3px 2px 7px;-webkit-overflow-scrolling:touch}
+math[display="block"]{display:block;width:max-content;min-width:min-content;max-width:none;margin:0 auto;font-size:clamp(17px,1.5vw,25px);line-height:1.35}
+.math-chain{border:1px solid #D9D2FF;background:linear-gradient(135deg,#F7F4FF,#F8FBFF);border-radius:15px;padding:15px 12px;margin-bottom:13px}
+.math-chain .chain-label{font-size:10px;color:#5B45C8;font-weight:900;letter-spacing:.65px;text-transform:uppercase;margin:0 0 8px 3px}
+.math-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.math-box{border:1px solid #DEE4EC;border-radius:13px;background:#FCFCFD;padding:12px;min-width:0}
+.math-box h4{margin:0 0 7px;font-size:12px}
+.math-box p{margin:7px 0 0;color:#667085;font-size:10px;line-height:1.52}
+.math-box math[display="block"]{font-size:clamp(15px,1.2vw,20px);margin-left:0}
+.live-math{margin-top:11px;border:1px solid #CFC5FF;background:#F8F6FF;border-radius:12px;padding:10px 12px;color:#536075;font-size:11px;line-height:1.55}
+.live-chips{display:flex;gap:7px;flex-wrap:wrap;margin-top:7px}
+.live-chip{border:1px solid #D9D2FF;background:#fff;border-radius:999px;padding:5px 8px;font-variant-numeric:tabular-nums;font-weight:800;color:#344054}
+.warning{margin-top:10px;border-left:4px solid var(--amber);background:#FFF9EB;border-radius:9px;padding:9px 11px;color:#6F4B08;font-size:10px;line-height:1.5}
+.good-note{margin-top:10px;border-left:4px solid var(--green);background:#F2FBF7;border-radius:9px;padding:9px 11px;color:#21694E;font-size:10px;line-height:1.5}
+.dag-verdict{margin:0 16px 15px;border-radius:13px;padding:11px 12px;font-size:11px;line-height:1.55;border:1px solid #D9D2FF;background:#F8F6FF;color:#514A72}
+.dag-verdict.good{border-color:#A9DCC8;background:#F2FBF7;color:#176A4C}
+.dag-verdict.bad{border-color:#F0BBBB;background:#FFF5F5;color:#A52D2D}
+.interpret-body{padding:2px 16px 16px}
+.interpret-quote{border:1px solid #D9D2FF;background:#F8F6FF;border-radius:14px;padding:12px 13px;font-size:13px;line-height:1.65;color:#413A63}
+.interpret-quote strong{color:#5B45C8}
+.status-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.status-box{border:1px solid #E1E6ED;border-radius:12px;background:#FCFCFD;padding:10px 11px;min-width:0}
+.status-box .name{font-size:9px;color:#667085;text-transform:uppercase;font-weight:900;letter-spacing:.45px}
+.status-box .number{font-size:19px;font-weight:880;margin:4px 0 2px;font-variant-numeric:tabular-nums}
+.status-box .detail{font-size:9px;color:#7B8495;line-height:1.4}
+.verdict-box{margin-top:9px;border-radius:12px;padding:10px 11px;font-size:11px;line-height:1.5;font-weight:650}
+.verdict-box.good{border:1px solid #A9DCC8;background:#F2FBF7;color:#176A4C}
+.verdict-box.bad{border:1px solid #F0BBBB;background:#FFF5F5;color:#A52D2D}
+.verdict-box.warn{border:1px solid #F0D39E;background:#FFF9EB;color:#76500D}
+.method-table{padding:0 16px 14px;overflow:auto}
+table{border-collapse:collapse;width:100%;font-size:11px;white-space:nowrap}
+th,td{padding:8px 9px;border-bottom:1px solid #EDF0F4;text-align:right;font-variant-numeric:tabular-nums}
+th:first-child,td:first-child{text-align:left}
+th{background:#F8FAFC;color:#667085;text-transform:uppercase;font-size:9px;letter-spacing:.45px}
+tbody tr{cursor:pointer}
+tbody tr:hover{background:#F7F5FF}
+tbody tr.selected{background:#EEE9FF}
+.limit-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:0 16px 14px}
+.limit-card{border:1px solid #E1E6ED;border-radius:12px;background:#FCFCFD;padding:10px 11px}
+.limit-card .name{font-size:9px;color:#667085;text-transform:uppercase;font-weight:900;letter-spacing:.4px}
+.limit-card .number{font-size:18px;font-weight:880;margin-top:4px;font-variant-numeric:tabular-nums}
+.limit-card .detail{font-size:9px;color:#7B8495;margin-top:3px;line-height:1.4}
+.two-question{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:0 16px 15px}
+.question-card{border:1px solid #E1E6ED;border-radius:13px;padding:12px;background:#FCFCFD}
+.question-card h4{margin:0 0 7px;font-size:13px}
+.question-card p{margin:0;color:#667085;font-size:11px;line-height:1.55}
+.question-card.p{border-color:#BDD5EA;background:#F3F8FC}
+.question-card.e{border-color:#CFC5FF;background:#F8F6FF}
+.limitations{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:0 16px 15px}
+.limitation{border:1px solid #E1E6ED;border-radius:12px;background:#FCFCFD;padding:10px 11px}
+.limitation b{display:block;font-size:11px;margin-bottom:4px}
+.limitation span{display:block;color:#667085;font-size:10px;line-height:1.45}
+.table-card{margin-bottom:18px}
+details summary{cursor:pointer;padding:14px 16px;font-weight:800;list-style:none;display:flex;align-items:center;justify-content:space-between}
+details summary::-webkit-details-marker{display:none}
+details summary::after{content:"＋";color:var(--accent);font-size:20px}
+details[open] summary::after{content:"−"}
+.table-tools{display:flex;gap:8px;padding:0 16px 10px;flex-wrap:wrap}
+.table-tools button{border:1px solid var(--line);background:#fff;border-radius:9px;padding:7px 9px;font-size:11px;font-weight:750}
+.footer{max-width:1780px;margin:0 auto;padding:0 18px 28px;color:#667085;font-size:11px;line-height:1.55}
+.tooltip{position:fixed;z-index:40;pointer-events:none;background:#111827;color:white;border-radius:10px;padding:9px 10px;box-shadow:0 8px 24px rgba(0,0,0,.24);font-size:11px;line-height:1.45;opacity:0;transform:translate(10px,10px);transition:opacity .08s;max-width:270px}
+
+.analysis-card{margin-bottom:12px;border-top:3px solid var(--green)}
+.analysis-card .card-head{padding-bottom:12px;background:linear-gradient(180deg,#FFFFFF,#FBFDFC)}
+.copy-button{border:1px solid #A9DCC8;background:#F2FBF7;color:#176A4C;border-radius:10px;padding:8px 11px;font-size:11px;font-weight:850;white-space:nowrap}
+.copy-button:hover{background:#E7F7EF;border-color:#70C4A3}
+.copy-status{font-size:10px;color:#176A4C;font-weight:800;margin-left:8px}
+.analysis-summary-grid{display:grid;grid-template-columns:repeat(6,minmax(115px,1fr));gap:8px;padding:0 16px 12px}
+.analysis-stat{border:1px solid #E1E6ED;border-radius:12px;background:#FCFCFD;padding:10px 11px;min-width:0}
+.analysis-stat.association{border-color:#BDD5EA;background:#F3F8FC}
+.analysis-stat.point{border-color:#CFC5FF;background:#F8F6FF}
+.analysis-stat.ci{border-color:#B8E5D2;background:#F2FBF7}
+.analysis-stat.candidate{border-color:#F0D39E;background:#FFF9EB}
+.analysis-stat .name{font-size:9px;color:#667085;text-transform:uppercase;font-weight:900;letter-spacing:.45px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.analysis-stat .number{font-size:18px;font-weight:900;margin:4px 0 2px;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.analysis-stat .detail{font-size:9px;color:#667085;line-height:1.4}
+.analysis-section-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;padding:0 16px 12px}
+.analysis-block{border:1px solid #E1E6ED;border-radius:14px;background:#FCFCFD;padding:12px 13px;min-width:0}
+.analysis-block h4{margin:0 0 6px;font-size:12px;color:#344054}
+.analysis-block p{margin:0;color:#5E687A;font-size:11px;line-height:1.62}
+.analysis-block strong{color:#162033}
+.analysis-block.point{border-left:4px solid var(--accent)}
+.analysis-block.ci{border-left:4px solid var(--green)}
+.analysis-block.candidate{border-left:4px solid var(--amber)}
+.analysis-block.context{border-left:4px solid var(--blue)}
+.threshold-panel{margin:0 16px 12px;border:1px solid #DEE4EC;border-radius:13px;background:#F8FAFC;padding:11px 12px}
+.threshold-title{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px}
+.threshold-title strong{font-size:11px;color:#344054}
+.threshold-title span{font-size:9px;color:#7B8495}
+.threshold-row{display:grid;grid-template-columns:155px minmax(110px,1fr) 180px;gap:9px;align-items:center;margin:7px 0}
+.threshold-label{font-size:10px;color:#475467;font-weight:800}
+.threshold-track{height:9px;border-radius:999px;background:#E3E8EF;overflow:hidden;position:relative}
+.threshold-fill{height:100%;border-radius:999px;min-width:2px}
+.threshold-fill.point{background:var(--accent)}
+.threshold-fill.ci{background:var(--green)}
+.threshold-value{font-size:9px;color:#667085;text-align:right;font-variant-numeric:tabular-nums;line-height:1.35}
+.analysis-report{margin:0 16px 12px;border:1px solid #CFC5FF;border-radius:14px;background:linear-gradient(135deg,#F8F6FF,#FBFCFF);padding:12px 13px}
+.analysis-report-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:7px}
+.analysis-report-head strong{font-size:12px;color:#4F3FA7}
+.report-text{font-size:11.5px;line-height:1.7;color:#3F4760}
+.report-text b{color:#162033}
+.analysis-cautions{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:0 16px 12px}
+.analysis-caution{border:1px solid #E1E6ED;border-radius:12px;background:#FCFCFD;padding:10px 11px;font-size:10px;line-height:1.48;color:#667085}
+.analysis-caution b{display:block;color:#344054;font-size:10.5px;margin-bottom:3px}
+.analysis-source-note{margin:0 16px 15px;border-left:4px solid var(--teal);background:#F1FAFA;border-radius:0 10px 10px 0;padding:9px 11px;color:#35666B;font-size:10px;line-height:1.5}
+@media(max-width:1250px){.analysis-summary-grid{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:850px){.analysis-section-grid{grid-template-columns:1fr}.analysis-cautions{grid-template-columns:1fr}.threshold-row{grid-template-columns:1fr}.threshold-value{text-align:left}.analysis-summary-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:480px){.analysis-summary-grid{grid-template-columns:1fr}.analysis-report-head{display:block}.copy-button{margin-top:7px}}
+
+@media(max-width:1200px){.app{grid-template-columns:1fr}.controls{position:relative;top:auto;max-height:none}.metrics{grid-template-columns:repeat(3,1fr)}.grid-top,.grid-two{grid-template-columns:1fr}}
+@media(max-width:760px){.hero-inner{display:block}.hero-badge{display:inline-block;margin-top:14px}.hero .author{display:block;margin-top:7px;font-size:.58em;white-space:normal}.app{padding:10px}.metrics{grid-template-columns:repeat(2,1fr)}.math-grid,.status-grid,.two-question,.limitations{grid-template-columns:1fr}.limit-grid{grid-template-columns:1fr}.card-head{display:block}.mini-controls{justify-content:flex-start;margin-top:9px}.math-tabs{display:grid;grid-template-columns:1fr 1fr}.math-tab{width:100%}}
+@media print{.controls,.hero-badge,.table-card,.footer,.preset-row,.primary-row{display:none!important}.app{display:block;max-width:none}.card{box-shadow:none;break-inside:avoid}.hero{padding:12px}.metrics{grid-template-columns:repeat(6,1fr)}}
+</style>
+</head>
+<body>
+<header class="hero">
+  <div class="hero-inner">
+    <div>
+      <h1>Sensitivity Analysis With E-values <span class="author">— Se Yoon Lee, Ph.D.</span></h1>
+      <p>Translate an adjusted risk ratio into a quantitative benchmark for possible unmeasured confounding. Explore the E-value, the two-link bias factor, unequal-strength trade-offs, confidence-limit robustness, and the distinction between statistical uncertainty and causal sensitivity.</p>
+      <div class="clarifier"><b>Core question:</b> How strongly would an unmeasured confounder have to be associated with both smoking and CVD, above and beyond measured covariates, to explain away the adjusted association?</div>
+    </div>
+    <div class="hero-badge">RISK-RATIO SCALE • NATIVE MATHML • INLINE SVG</div>
+  </div>
+</header>
+
+<main class="app">
+<aside class="controls" aria-label="E-value controls">
+  <div class="controls-head"><h2>Define the sensitivity analysis</h2><p>Load a lecture result or enter a custom adjusted risk ratio and plausible hidden-confounder strengths.</p></div>
+
+  <div class="control-section">
+    <div class="section-label">Lecture presets</div>
+    <div class="preset-row">
+      <button class="preset active" data-preset="ipw">IPW</button>
+      <button class="preset" data-preset="or">Outcome regression</button>
+      <button class="preset" data-preset="dr">Doubly robust</button>
+      <button class="preset" data-preset="protective">Protective example</button>
+      <button class="preset" data-preset="near">CI crosses null</button>
+      <button class="preset" data-preset="strong">Stronger association</button>
+    </div>
+  </div>
+
+  <div class="control-section">
+    <div class="section-label">Adjusted association</div>
+    <div class="control">
+      <div class="control-top"><label for="rrRange">Adjusted risk ratio</label><span class="value" id="rrValue"></span></div>
+      <input id="rrRange" type="range" min="-1.386294" max="1.386294" step="0.002" value="0.293">
+      <div class="range-ends"><span>0.25 protective</span><span>1 null</span><span>4 harmful</span></div>
+    </div>
+    <div class="input-pair">
+      <div class="mini-field"><label for="ciLower">95% CI lower</label><input id="ciLower" type="number" min="0.01" step="0.01" value="1.17"></div>
+      <div class="mini-field"><label for="ciUpper">95% CI upper</label><input id="ciUpper" type="number" min="0.01" step="0.01" value="1.58"></div>
+    </div>
+    <div class="teaching-note" id="ciValidation">The confidence interval is used for uncertainty display. The lecture's primary E-value is calculated from the point estimate.</div>
+  </div>
+
+  <div class="control-section">
+    <div class="section-label">Possible hidden confounder U</div>
+    <div class="control">
+      <div class="control-top"><label for="euRange">Exposure–U strength, RR<sub>EU</sub></label><span class="value" id="euValue"></span></div>
+      <input id="euRange" type="range" min="1" max="8" step="0.01" value="1.60">
+      <div class="range-ends"><span>1 none</span><span>8 very strong</span></div>
+    </div>
+    <div class="control">
+      <div class="control-top"><label for="uyRange">U–outcome strength, RR<sub>UY</sub></label><span class="value" id="uyValue"></span></div>
+      <input id="uyRange" type="range" min="1" max="8" step="0.01" value="1.60">
+      <div class="range-ends"><span>1 none</span><span>8 very strong</span></div>
+    </div>
+    <div class="primary-row">
+      <button class="primary" id="setEqualE">Set both to E-value</button>
+      <button class="secondary" id="resetLinks">Reset links</button>
+    </div>
+    <div class="teaching-note">These are sensitivity parameters on the risk-ratio scale. They are not estimated from the observed dataset.</div>
+  </div>
+
+  <div class="control-section">
+    <div class="section-label">Interpretation options</div>
+    <div class="checkrow"><input id="showCiE" type="checkbox" checked><label for="showCiE">Show the optional E-value for the confidence-limit closest to the null.</label></div>
+    <div class="checkrow" style="margin-top:9px"><input id="showMethodPoints" type="checkbox" checked><label for="showMethodPoints">Show the three lecture methods on the E-value curve.</label></div>
+    <div class="control" style="margin-top:12px"><label for="candidateU" style="display:block;margin-bottom:6px">Candidate hidden confounder</label><select id="candidateU"><option>Physical activity</option><option>Family history</option><option>Long-term diet</option><option>Stress</option><option>Health-seeking behavior</option><option>Custom hidden factor U</option></select></div>
+  </div>
+
+  <div class="control-section">
+    <div class="section-label">Actions</div>
+    <div class="primary-row"><button class="primary" id="resetAll">Restore lecture IPW</button><button class="secondary" onclick="window.print()">Print dashboard</button></div>
+  </div>
+</aside>
+
+<section class="workspace">
+  <div class="metrics" id="metricStrip" aria-live="polite"></div>
+  <div class="selected-u-status" id="selectedUStatus" aria-live="polite"></div>
+
+
+  <article class="card analysis-card" aria-labelledby="analysisInterpretationTitle">
+    <div class="card-head">
+      <div><h3 id="analysisInterpretationTitle">Interpretation of the current analysis</h3><p>Integrates the adjusted association, sampling uncertainty, point-estimate E-value, confidence-limit E-value, method agreement, and the selected hidden-confounder scenario.</p></div>
+      <button class="copy-button" id="copyInterpretation" type="button">Copy report paragraph</button>
+    </div>
+    <div class="analysis-summary-grid" id="analysisSummaryGrid"></div>
+    <div class="analysis-section-grid" id="analysisSectionGrid"></div>
+    <div class="threshold-panel" id="analysisThresholdPanel"></div>
+    <div class="analysis-report">
+      <div class="analysis-report-head"><strong>Report-ready interpretation</strong><span class="copy-status" id="copyStatus"></span></div>
+      <div class="report-text" id="reportParagraph"></div>
+    </div>
+    <div class="analysis-cautions" id="analysisCautions"></div>
+    <div class="analysis-source-note"><b>Interpretive principle.</b> The E-value is a continuous, context-dependent robustness benchmark. It should be interpreted above and beyond the measured adjustment set, alongside the confidence interval, plausible strengths of omitted confounders, the associations of measured covariates where available, and other sources of bias. There is no universal “large enough” cutoff.</div>
+  </article>
+
+  <article class="card math-card">
+    <div class="card-head"><div><h3>Mathematical formulation</h3><p>Point-estimate E-value, risk-ratio bias factor, equal-strength derivation, confidence-limit extension, and interpretation conditions.</p></div><div class="hero-badge" style="padding:7px 10px;font-size:10px">GRADUATE-LEVEL NOTATION</div></div>
+    <div class="math-tabs" role="tablist">
+      <button class="math-tab" role="tab" aria-selected="true" data-tab="definition">Definition</button>
+      <button class="math-tab" role="tab" aria-selected="false" data-tab="bias">Bias factor</button>
+      <button class="math-tab" role="tab" aria-selected="false" data-tab="derivation">Derivation</button>
+      <button class="math-tab" role="tab" aria-selected="false" data-tab="ci">CI extension</button>
+      <button class="math-tab" role="tab" aria-selected="false" data-tab="limits">Interpretation limits</button>
+    </div>
+
+    <section class="math-panel active" id="panel-definition">
+      <div class="math-chain"><div class="chain-label">Lecture definition</div><div class="math-scroll">
+        <math display="block"><mrow><mtext>For</mtext><mspace width=".35em"/><msub><mi>RR</mi><mtext>obs</mtext></msub><mo>≥</mo><mn>1</mn><mo>,</mo><mspace width=".55em"/><mi>E</mi><mo>=</mo><msub><mi>RR</mi><mtext>obs</mtext></msub><mo>+</mo><msqrt><msub><mi>RR</mi><mtext>obs</mtext></msub><mo>(</mo><msub><mi>RR</mi><mtext>obs</mtext></msub><mo>−</mo><mn>1</mn><mo>)</mo></msqrt></mrow></math>
+      </div></div>
+      <div class="math-grid">
+        <div class="math-box"><h4>Direct lecture formula</h4><div class="math-scroll"><math display="block"><mrow><msub><mi>RR</mi><mtext>obs</mtext></msub><mo>&gt;</mo><mn>1</mn><mo>:</mo><mspace width=".5em"/><mi>E</mi><mo>=</mo><msub><mi>RR</mi><mtext>obs</mtext></msub><mo>+</mo><msqrt><msub><mi>RR</mi><mtext>obs</mtext></msub><mo>(</mo><msub><mi>RR</mi><mtext>obs</mtext></msub><mo>−</mo><mn>1</mn><mo>)</mo></msqrt></mrow></math></div><p>This is the formula used in the lecture note and in the classroom examples.</p></div>
+        <div class="math-box"><h4>Protective association extension</h4><div class="math-scroll"><math display="block"><mrow><msub><mi>RR</mi><mtext>obs</mtext></msub><mo>&lt;</mo><mn>1</mn><mo>:</mo><mspace width=".5em"/><mi>R</mi><mo>=</mo><mfrac><mn>1</mn><msub><mi>RR</mi><mtext>obs</mtext></msub></mfrac><mo>,</mo><mspace width=".5em"/><mi>E</mi><mo>=</mo><mi>R</mi><mo>+</mo><msqrt><mi>R</mi><mo>(</mo><mi>R</mi><mo>−</mo><mn>1</mn><mo>)</mo></msqrt></mrow></math></div><p>If the observed risk ratio is below 1, first invert it and then apply the same lecture formula.</p></div>
+      </div>
+      <div class="live-math" id="liveDefinition"></div>
+    </section>
+
+    <section class="math-panel" id="panel-bias" hidden>
+      <div class="math-chain"><div class="chain-label">Risk-ratio bias factor</div><div class="math-scroll">
+        <math display="block"><mrow><mi>B</mi><mo>(</mo><msub><mi>RR</mi><mtext>EU</mtext></msub><mo>,</mo><msub><mi>RR</mi><mtext>UY</mtext></msub><mo>)</mo><mo>=</mo><mfrac><mrow><msub><mi>RR</mi><mtext>EU</mtext></msub><msub><mi>RR</mi><mtext>UY</mtext></msub></mrow><mrow><msub><mi>RR</mi><mtext>EU</mtext></msub><mo>+</mo><msub><mi>RR</mi><mtext>UY</mtext></msub><mo>−</mo><mn>1</mn></mrow></mfrac></mrow></math>
+      </div></div>
+      <div class="good-note" style="margin:0 0 10px"><b>Sensitivity-parameter meaning:</b> RR<sub>EU</sub> bounds the strongest residual exposure–U association, and RR<sub>UY</sub> bounds the strongest residual U–outcome association on the risk-ratio scale. These are sensitivity parameters defined after adjustment for the measured covariates X; in the standard bound, RR<sub>UY</sub> is interpreted within levels of exposure and X. They are not ordinary regression coefficients.</div>
+      <div class="math-grid">
+        <div class="math-box"><h4>Explain-away condition</h4><div class="math-scroll"><math display="block"><mrow><mfrac><mi>R</mi><mi>B</mi></mfrac><mo>≤</mo><mn>1</mn><mspace width=".7em"/><mo>⇔</mo><mspace width=".7em"/><mi>B</mi><mo>≥</mo><mi>R</mi></mrow></math></div><p>Here R is the observed association oriented away from the null. The factor is a worst-case bound, not a literal bias correction.</p></div>
+        <div class="math-box"><h4>Unequal-link boundary</h4><div class="math-scroll"><math display="block"><mrow><msub><mi>RR</mi><mtext>UY, required</mtext></msub><mo>=</mo><mfrac><mrow><mi>R</mi><mo>(</mo><msub><mi>RR</mi><mtext>EU</mtext></msub><mo>−</mo><mn>1</mn><mo>)</mo></mrow><mrow><msub><mi>RR</mi><mtext>EU</mtext></msub><mo>−</mo><mi>R</mi></mrow></mfrac><mo>,</mo><mspace width=".5em"/><msub><mi>RR</mi><mtext>EU</mtext></msub><mo>&gt;</mo><mi>R</mi></mrow></math></div><p>If one link is relatively weak, the other must be stronger. No finite second link suffices when the fixed first link is at or below R.</p></div>
+      </div>
+      <div class="live-math" id="liveBias"></div>
+    </section>
+
+    <section class="math-panel" id="panel-derivation" hidden>
+      <div class="math-chain"><div class="chain-label">Equal-strength benchmark</div><div class="math-scroll">
+        <math display="block"><mtable rowspacing=".55em"><mtr><mtd><msub><mi>RR</mi><mtext>EU</mtext></msub><mo>=</mo><msub><mi>RR</mi><mtext>UY</mtext></msub><mo>=</mo><mi>r</mi><mspace width=".8em"/><mo>⇒</mo><mspace width=".8em"/><mi>B</mi><mo>=</mo><mfrac><msup><mi>r</mi><mn>2</mn></msup><mrow><mn>2</mn><mi>r</mi><mo>−</mo><mn>1</mn></mrow></mfrac></mtd></mtr><mtr><mtd><mfrac><msup><mi>r</mi><mn>2</mn></msup><mrow><mn>2</mn><mi>r</mi><mo>−</mo><mn>1</mn></mrow></mfrac><mo>=</mo><mi>R</mi><mspace width=".8em"/><mo>⇒</mo><mspace width=".8em"/><msup><mi>r</mi><mn>2</mn></msup><mo>−</mo><mn>2</mn><mi>R</mi><mi>r</mi><mo>+</mo><mi>R</mi><mo>=</mo><mn>0</mn></mtd></mtr><mtr><mtd><mi>r</mi><mo>=</mo><mi>R</mi><mo>±</mo><msqrt><mi>R</mi><mo>(</mo><mi>R</mi><mo>−</mo><mn>1</mn><mo>)</mo></msqrt></mtd></mtr></mtable></math>
+      </div></div>
+      <div class="math-box"><h4>Why the larger root is used</h4><div class="math-scroll"><math display="block"><mrow><mi>E</mi><mo>=</mo><mi>R</mi><mo>+</mo><msqrt><mi>R</mi><mo>(</mo><mi>R</mi><mo>−</mo><mn>1</mn><mo>)</mo></msqrt><mo>≥</mo><mn>1</mn></mrow></math></div><p>The smaller root is below 1, whereas the sensitivity strengths are defined away from the null and are at least 1.</p></div>
+      <div class="live-math" id="liveDerivation"></div>
+    </section>
+
+    <section class="math-panel" id="panel-ci" hidden>
+      <div class="math-chain"><div class="chain-label">Optional confidence-limit E-value</div><div class="math-scroll">
+        <math display="block"><mrow><msub><mi>R</mi><mtext>CI</mtext></msub><mo>=</mo><mfenced open="{" close=""><mtable columnalign="left"><mtr><mtd><mi>L</mi><mo>,</mo></mtd><mtd><mi>L</mi><mo>&gt;</mo><mn>1</mn></mtd></mtr><mtr><mtd><mfrac><mn>1</mn><mi>U</mi></mfrac><mo>,</mo></mtd><mtd><mi>U</mi><mo>&lt;</mo><mn>1</mn></mtd></mtr><mtr><mtd><mn>1</mn><mo>,</mo></mtd><mtd><mi>L</mi><mo>≤</mo><mn>1</mn><mo>≤</mo><mi>U</mi></mtd></mtr></mtable></mfenced><mspace width="1em"/><msub><mi>E</mi><mtext>CI</mtext></msub><mo>=</mo><msub><mi>R</mi><mtext>CI</mtext></msub><mo>+</mo><msqrt><msub><mi>R</mi><mtext>CI</mtext></msub><mo>(</mo><msub><mi>R</mi><mtext>CI</mtext></msub><mo>−</mo><mn>1</mn><mo>)</mo></msqrt></mrow></math>
+      </div></div>
+      <div class="math-grid"><div class="math-box"><h4>CI excludes the null</h4><p>Use the confidence limit closest to 1, orient it away from the null, and calculate its E-value.</p></div><div class="math-box"><h4>CI includes the null</h4><p>The confidence-limit E-value is 1 because no unmeasured confounding is needed to move the interval to include the null.</p></div></div>
+      <div class="warning"><b>Lecture convention:</b> the uploaded lecture reports point-estimate E-values only. This confidence-limit calculation is included as an optional advanced extension and is labeled separately throughout.</div>
+      <div class="live-math" id="liveCI"></div>
+    </section>
+
+    <section class="math-panel" id="panel-limits" hidden>
+      <div class="math-grid">
+        <div class="math-box"><h4>What the E-value addresses</h4><p>One sensitivity question: how strong residual unmeasured confounding would need to be, on the risk-ratio scale, to move an adjusted association to the null.</p></div>
+        <div class="math-box"><h4>What it does not prove</h4><p>A large E-value does not establish causation, and a small E-value does not establish no effect. The E-value is a robustness benchmark, not a posterior probability.</p></div>
+        <div class="math-box"><h4>Other threats remain</h4><p>Measurement error, reverse causality, selection bias, poor overlap, model misspecification, interference, and wrong time ordering are not repaired by an E-value.</p></div>
+        <div class="math-box"><h4>Scale matters</h4><p>The standard formula is on the risk-ratio scale. A risk difference cannot be inserted directly into the E-value formula.</p></div>
+      </div>
+      <div class="good-note"><b>Precise reading:</b> an unmeasured confounder with both sensitivity links equal to E could explain away the point estimate. If both links are weaker than E, they cannot fully explain it under the standard bias-factor bound. One link may be below E only if the other is correspondingly stronger.</div>
+    </section>
+  </article>
+
+  <div class="grid-top">
+    <article class="card">
+      <div class="card-head"><div><h3>1. Hidden-confounder graph and current sensitivity parameters</h3><p>Measured covariates X are adjusted for. The two red U arrows represent residual associations above and beyond X.</p></div></div>
+      <div class="legend"><span><i class="line-key" style="border-color:var(--orange)"></i>causal path T → Y</span><span><i class="line-key" style="border-color:var(--teal)"></i>measured adjustment paths</span><span><i class="line-key" style="border-color:var(--danger)"></i>unmeasured-confounding links</span></div>
+      <div class="chart-wrap"><svg id="dagSvg" class="chart" viewBox="0 0 860 420" role="img" aria-label="DAG with measured covariates, hidden confounder, smoking, and CVD"></svg></div>
+      <div class="dag-verdict" id="dagVerdict"></div>
+      <div class="chart-note">Arrow thickness is a pedagogical representation of the selected sensitivity parameters. It is not a formal structural coefficient or a fitted DAG edge weight.</div>
+    </article>
+
+    <article class="card">
+      <div class="card-head"><div><h3>2. Selected-confounder stress test</h3><p>Applies the user-specified hidden-confounder strengths to the point estimate and the confidence interval.</p></div></div>
+      <div class="interpret-body">
+        <div class="interpret-quote" id="interpretQuote"></div>
+        <div class="status-grid" id="statusGrid"></div>
+        <div class="verdict-box" id="explainVerdict"></div>
+      </div>
+    </article>
+  </div>
+
+  <div class="grid-two">
+    <article class="card">
+      <div class="card-head"><div><h3>3. E-value Function</h3><p>This panel follows the lecture note: for risk ratios above 1, E = RR + √{RR(RR − 1)}.</p></div></div>
+      <div class="legend"><span><i class="line-key" style="border-color:var(--accent)"></i>E-value formula</span><span><i class="dot" style="background:var(--accent)"></i>current / selected result</span><span><i class="dot" style="background:var(--orange)"></i>IPW</span><span><i class="dot" style="background:var(--green)"></i>Outcome regression</span><span><i class="dot" style="background:var(--blue)"></i>Doubly robust</span></div>
+      <div class="chart-wrap"><svg id="functionSvg" class="chart" viewBox="0 0 800 410" role="img" aria-label="Lecture E-value function on the risk-ratio scale"></svg></div>
+      <div class="chart-note">The lecture curve is drawn on the RR ≥ 1 scale. If the observed adjusted risk ratio is below 1, the current point is plotted at 1/RR before applying the lecture formula.</div>
+    </article>
+
+    <article class="card">
+      <div class="card-head"><div><h3>4. Bias-factor surface: can the selected U explain away the result?</h3><p>Green cells satisfy B ≥ R; blue cells leave residual association away from the null.</p></div></div>
+      <div class="legend"><span><i class="dot" style="background:var(--green)"></i>strong enough under the bound</span><span><i class="dot" style="background:var(--blue)"></i>not strong enough</span><span><i class="dot" style="background:var(--orange)"></i>current U</span></div>
+      <div class="chart-wrap"><svg id="surfaceSvg" class="chart" viewBox="0 0 800 430" role="img" aria-label="Bias factor surface for exposure-confounder and confounder-outcome strengths"></svg></div>
+      <div class="chart-note">The dashed boundary is B(RR<sub>EU</sub>,RR<sub>UY</sub>) = R. The equal-strength point on this boundary is the E-value.</div>
+    </article>
+  </div>
+
+  <div class="grid-two">
+    <article class="card">
+      <div class="card-head"><div><h3>5. Unequal-strength trade-off</h3><p>Fix one hidden-confounder link and calculate the minimum strength required for the other.</p></div></div>
+      <div class="legend"><span><i class="line-key" style="border-color:var(--danger)"></i>explain-away boundary</span><span><i class="dot" style="background:var(--accent)"></i>equal E-value point</span><span><i class="dot" style="background:var(--orange)"></i>current U</span></div>
+      <div class="chart-wrap"><svg id="tradeoffSvg" class="chart" viewBox="0 0 800 390" role="img" aria-label="Required unequal hidden-confounder strengths"></svg></div>
+      <div class="limit-grid" id="requiredGrid"></div>
+    </article>
+
+    <article class="card">
+      <div class="card-head"><div><h3>6. Point estimate and confidence-limit robustness</h3><p>The lecture's primary E-value uses the point estimate; the CI E-value is displayed as an optional extension.</p></div></div>
+      <div class="chart-wrap"><svg id="ciSvg" class="chart" viewBox="0 0 800 330" role="img" aria-label="Adjusted risk ratio confidence interval and corresponding E-values"></svg></div>
+      <div class="limit-grid" id="ciCards"></div>
+      <div class="chart-note" id="ciNote"></div>
+    </article>
+  </div>
+
+  <div class="grid-two">
+    <article class="card">
+      <div class="card-head"><div><h3>7. Three adjusted methods from the lecture</h3><p>Click a row or point to load that method into the complete sensitivity dashboard.</p></div></div>
+      <div class="chart-wrap"><svg id="methodsSvg" class="chart" viewBox="0 0 800 360" role="img" aria-label="IPW, outcome regression, and doubly robust risk ratios and E-values"></svg></div>
+      <div class="method-table"><table><thead><tr><th>Method</th><th>Adjusted RR</th><th>95% CI</th><th>p-value</th><th>Point E-value</th><th>CI E-value</th></tr></thead><tbody id="methodBody"></tbody></table></div>
+    </article>
+
+    <article class="card">
+      <div class="card-head"><div><h3>8. Statistical significance and causal sensitivity answer different questions</h3><p>Neither number replaces the other.</p></div></div>
+      <div class="two-question">
+        <div class="question-card p"><h4>p-value / confidence interval</h4><p><strong>Sampling question:</strong> Is the adjusted association statistically distinguishable from RR = 1 under the fitted analysis and its uncertainty procedure?</p></div>
+        <div class="question-card e"><h4>E-value</h4><p><strong>Sensitivity question:</strong> How strong would residual unmeasured confounding need to be to move the adjusted association to the null?</p></div>
+      </div>
+      <div class="chart-wrap"><svg id="questionsSvg" class="chart" viewBox="0 0 800 270" role="img" aria-label="Difference between sampling uncertainty and unmeasured confounding sensitivity"></svg></div>
+      <div class="chart-note">A small p-value does not establish exchangeability. A large E-value does not establish correct measurement, overlap, model specification, or temporal ordering.</div>
+    </article>
+  </div>
+
+  <article class="card full-card">
+    <div class="card-head"><div><h3>9. What the E-value does—and does not—address</h3><p>Use the E-value as one component of a broader sensitivity analysis, not as a universal causal-validity score.</p></div></div>
+    <div class="limitations">
+      <div class="limitation"><b>Addresses</b><span>Residual unmeasured confounding strong enough to move an adjusted RR toward the null.</span></div>
+      <div class="limitation"><b>Does not repair</b><span>Misclassified smoking, mismeasured CVD, missing outcomes, or other measurement error.</span></div>
+      <div class="limitation"><b>Does not repair</b><span>Poor treatment overlap, extreme weights, unsupported extrapolation, or model misspecification.</span></div>
+      <div class="limitation"><b>Does not repair</b><span>Reverse causation, incorrect time ordering, selection mechanisms, or interference.</span></div>
+      <div class="limitation"><b>Needs context</b><span>Compare the benchmark with scientifically plausible confounders and with measured-covariate associations where possible.</span></div>
+      <div class="limitation"><b>Does not prove causation</b><span>It quantifies robustness to one sensitivity model; it does not verify all identifying assumptions.</span></div>
+    </div>
+  </article>
+
+  <article class="card table-card">
+    <details>
+      <summary>Export vector graphics and current sensitivity summary</summary>
+      <div class="table-tools"><button data-svg="dagSvg">Save DAG as SVG</button><button data-svg="functionSvg">Save E-value curve as SVG</button><button data-svg="surfaceSvg">Save bias surface as SVG</button><button data-svg="tradeoffSvg">Save trade-off as SVG</button><button data-svg="methodsSvg">Save methods plot as SVG</button><button id="exportSummary">Export summary CSV</button></div>
+    </details>
+  </article>
+</section>
+</main>
+<div class="tooltip" id="tooltip"></div>
+<footer class="footer"><b>Se Yoon Lee, Ph.D.</b> • This self-contained teaching application works entirely in the browser. The lecture presets reproduce the adjusted risk-ratio results reported in the accompanying Lecture 6 material. The confidence-limit E-value is included as a separately labeled advanced extension.</footer>
+
+<script>
+(function(){
+'use strict';
+const $=id=>document.getElementById(id);
+const NS='http://www.w3.org/2000/svg';
+const COLORS={ink:'#162033',muted:'#667085',grid:'#E7ECF2',accent:'#7057E8',orange:'#E56B2F',blue:'#2F6EA5',green:'#208A62',danger:'#C23B3B',amber:'#B66A00',teal:'#167C86'};
+const METHODS={
+  ipw:{label:'IPW',rr:1.341,lo:1.17,hi:1.58,p:'<0.001',displayRR:'1.34'},
+  or:{label:'Outcome regression',rr:1.4045,lo:1.22,hi:1.64,p:'<0.001',displayRR:'1.40'},
+  dr:{label:'Doubly robust',rr:1.379,lo:1.21,hi:1.63,p:'<0.001',displayRR:'1.38'},
+  protective:{label:'Protective example',rr:.70,lo:.55,hi:.89,p:'0.018',displayRR:'0.70'},
+  near:{label:'CI crosses null',rr:1.15,lo:.94,hi:1.41,p:'0.174',displayRR:'1.15'},
+  strong:{label:'Stronger association',rr:2.00,lo:1.55,hi:2.58,p:'<0.001',displayRR:'2.00'}
+};
+const state={preset:'ipw',rr:METHODS.ipw.rr,lo:METHODS.ipw.lo,hi:METHODS.ipw.hi,eu:1.6,uy:1.6,showCi:true,showMethods:true};
+
+function clamp(x,a,b){return Math.max(a,Math.min(b,x))}
+function fmt(x,d=2){return Number.isFinite(x)?x.toFixed(d):'∞'}
+function pct(x,d=1){return Number.isFinite(x)?(100*x).toFixed(d)+'%':'—'}
+function logitScaleToRR(x){return Math.exp(x)}
+function rrToLogitScale(rr){return Math.log(clamp(rr,.25,4))}
+function evalue(rr){if(!(rr>0))return NaN;const r=Math.max(rr,1/rr);return r<=1?1:r+Math.sqrt(r*(r-1))}
+function awayRR(rr){return rr>=1?rr:1/rr}
+function ciAway(lo,hi){if(!(lo>0&&hi>0&&lo<=hi))return NaN;if(lo>1)return lo;if(hi<1)return 1/hi;return 1}
+function ciEvalue(lo,hi){const r=ciAway(lo,hi);return Number.isFinite(r)?(r<=1?1:r+Math.sqrt(r*(r-1))):NaN}
+function biasFactor(a,b){return a*b/(a+b-1)}
+function requiredOther(fixed,r){if(r<=1)return 1;if(fixed<=r+1e-10)return Infinity;return r*(fixed-1)/(fixed-r)}
+function selectedMethod(){return METHODS[state.preset]||null}
+function signDirection(rr){return rr>1?'harmful':rr<1?'protective':'null'}
+function signedRRLabel(rr){return rr>=1?fmt(rr,2):fmt(rr,2)+' (inverse '+fmt(1/rr,2)+')'}
+function niceP(){const m=selectedMethod();if(m&&Math.abs(state.rr-m.rr)<1e-5&&Math.abs(state.lo-m.lo)<1e-5&&Math.abs(state.hi-m.hi)<1e-5)return m.p;if(!(state.lo>0&&state.hi>state.lo&&state.rr>0))return '—';const se=(Math.log(state.hi)-Math.log(state.lo))/(2*1.959963984540054);if(!(se>0))return '—';const z=Math.abs(Math.log(state.rr)/se),p=2*(1-normalCdf(z));return p<.001?'<0.001':p.toFixed(3)+' approx.'}
+function normalCdf(x){const t=1/(1+.2316419*Math.abs(x)),d=.3989423*Math.exp(-x*x/2),p=1-d*t*(.319381530+t*(-.356563782+t*(1.781477937+t*(-1.821255978+t*1.330274429))));return x>=0?p:1-p}
+function svgText(x,y,text,attrs=''){return '<text x="'+x+'" y="'+y+'" '+attrs+'>'+escapeHtml(String(text))+'</text>'}
+function escapeHtml(s){return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
+function sx(v,lo,hi,L,R){return L+(v-lo)/(hi-lo)*(R-L)}
+function sy(v,lo,hi,T,B){return B-(v-lo)/(hi-lo)*(B-T)}
+function axisTicks(lo,hi,n=5){const out=[];for(let i=0;i<=n;i++)out.push(lo+(hi-lo)*i/n);return out}
+function showTip(e,html){const t=$('tooltip');t.innerHTML=html;t.style.opacity=1;moveTip(e)}
+function moveTip(e){const t=$('tooltip');t.style.left=Math.min(innerWidth-290,e.clientX+12)+'px';t.style.top=Math.min(innerHeight-150,e.clientY+12)+'px'}
+function hideTip(){$('tooltip').style.opacity=0}
+
+function readControls(){
+  state.rr=logitScaleToRR(+$('rrRange').value);state.lo=+$('ciLower').value;state.hi=+$('ciUpper').value;state.eu=+$('euRange').value;state.uy=+$('uyRange').value;state.showCi=$('showCiE').checked;state.showMethods=$('showMethodPoints').checked;
+}
+function updateControls(){
+  $('rrRange').value=rrToLogitScale(state.rr);$('ciLower').value=state.lo.toFixed(2);$('ciUpper').value=state.hi.toFixed(2);$('euRange').value=state.eu;$('uyRange').value=state.uy;$('showCiE').checked=state.showCi;$('showMethodPoints').checked=state.showMethods;updateLabels();
+}
+function updateLabels(){
+  $('rrValue').textContent=fmt(state.rr,3);$('euValue').textContent=fmt(state.eu,2);$('uyValue').textContent=fmt(state.uy,2);
+  const valid=state.lo>0&&state.hi>0&&state.lo<=state.hi,contains=valid&&state.lo<=state.rr&&state.rr<=state.hi;
+  $('ciValidation').innerHTML=!valid?'<b style="color:#A52D2D">Invalid CI:</b> require 0 &lt; lower ≤ upper.':!contains?'<b style="color:#A52D2D">Warning:</b> the point estimate is outside the entered interval.':'The confidence interval is valid. The lecture\'s primary E-value is calculated from the point estimate.';
+}
+function setPreset(name){const m=METHODS[name];if(!m)return;state.preset=name;state.rr=m.rr;state.lo=m.lo;state.hi=m.hi;document.querySelectorAll('[data-preset]').forEach(b=>b.classList.toggle('active',b.dataset.preset===name));updateControls();renderAll()}
+function markCustom(){state.preset='custom';document.querySelectorAll('[data-preset]').forEach(b=>b.classList.remove('active'))}
+
+function metrics(){
+  const R=awayRR(state.rr),E=evalue(state.rr),ECI=ciEvalue(state.lo,state.hi),B=biasFactor(state.eu,state.uy),residual=R/B,enough=B>=R-1e-10;
+  const items=[
+    ['Adjusted RR',fmt(state.rr,3),signDirection(state.rr)+' association'],
+    ['95% CI',state.lo>0&&state.hi>=state.lo?'['+fmt(state.lo,2)+', '+fmt(state.hi,2)+']':'invalid','bootstrap interval in lecture'],
+    ['Point E-value',fmt(E,2),'equal-strength threshold for point estimate'],
+    ['CI E-value',state.showCi?(Number.isFinite(ECI)?fmt(ECI,2):'invalid'):'hidden',!Number.isFinite(ECI)?'check CI limits':ECI===1?'CI already includes RR = 1':'threshold for closest confidence limit'],
+    ['Selected bias factor B',fmt(B,2),'required point threshold R = '+fmt(R,2)],
+    ['Residual association R/B',fmt(residual,2),enough?'≤ 1: null can be reached':'> 1: remains away from null']
+  ];
+  $('metricStrip').innerHTML=items.map((x,i)=>'<div class="metric" style="border-color:'+(i===5?(enough?'#F0BBBB':'#A9DCC8'):'var(--line)')+'"><div class="k">'+x[0]+'</div><div class="v" style="color:'+(i===5?(enough?'var(--danger)':'var(--green)'):'var(--ink)')+'">'+x[1]+'</div><div class="sub">'+x[2]+'</div></div>').join('');
+
+  const status=$('selectedUStatus');
+  status.className='selected-u-status '+(enough?'bad':'good');
+  status.innerHTML='<div class="selected-u-icon">'+(enough?'!':'✓')+'</div><div><div class="selected-u-title">'+(enough?'Selected U is sufficient to move the point estimate to RR = 1 under the bias bound.':'Selected U is insufficient to move the point estimate to RR = 1 under the bias bound.')+'</div><div class="selected-u-detail"><span class="selected-u-equation">B = '+fmt(B,2)+'</span><span class="selected-u-equation">R = '+fmt(R,2)+'</span><span class="selected-u-equation">R/B = '+fmt(residual,2)+'</span> '+(enough?'Because B ≥ R, the selected sensitivity parameters are large enough that the adjusted association could be fully explained by unmeasured confounding in a compatible worst-case configuration.':'Because B < R, the selected sensitivity parameters can reduce the association only to R/B = '+fmt(residual,2)+', which remains away from the null. This conclusion applies only to the selected U strengths; it does not prove absence of other unmeasured confounding.')+'</div></div>';
+}
+
+function renderMath(){
+  const R=awayRR(state.rr),E=evalue(state.rr),B=biasFactor(state.eu,state.uy),rem=R/B,ECI=ciEvalue(state.lo,state.hi),rCI=ciAway(state.lo,state.hi),reqUY=requiredOther(state.eu,R),reqEU=requiredOther(state.uy,R);
+  let def='<b>Current lecture-style substitution</b><div class="live-chips">';
+  if(state.rr>=1){
+    def+='<span class="live-chip">RR = RR<sub>obs</sub> = '+fmt(state.rr,3)+'</span>';
+  }else{
+    def+='<span class="live-chip">RR<sub>obs</sub> = '+fmt(state.rr,3)+'</span><span class="live-chip">Because RR<sub>obs</sub> &lt; 1, use RR = 1/RR<sub>obs</sub> = '+fmt(R,3)+'</span>';
+  }
+  def+='<span class="live-chip">E = '+fmt(R,3)+' + √{'+fmt(R,3)+'('+fmt(R,3)+'−1)} = '+fmt(E,3)+'</span></div>';
+  $('liveDefinition').innerHTML=def;
+  $('liveBias').innerHTML='<b>Current two-link calculation</b><div class="live-chips"><span class="live-chip">RR<sub>EU</sub> = '+fmt(state.eu,2)+'</span><span class="live-chip">RR<sub>UY</sub> = '+fmt(state.uy,2)+'</span><span class="live-chip">B = '+fmt(B,3)+'</span><span class="live-chip">R/B = '+fmt(rem,3)+'</span><span class="live-chip">'+(B>=R?'B ≥ R: sufficient under bound':'B < R: insufficient under bound')+'</span></div>';
+  $('liveDerivation').innerHTML='<b>Equal-strength solution for this result</b><div class="live-chips"><span class="live-chip">r²/(2r−1) = '+fmt(R,3)+'</span><span class="live-chip">r = '+fmt(E,3)+'</span><span class="live-chip">B(E,E) = '+fmt(biasFactor(E,E),3)+'</span></div>';
+  $('liveCI').innerHTML='<b>Current confidence-limit calculation</b><div class="live-chips"><span class="live-chip">CI = ['+fmt(state.lo,2)+', '+fmt(state.hi,2)+']</span><span class="live-chip">R<sub>CI</sub> = '+fmt(rCI,3)+'</span><span class="live-chip">E<sub>CI</sub> = '+fmt(ECI,3)+'</span><span class="live-chip">'+(ECI===1?'CI already includes RR = 1':'CI excludes RR = 1')+'</span></div>';
+}
+
+
+function analysisLabel(){
+  const m=selectedMethod();
+  return m?m.label:'Custom adjusted analysis';
+}
+function associationDescription(rr){
+  if(rr>1+1e-10)return{short:'+'+fmt((rr-1)*100,1)+'% risk',long:'the adjusted CVD risk among smokers was estimated to be '+fmt((rr-1)*100,1)+'% higher than among non-smokers'};
+  if(rr<1-1e-10)return{short:'−'+fmt((1-rr)*100,1)+'% risk',long:'the adjusted CVD risk among smokers was estimated to be '+fmt((1-rr)*100,1)+'% lower than among non-smokers'};
+  return{short:'no relative difference',long:'the adjusted risk ratio was at the null value of 1'};
+}
+function ciExcludesNull(lo,hi){return lo>1||hi<1}
+function ciClosestAfterBias(lo,hi,B){
+  if(!(lo>0&&hi>0&&lo<=hi))return NaN;
+  if(lo<=1&&1<=hi)return 1;
+  return lo>1?lo/B:hi*B;
+}
+function pointAfterBias(rr,B){return rr>=1?rr/B:rr*B}
+function contextualBenchmark(E){
+  if(E<=1.000001)return 'The estimate is at the null, so the minimum E-value of 1 is expected.';
+  if(E<2)return 'The point E-value is below 2. Residual associations of less than two-fold with both exposure and outcome could be sufficient under the bound, so comparatively modest unmeasured confounding may explain away the point estimate.';
+  if(E<3)return 'The point E-value lies between 2 and 3. The original E-value paper notes that two- to three-fold associations occur in biomedical and social research but are not especially common, and a single omitted factor associated with both exposure and outcome at that magnitude would generally be less common. This remains a contextual—not universal—judgment.';
+  return 'The point E-value is at least 3, so equal residual associations of three-fold or more would be required to explain away the point estimate. This is a comparatively demanding benchmark, but it still does not prove causality and must be compared with the actual scientific setting.';
+}
+function reportStatement(){
+  const label=analysisLabel(),rr=state.rr,lo=state.lo,hi=state.hi,E=evalue(rr),ECI=ciEvalue(lo,hi),valid=lo>0&&hi>0&&lo<=hi,desc=associationDescription(rr),candidate=$('candidateU').value;
+  const ciTxt=valid?' (95% CI '+fmt(lo,2)+' to '+fmt(hi,2)+')':'';
+  let s=label+' estimated an adjusted risk ratio of '+fmt(rr,2)+ciTxt+', indicating that '+desc.long+'. ';
+  if(rr===1){
+    s+='The point-estimate E-value is 1 because the estimate is already at the null. ';
+  }else{
+    s+='The point-estimate E-value is '+fmt(E,2)+': under the standard E-value bound, an unmeasured confounder associated with both smoking and CVD by risk ratios of '+fmt(E,2)+'-fold each, above and beyond the measured covariates, could explain away the point estimate; if both associations were weaker than '+fmt(E,2)+'-fold, they could not do so, although one association may be weaker if the other is stronger. ';
+  }
+  if(valid){
+    if(lo<=1&&1<=hi){
+      s+='The confidence interval already includes the null, so the confidence-limit E-value is 1 and no unmeasured confounding is needed to make the interval compatible with no association. ';
+    }else{
+      s+='The confidence-limit E-value is '+fmt(ECI,2)+', meaning that equal residual associations of '+fmt(ECI,2)+'-fold each could move the confidence limit closest to the null to include RR = 1; if both were weaker, they could not do so under the bound. ';
+    }
+  }
+  s+='These E-values quantify robustness to residual unmeasured confounding only. Their plausibility depends on the measured covariates, the candidate omitted factor, and subject-matter knowledge. They do not establish causality or address measurement error, selection bias, missing data, poor overlap, model misspecification, or reverse causation.';
+  return s;
+}
+function renderAnalysisInterpretation(){
+  const rr=state.rr,lo=state.lo,hi=state.hi,R=awayRR(rr),E=evalue(rr),ECI=ciEvalue(lo,hi),Rci=ciAway(lo,hi),B=biasFactor(state.eu,state.uy),valid=lo>0&&hi>0&&lo<=hi,excludes=valid&&ciExcludesNull(lo,hi),p=niceP(),desc=associationDescription(rr),candidate=$('candidateU').value;
+  const pointEnough=B>=R-1e-10,ciEnough=valid&&(Rci===1||B>=Rci-1e-10),pointRatio=B/R,ciRatio=!valid?0:(Rci===1?1:B/Rci);
+  const pointMoved=pointAfterBias(rr,B),ciMoved=ciClosestAfterBias(lo,hi,B);
+  const methods=['ipw','or','dr'].map(k=>METHODS[k]),rrMin=Math.min(...methods.map(m=>m.rr)),rrMax=Math.max(...methods.map(m=>m.rr)),eMin=Math.min(...methods.map(m=>evalue(m.rr))),eMax=Math.max(...methods.map(m=>evalue(m.rr)));
+  const selected=analysisLabel();
+
+  const stats=[
+    ['Adjusted association','RR '+fmt(rr,2),'association',desc.short],
+    ['Sampling uncertainty',valid?'['+fmt(lo,2)+', '+fmt(hi,2)+']':'Invalid CI','association',valid?(excludes?'excludes RR = 1':'includes RR = 1'):'check limits'],
+    ['Point E-value',fmt(E,2),'point','point-estimate robustness'],
+    ['CI E-value',state.showCi?fmt(ECI,2):'hidden','ci',Rci===1?'CI already includes null':'closest limit to null'],
+    ['Selected U bias factor','B = '+fmt(B,2),'candidate',pointEnough?'sufficient to reach the null':'insufficient to reach the null'],
+    ['Across lecture methods','RR '+fmt(rrMin,2)+'–'+fmt(rrMax,2),'','E-values '+fmt(eMin,2)+'–'+fmt(eMax,2)]
+  ];
+  $('analysisSummaryGrid').innerHTML=stats.map(x=>'<div class="analysis-stat '+x[2]+'"><div class="name">'+x[0]+'</div><div class="number">'+x[1]+'</div><div class="detail">'+x[3]+'</div></div>').join('');
+
+  let samplingText;
+  if(!valid)samplingText='The entered confidence interval is invalid, so sampling-uncertainty and confidence-limit interpretations should not be used until the limits are corrected.';
+  else if(excludes)samplingText='The 95% confidence interval '+fmt(lo,2)+' to '+fmt(hi,2)+' excludes RR = 1, and the displayed p-value is '+p+'. Under the fitted analysis and its uncertainty procedure, the adjusted association is statistically distinguishable from the null. This addresses sampling uncertainty, not residual confounding.';
+  else samplingText='The 95% confidence interval '+fmt(lo,2)+' to '+fmt(hi,2)+' includes RR = 1, so the data are statistically compatible with no association under the fitted analysis. The confidence-limit E-value is therefore 1; no unmeasured confounding is required to make the interval include the null.';
+
+  let pointText;
+  if(E===1)pointText='The point estimate is at RR = 1, so its E-value is 1. There is no adjusted association away from the null to explain away.';
+  else pointText='The point E-value of '+fmt(E,2)+' means that equal residual associations of '+fmt(E,2)+'-fold with smoking and with CVD—above and beyond the measured covariates—could explain away the point estimate. If both links were below '+fmt(E,2)+', they could not fully explain it under the standard bound. This does not require the two links to be equal: one may be smaller only if the other is larger.';
+
+  let ciText;
+  if(!valid)ciText='A confidence-limit E-value cannot be interpreted because the confidence interval is invalid.';
+  else if(Rci===1)ciText='Because the confidence interval already includes RR = 1, the confidence-limit E-value is 1. The interval is already statistically compatible with the null before considering hidden confounding.';
+  else ciText='The confidence-limit E-value is '+fmt(ECI,2)+'. Thus, equal residual associations of '+fmt(ECI,2)+'-fold each could move the confidence limit closest to the null to include RR = 1. This is a lower robustness threshold than the point E-value, which is expected because it incorporates sampling uncertainty.';
+
+  let candidateText='The strengths shown for '+candidate+' are hypothetical inputs, not estimated properties of that factor. They produce a bias factor of '+fmt(B,2)+'. ';
+  if(pointEnough)candidateText+='Under the worst-case bound, this is sufficient to move the point estimate to RR = 1. Thus the selected sensitivity scenario is compatible with fully explaining the adjusted association. This is a possibility statement; it does not imply that such a confounder exists or that the causal effect is actually null.';
+  else candidateText+='Under the worst-case bound, this is insufficient to move the point estimate to RR = 1. The residual oriented association is R/B = '+fmt(pointRatio>0?1/pointRatio:NaN,2)+', and the corresponding point estimate moved toward the null remains approximately RR = '+fmt(pointMoved,2)+'. This does not establish validity against stronger or differently structured unmeasured confounding.';
+  if(valid){
+    if(Rci===1)candidateText+=' The confidence interval already includes the null.';
+    else if(ciEnough)candidateText+=' However, these strengths are sufficient to move the confidence interval to include the null.';
+    else candidateText+=' They are also insufficient to move the confidence interval to the null; its closest limit would remain approximately '+fmt(ciMoved,2)+'.';
+  }
+
+  const methodText='The three lecture analyses are closely aligned: adjusted RRs range from '+fmt(rrMin,2)+' to '+fmt(rrMax,2)+', with point E-values from '+fmt(eMin,2)+' to '+fmt(eMax,2)+'. This agreement suggests that the substantive sensitivity conclusion is not being driven by the choice among IPW, outcome regression, and doubly robust estimation. It does not rule out a common omitted confounder or other bias shared by all three methods.';
+  const contextText=contextualBenchmark(E)+' Best practice is to compare the E-value with plausible residual associations and, where possible, with the strengths of measured covariates if they had been omitted. The amount and quality of measured adjustment matter: the same numerical E-value is more reassuring after rich control of strong confounders than after minimal adjustment.';
+
+  const blocks=[
+    ['Effect estimate and sampling', '<strong>'+selected+':</strong> '+desc.long+'. '+samplingText, ''],
+    ['Point-estimate E-value threshold', pointText, 'point'],
+    ['Confidence-limit E-value threshold', ciText, 'ci'],
+    ['Selected candidate-confounder scenario', candidateText, 'candidate'],
+    ['Agreement across analytic methods', methodText, ''],
+    ['Contextual scientific judgment', contextText, 'context']
+  ];
+  $('analysisSectionGrid').innerHTML=blocks.map(x=>'<div class="analysis-block '+x[2]+'"><h4>'+x[0]+'</h4><p>'+x[1]+'</p></div>').join('');
+
+  const pointPct=Math.max(0,Math.min(100,pointRatio*100)),ciPct=Math.max(0,Math.min(100,ciRatio*100));
+  const ciThresholdText=!valid?'Invalid confidence interval':Rci===1?'No additional confounding required':('B = '+fmt(B,2)+' versus required '+fmt(Rci,2)+' ('+fmt(ciRatio*100,0)+'%)');
+  $('analysisThresholdPanel').innerHTML='<div class="threshold-title"><strong>Selected U compared with the required explain-away thresholds</strong><span>Ratio of selected bias factor B to required threshold</span></div>'+
+    '<div class="threshold-row"><div class="threshold-label">Point estimate</div><div class="threshold-track"><div class="threshold-fill point" style="width:'+pointPct+'%"></div></div><div class="threshold-value">B = '+fmt(B,2)+' vs required '+fmt(R,2)+' ('+fmt(pointRatio*100,0)+'%)</div></div>'+
+    '<div class="threshold-row"><div class="threshold-label">CI limit closest to null</div><div class="threshold-track"><div class="threshold-fill ci" style="width:'+ciPct+'%"></div></div><div class="threshold-value">'+ciThresholdText+'</div></div>';
+
+  const report=reportStatement();state.reportText=report;
+  $('reportParagraph').innerHTML=escapeHtml(report).replace(/\. /g,'.<span aria-hidden="true"> </span>');
+  $('analysisCautions').innerHTML='<div class="analysis-caution"><b>Possibility, not inevitability</b>An omitted factor with the stated bounds could explain away the association in some compatible configurations; its existence would not guarantee that it does.</div><div class="analysis-caution"><b>No universal cutoff</b>E-values are continuous and context-dependent. Avoid declaring a result “robust” solely because the E-value exceeds an arbitrary number.</div><div class="analysis-caution"><b>Other biases remain</b>The E-value does not address outcome or exposure misclassification, selection bias, missing data, selective reporting, poor overlap, model error, or reverse causation.</div>';
+}
+function copyCurrentInterpretation(){
+  const txt=state.reportText||reportStatement(),status=$('copyStatus');
+  const done=()=>{status.textContent='Copied';setTimeout(()=>{status.textContent=''},1800)};
+  if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(txt).then(done).catch(()=>fallbackCopy(txt,done));}
+  else fallbackCopy(txt,done);
+}
+function fallbackCopy(txt,done){const ta=document.createElement('textarea');ta.value=txt;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();try{document.execCommand('copy');done()}catch(e){}ta.remove()}
+
+function renderDag(){
+  const svg=$('dagSvg'),a=state.eu,b=state.uy,R=awayRR(state.rr),B=biasFactor(a,b),enough=B>=R;
+  const nodes={X:[145,235],T:[400,235],Y:[675,235],U:[400,80]};
+  const thick=x=>1.5+3.5*Math.log(x)/Math.log(8);
+  let s='<defs><marker id="aTeal" markerWidth="13" markerHeight="11" refX="11" refY="5.5" orient="auto"><path d="M0,0 L13,5.5 L0,11z" fill="'+COLORS.teal+'"/></marker><marker id="aOrange" markerWidth="13" markerHeight="11" refX="11" refY="5.5" orient="auto"><path d="M0,0 L13,5.5 L0,11z" fill="'+COLORS.orange+'"/></marker><marker id="aRed" markerWidth="13" markerHeight="11" refX="11" refY="5.5" orient="auto"><path d="M0,0 L13,5.5 L0,11z" fill="'+COLORS.danger+'"/></marker></defs><style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="860" height="420" fill="#fff"/>';
+  s+='<path d="M195,225 C260,190 315,195 345,220" fill="none" stroke="'+COLORS.teal+'" stroke-width="2.4" marker-end="url(#aTeal)"/>';
+  s+='<path d="M190,250 C325,355 545,350 620,252" fill="none" stroke="'+COLORS.teal+'" stroke-width="2.4" marker-end="url(#aTeal)"/>';
+  s+='<path d="M455,235 L615,235" fill="none" stroke="'+COLORS.orange+'" stroke-width="3" marker-end="url(#aOrange)"/>';
+  s+='<path d="M375,125 C360,160 365,185 385,192" fill="none" stroke="'+COLORS.danger+'" stroke-width="'+thick(a)+'" marker-end="url(#aRed)"/>';
+  s+='<path d="M425,125 C485,145 570,165 625,205" fill="none" stroke="'+COLORS.danger+'" stroke-width="'+thick(b)+'" marker-end="url(#aRed)"/>';
+  const node=(k,title,sub,color,fill)=>{const [x,y]=nodes[k];s+='<circle cx="'+x+'" cy="'+y+'" r="49" fill="#fff" stroke="'+color+'" stroke-width="3"/><circle cx="'+x+'" cy="'+y+'" r="41" fill="'+fill+'"/>'+svgText(x,y-3,title,'text-anchor="middle" font-size="21" font-weight="900" fill="'+color+'"')+svgText(x,y+17,sub,'text-anchor="middle" font-size="9" font-weight="750" fill="'+COLORS.muted+'"')};
+  node('X','X','measured covariates',COLORS.teal,'#EAF7F7');node('T','T','smoking',COLORS.orange,'#FFF1E8');node('Y','Y','CVD outcome',COLORS.ink,'#F0F2F5');node('U','U','unmeasured factor',COLORS.danger,'#FFF0F1');
+  s+=svgText(337,156,'RR_EU = '+fmt(a,2),'text-anchor="end" font-size="11" font-weight="850" fill="'+COLORS.danger+'"')+svgText(535,151,'RR_UY = '+fmt(b,2),'text-anchor="middle" font-size="11" font-weight="850" fill="'+COLORS.danger+'"');
+  s+=svgText(430,384,'The E-value concerns the two U links after adjustment for X.','text-anchor="middle" font-size="11" font-weight="750" fill="'+COLORS.muted+'"');
+  svg.innerHTML=s;
+  const candidate=$('candidateU').value;
+  const v=$('dagVerdict');v.className='dag-verdict '+(enough?'bad':'good');v.innerHTML='<b>'+candidate+':</b> the selected links generate bias factor B = '+fmt(B,2)+', compared with the required point-estimate threshold R = '+fmt(R,2)+'. <b>'+(enough?'Because B ≥ R, the selected sensitivity parameters are sufficient under the bound to move the point estimate to RR = 1.':'Because B < R, the selected sensitivity parameters are insufficient under the bound; the residual oriented association is R/B = '+fmt(R/B,2)+'.')+'</b>';
+}
+
+function renderInterpretation(){
+  const R=awayRR(state.rr),E=evalue(state.rr),B=biasFactor(state.eu,state.uy),rem=R/B,enough=B>=R,dir=signDirection(state.rr),candidate=$('candidateU').value,reqUY=requiredOther(state.eu,R),reqEU=requiredOther(state.uy,R),valid=state.lo>0&&state.hi>0&&state.lo<=state.hi,Rci=valid?ciAway(state.lo,state.hi):NaN,ECI=valid?ciEvalue(state.lo,state.hi):NaN,ciEnough=valid&&(Rci===1||B>=Rci);
+  const orientation=dir==='protective'?'Because the observed RR is protective, the lecture formula is applied to 1/RR = '+fmt(R,2)+'. ':dir==='harmful'?'':'The observed RR is at the null. ';
+  let quote='<strong>'+candidate+' is a hypothetical candidate, not an estimated confounder.</strong> '+orientation+'The adjusted RR is <strong>'+fmt(state.rr,2)+'</strong>, the point E-value is <strong>'+fmt(E,2)+'</strong>, and '+(!valid?'the entered confidence interval is invalid':Rci===1?'the confidence interval already includes the null':'the confidence-limit E-value is <strong>'+fmt(ECI,2)+'</strong>')+'. The selected strengths RR<sub>EU</sub> = '+fmt(state.eu,2)+' and RR<sub>UY</sub> = '+fmt(state.uy,2)+' imply bias factor B = '+fmt(B,2)+'.';
+  $('interpretQuote').innerHTML=quote;
+  $('statusGrid').innerHTML='<div class="status-box"><div class="name">Current RR_EU</div><div class="number">'+fmt(state.eu,2)+'</div><div class="detail">Required RR_UY for point: '+(Number.isFinite(reqUY)?fmt(reqUY,2):'no finite value')+'</div></div><div class="status-box"><div class="name">Current RR_UY</div><div class="number">'+fmt(state.uy,2)+'</div><div class="detail">Required RR_EU for point: '+(Number.isFinite(reqEU)?fmt(reqEU,2):'no finite value')+'</div></div><div class="status-box"><div class="name">Point threshold</div><div class="number">'+fmt(R,2)+'</div><div class="detail">Selected B / threshold = '+fmt(B/R,2)+'</div></div><div class="status-box"><div class="name">CI threshold</div><div class="number">'+(valid?fmt(Rci,2):'invalid')+'</div><div class="detail">'+(!valid?'Correct the interval limits':Rci===1?'CI already includes null':'Selected B / threshold = '+fmt(B/Rci,2))+'</div></div>';
+  const pointSentence=enough?'The selected U scenario is sufficient under the bound to move the point estimate to RR = 1.':'The selected U scenario is insufficient under the bound to move the point estimate to RR = 1; the residual oriented association is R/B = '+fmt(rem,2)+'.';
+  const ciSentence=!valid?' The confidence-interval stress test is unavailable until valid limits are entered.':Rci===1?' The confidence interval already includes RR = 1, so no hidden confounding is required for that inferential conclusion.':ciEnough?' The selected pair is nevertheless sufficient to move the confidence interval to include RR = 1.':' The selected pair is also insufficient to move the confidence interval to include RR = 1.';
+  const box=$('explainVerdict');box.className='verdict-box '+(enough?'bad':ciEnough?'warn':'good');box.innerHTML='<b>'+pointSentence+'</b>'+ciSentence+' These statements concern what is possible under the worst-case bias bound; they do not establish that '+candidate+' actually has these associations or would necessarily create this amount of bias.';
+}
+
+function renderFunction(){
+  const svg=$('functionSvg'),W=800,H=410,L=72,Rx=765,T=30,B=330;
+  const currentKey=['ipw','or','dr'].includes(state.preset)?state.preset:null;
+  const methodKeys=['ipw','or','dr'];
+  const methodMax=Math.max(...methodKeys.map(k=>METHODS[k].rr));
+  const Rcur=awayRR(state.rr),Ecur=evalue(state.rr);
+  const xhi=Math.max(2.0,methodMax+0.20,Rcur+0.28),yhi=Math.max(3.7,evalue(xhi)+0.18),xlo=1,ylo=1;
+  const currColor=COLORS.accent;
+  const methodColor={ipw:COLORS.orange,or:COLORS.green,dr:COLORS.blue};
+  const halo='style="paint-order:stroke;stroke:#fff;stroke-width:4.5;stroke-linejoin:round"';
+  function lineStep(max){return max<=2.8?.2:.5}
+  function tickSeq(max,step){const arr=[];for(let v=1;v<=max+1e-9;v+=step)arr.push(+v.toFixed(2));if(arr[arr.length-1]<max-.08)arr.push(+max.toFixed(2));return arr}
+  function yTicks(max){const arr=[];for(let v=1;v<=max+1e-9;v+=.5)arr.push(+v.toFixed(1));return arr}
+  function multiText(x,y,lines,anchor,color,size=12){let out='<text x="'+x+'" y="'+y+'" text-anchor="'+anchor+'" font-size="'+size+'" font-weight="850" fill="'+color+'" '+halo+'>';lines.forEach((ln,i)=>{out+='<tspan x="'+x+'" dy="'+(i===0?0:14)+'">'+escapeHtml(String(ln))+'</tspan>'});out+='</text>';return out}
+  function leader(px,py,lx,ly,anchor,color){const tx=anchor==='end'?lx-6:anchor==='middle'?lx:lx+6;return '<line x1="'+px+'" y1="'+py+'" x2="'+tx+'" y2="'+(ly+4)+'" stroke="'+color+'" stroke-width="1.8" stroke-linecap="round"/>'}
+  let s='<style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="800" height="410" fill="#fff"/>';
+  const xticks=tickSeq(xhi,lineStep(xhi));
+  xticks.forEach(v=>{const x=sx(v,xlo,xhi,L,Rx);s+='<line x1="'+x+'" x2="'+x+'" y1="'+T+'" y2="'+B+'" stroke="'+COLORS.grid+'"/>'+svgText(x,B+22,fmt(v,v===1?0:2),'text-anchor="middle" font-size="10.5" fill="'+COLORS.muted+'"')});
+  yTicks(yhi).forEach(v=>{const y=sy(v,ylo,yhi,T,B);s+='<line x1="'+L+'" x2="'+Rx+'" y1="'+y+'" y2="'+y+'" stroke="'+COLORS.grid+'"/>'+svgText(L-10,y+4,fmt(v,v%1===0?0:1),'text-anchor="end" font-size="10.5" fill="'+COLORS.muted+'"')});
+  const xnull=sx(1,xlo,xhi,L,Rx),ynull=sy(1,ylo,yhi,T,B);
+  s+='<line x1="'+xnull+'" x2="'+xnull+'" y1="'+T+'" y2="'+B+'" stroke="#111827" stroke-width="2" stroke-dasharray="6 5"/>';
+  s+='<line x1="'+L+'" x2="'+Rx+'" y1="'+ynull+'" y2="'+ynull+'" stroke="#111827" stroke-width="1.8" stroke-dasharray="6 5"/>';
+  s+=svgText(xnull+6,T+14,'RR = 1','font-size="10" font-weight="800" fill="#111827"')+svgText(Rx-4,ynull-6,'E-value = 1','text-anchor="end" font-size="10" font-weight="800" fill="#111827"');
+  let d='';
+  for(let i=0;i<=320;i++){const rr=xlo+(xhi-xlo)*i/320,ev=evalue(rr),x=sx(rr,xlo,xhi,L,Rx),y=sy(ev,ylo,yhi,T,B);d+=(i?'L':'M')+x+' '+y+' '}
+  s+='<path d="'+d+'" fill="none" stroke="'+COLORS.accent+'" stroke-width="4"/>';
+
+  if(state.showMethods){
+    const pos={ipw:{dx:-74,dy:46,anchor:'end'},or:{dx:56,dy:-18,anchor:'start'},dr:{dx:68,dy:46,anchor:'start'}};
+    methodKeys.forEach(k=>{
+      if(k===currentKey)return;
+      const m=METHODS[k],x=sx(m.rr,xlo,xhi,L,Rx),y=sy(evalue(m.rr),ylo,yhi,T,B),p=pos[k],lx=clamp(x+p.dx,60,740),ly=clamp(y+p.dy,56,298),col=methodColor[k];
+      s+='<circle class="method-dot" data-method="'+k+'" cx="'+x+'" cy="'+y+'" r="8" fill="'+col+'" stroke="#fff" stroke-width="2.5"/>';
+      s+=leader(x,y,lx,ly,p.anchor,col)+multiText(lx,ly,[m.label,'RR '+fmt(m.rr,2),'E-value '+fmt(evalue(m.rr),2)],p.anchor,col,12);
+    });
+  }
+
+  const xc=sx(Rcur,xlo,xhi,L,Rx),yc=sy(Ecur,ylo,yhi,T,B);
+  s+='<circle cx="'+xc+'" cy="'+yc+'" r="9.5" fill="'+currColor+'" stroke="#fff" stroke-width="3"/>';
+  let cp;
+  if(currentKey==='ipw')cp={dx:-74,dy:46,anchor:'end'}; else if(currentKey==='or')cp={dx:56,dy:-18,anchor:'start'}; else if(currentKey==='dr')cp={dx:68,dy:46,anchor:'start'}; else cp=Rcur<1.45?{dx:-58,dy:-24,anchor:'end'}:Rcur<1.75?{dx:58,dy:-24,anchor:'start'}:{dx:-58,dy:-24,anchor:'end'};
+  const clx=clamp(xc+cp.dx,60,742),cly=clamp(yc+cp.dy,54,294);
+  const currentTitle=currentKey?METHODS[currentKey].label+' (selected)':'Current result';
+  const currentLines=state.rr>=1?[currentTitle,'RR '+fmt(state.rr,2),'E-value '+fmt(Ecur,2)]:[currentTitle,'RR_obs '+fmt(state.rr,2)+' → use 1/RR = '+fmt(Rcur,2),'E-value '+fmt(Ecur,2)];
+  s+=leader(xc,yc,clx,cly,cp.anchor,currColor)+multiText(clx,cly,currentLines,cp.anchor,currColor,12.5);
+
+  s+=svgText((L+Rx)/2,396,'Risk ratio used in the lecture formula','text-anchor="middle" font-size="12" font-weight="800" fill="'+COLORS.ink+'"');
+  s+='<g transform="translate(22,'+((T+B)/2)+') rotate(-90)">'+svgText(0,0,'E-value','text-anchor="middle" font-size="12" font-weight="800" fill="'+COLORS.ink+'"')+'</g>';
+  svg.innerHTML=s;
+  svg.querySelectorAll('.method-dot').forEach(c=>c.addEventListener('click',()=>setPreset(c.dataset.method)));
+}
+
+function renderSurface(){
+  const svg=$('surfaceSvg'),W=800,H=430,L=70,Rx=760,T=28,B=355,max=8,Robs=awayRR(state.rr),N=38,dx=(Rx-L)/N,dy=(B-T)/N;
+  let s='<style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="800" height="430" fill="#fff"/>';
+  for(let ix=0;ix<N;ix++)for(let iy=0;iy<N;iy++){const a=1+(max-1)*(ix+.5)/N,b=1+(max-1)*(iy+.5)/N,ratio=biasFactor(a,b)/Robs,enough=ratio>=1,op=clamp(.18+.50*Math.abs(Math.log(Math.max(.2,ratio))),.18,.72),x=L+ix*dx,y=B-(iy+1)*dy;s+='<rect x="'+x+'" y="'+y+'" width="'+(dx+.3)+'" height="'+(dy+.3)+'" fill="'+(enough?COLORS.green:COLORS.blue)+'" fill-opacity="'+op+'"/>'}
+  for(const v of [1,2,3,4,5,6,7,8]){const x=sx(v,1,max,L,Rx),y=sy(v,1,max,T,B);s+='<line x1="'+x+'" x2="'+x+'" y1="'+T+'" y2="'+B+'" stroke="#fff" stroke-opacity=".35"/>'+svgText(x,B+21,v,'text-anchor="middle" font-size="9" fill="'+COLORS.muted+'"')+'<line x1="'+L+'" x2="'+Rx+'" y1="'+y+'" y2="'+y+'" stroke="#fff" stroke-opacity=".35"/>'+svgText(L-8,y+4,v,'text-anchor="end" font-size="9" fill="'+COLORS.muted+'"')}
+  let path='';for(let i=0;i<=240;i++){const a=Robs+.001+(max-Robs-.001)*i/240,req=requiredOther(a,Robs);if(req>=1&&req<=max){const x=sx(a,1,max,L,Rx),y=sy(req,1,max,T,B);path+=(path?'L':'M')+x+' '+y+' '}}
+  if(path)s+='<path d="'+path+'" fill="none" stroke="#111827" stroke-width="2.5" stroke-dasharray="7 5"/>';
+  const E=evalue(state.rr),xe=sx(clamp(E,1,max),1,max,L,Rx),ye=sy(clamp(E,1,max),1,max,T,B);if(E<=max)s+='<circle cx="'+xe+'" cy="'+ye+'" r="7" fill="'+COLORS.accent+'" stroke="#fff" stroke-width="2"/>'+svgText(xe+9,ye-8,'E = '+fmt(E,2),'font-size="9" font-weight="850" fill="'+COLORS.accent+'"');
+  const xc=sx(state.eu,1,max,L,Rx),yc=sy(state.uy,1,max,T,B);s+='<circle cx="'+xc+'" cy="'+yc+'" r="8" fill="'+COLORS.orange+'" stroke="#fff" stroke-width="2.5"/>'+svgText(xc+10,yc+4,'current','font-size="10" font-weight="850" fill="'+COLORS.orange+'"');
+  s+=svgText((L+Rx)/2,415,'RR_EU: exposure–U association strength','text-anchor="middle" font-size="11" font-weight="750" fill="'+COLORS.ink+'"')+'<g transform="translate(18,'+((T+B)/2)+') rotate(-90)">'+svgText(0,0,'RR_UY: U–outcome association strength','text-anchor="middle" font-size="11" font-weight="750" fill="'+COLORS.ink+'"')+'</g>';
+  svg.innerHTML=s;
+}
+
+function renderTradeoff(){
+  const svg=$('tradeoffSvg'),W=800,H=390,L=70,Rx=760,T=28,B=315,max=8,Robs=awayRR(state.rr),E=evalue(state.rr);
+  let s='<style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="800" height="390" fill="#fff"/>';
+  for(const v of [1,2,3,4,5,6,7,8]){const x=sx(v,1,max,L,Rx),y=sy(v,1,max,T,B);s+='<line x1="'+x+'" x2="'+x+'" y1="'+T+'" y2="'+B+'" stroke="'+COLORS.grid+'"/>'+svgText(x,B+21,v,'text-anchor="middle" font-size="9" fill="'+COLORS.muted+'"')+'<line x1="'+L+'" x2="'+Rx+'" y1="'+y+'" y2="'+y+'" stroke="'+COLORS.grid+'"/>'+svgText(L-8,y+4,v,'text-anchor="end" font-size="9" fill="'+COLORS.muted+'"')}
+  let path='';for(let i=0;i<=300;i++){const a=Robs+.002+(max-Robs-.002)*i/300,req=requiredOther(a,Robs);if(req>=1&&req<=max){path+=(path?'L':'M')+sx(a,1,max,L,Rx)+' '+sy(req,1,max,T,B)+' '}}
+  if(path)s+='<path d="'+path+'" fill="none" stroke="'+COLORS.danger+'" stroke-width="4"/>';
+  s+='<path d="M'+sx(1,1,max,L,Rx)+' '+sy(1,1,max,T,B)+' L'+sx(max,1,max,L,Rx)+' '+sy(max,1,max,T,B)+'" fill="none" stroke="#98A2B3" stroke-width="1.5" stroke-dasharray="5 4"/>';
+  if(E<=max){const xe=sx(E,1,max,L,Rx),ye=sy(E,1,max,T,B);s+='<circle cx="'+xe+'" cy="'+ye+'" r="8" fill="'+COLORS.accent+'" stroke="#fff" stroke-width="2.5"/>'+svgText(xe+10,ye-9,'equal links E='+fmt(E,2),'font-size="9" font-weight="850" fill="'+COLORS.accent+'"')}
+  const xc=sx(state.eu,1,max,L,Rx),yc=sy(state.uy,1,max,T,B);s+='<circle cx="'+xc+'" cy="'+yc+'" r="8" fill="'+COLORS.orange+'" stroke="#fff" stroke-width="2.5"/>'+svgText(xc+10,yc+4,'current','font-size="10" font-weight="850" fill="'+COLORS.orange+'"');
+  s+=svgText((L+Rx)/2,376,'Fixed RR_EU','text-anchor="middle" font-size="11" font-weight="750" fill="'+COLORS.ink+'"')+'<g transform="translate(18,'+((T+B)/2)+') rotate(-90)">'+svgText(0,0,'Required RR_UY','text-anchor="middle" font-size="11" font-weight="750" fill="'+COLORS.ink+'"')+'</g>';
+  svg.innerHTML=s;
+  const reqUY=requiredOther(state.eu,Robs),reqEU=requiredOther(state.uy,Robs),Bf=biasFactor(state.eu,state.uy);
+  $('requiredGrid').innerHTML='<div class="limit-card"><div class="name">If RR_EU is fixed at '+fmt(state.eu,2)+'</div><div class="number">'+(Number.isFinite(reqUY)?fmt(reqUY,2):'∞')+'</div><div class="detail">minimum RR_UY required</div></div><div class="limit-card"><div class="name">If RR_UY is fixed at '+fmt(state.uy,2)+'</div><div class="number">'+(Number.isFinite(reqEU)?fmt(reqEU,2):'∞')+'</div><div class="detail">minimum RR_EU required</div></div><div class="limit-card"><div class="name">Equal-strength benchmark</div><div class="number">'+fmt(E,2)+'</div><div class="detail">B(E,E) = '+fmt(biasFactor(E,E),2)+'</div></div>';
+}
+
+function renderCI(){
+  const svg=$('ciSvg'),lo=Math.max(.15,Math.min(state.lo,state.rr,1)*.82),hi=Math.max(state.hi,state.rr,1)*1.18,L=72,Rx=760,T=35,B=238,y=132,loglo=Math.log(lo),loghi=Math.log(hi),x=v=>sx(Math.log(v),loglo,loghi,L,Rx),valid=state.lo>0&&state.hi>=state.lo;
+  let s='<style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="800" height="330" fill="#fff"/>';
+  const ticks=[];for(let i=0;i<=5;i++)ticks.push(Math.exp(loglo+(loghi-loglo)*i/5));ticks.forEach(v=>{const xx=x(v);s+='<line x1="'+xx+'" x2="'+xx+'" y1="'+T+'" y2="'+B+'" stroke="'+COLORS.grid+'"/>'+svgText(xx,B+21,fmt(v,2),'text-anchor="middle" font-size="9" fill="'+COLORS.muted+'"')});
+  const xn=x(1);s+='<line x1="'+xn+'" x2="'+xn+'" y1="'+T+'" y2="'+B+'" stroke="#111827" stroke-width="2.5" stroke-dasharray="7 5"/>'+svgText(xn+5,T+13,'null RR=1','font-size="9" font-weight="850" fill="#111827"');
+  if(valid){const xl=x(state.lo),xu=x(state.hi),xp=x(state.rr);s+='<line x1="'+xl+'" x2="'+xu+'" y1="'+y+'" y2="'+y+'" stroke="'+COLORS.accent+'" stroke-width="6" stroke-linecap="round"/><line x1="'+xl+'" x2="'+xl+'" y1="'+(y-11)+'" y2="'+(y+11)+'" stroke="'+COLORS.accent+'" stroke-width="2"/><line x1="'+xu+'" x2="'+xu+'" y1="'+(y-11)+'" y2="'+(y+11)+'" stroke="'+COLORS.accent+'" stroke-width="2"/><circle cx="'+xp+'" cy="'+y+'" r="9" fill="'+COLORS.orange+'" stroke="#fff" stroke-width="2.5"/>'+svgText(xp,y-18,'RR '+fmt(state.rr,2),'text-anchor="middle" font-size="10" font-weight="850" fill="'+COLORS.orange+'"')+svgText(xl,y+28,'L '+fmt(state.lo,2),'text-anchor="middle" font-size="9" fill="'+COLORS.accent+'"')+svgText(xu,y+28,'U '+fmt(state.hi,2),'text-anchor="middle" font-size="9" fill="'+COLORS.accent+'"')}
+  s+=svgText((L+Rx)/2,310,'Risk ratio (log scale)','text-anchor="middle" font-size="11" font-weight="750" fill="'+COLORS.ink+'"');svg.innerHTML=s;
+  const E=evalue(state.rr),ECI=ciEvalue(state.lo,state.hi),rCI=ciAway(state.lo,state.hi),p=niceP();
+  $('ciCards').innerHTML='<div class="limit-card"><div class="name">Point estimate E-value</div><div class="number">'+fmt(E,2)+'</div><div class="detail">primary lecture result</div></div><div class="limit-card"><div class="name">Confidence-limit E-value</div><div class="number">'+(state.showCi?(Number.isFinite(ECI)?fmt(ECI,2):'invalid'):'hidden')+'</div><div class="detail">R_CI = '+(Number.isFinite(rCI)?fmt(rCI,2):'invalid')+'</div></div><div class="limit-card"><div class="name">Approx. p-value</div><div class="number">'+p+'</div><div class="detail">log-RR scale from CI</div></div>';
+  $('ciNote').innerHTML=!valid?'<strong>Invalid confidence interval.</strong> Require positive limits with lower ≤ upper before interpreting sampling uncertainty or a confidence-limit E-value.':ECI===1?'<strong>The interval includes RR = 1.</strong> Therefore, the optional confidence-limit E-value is 1, even though the point estimate may have E-value greater than 1.':'<strong>The interval excludes RR = 1.</strong> The confidence-limit E-value uses the limit closest to the null: '+fmt(rCI,2)+'.';
+}
+
+function renderMethods(){
+  const svg=$('methodsSvg'),rows=['ipw','or','dr'],L=115,Rx=735,T=35,B=285,xlo=Math.log(.95),xhi=Math.log(1.75),ys=[85,165,245],x=v=>sx(Math.log(v),xlo,xhi,L,Rx);
+  let s='<style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="800" height="360" fill="#fff"/>';
+  [1,1.1,1.2,1.3,1.4,1.5,1.6,1.7].forEach(v=>{const xx=x(v);s+='<line x1="'+xx+'" x2="'+xx+'" y1="'+T+'" y2="'+B+'" stroke="'+COLORS.grid+'"/>'+svgText(xx,B+22,fmt(v,1),'text-anchor="middle" font-size="9" fill="'+COLORS.muted+'"')});
+  const xn=x(1);s+='<line x1="'+xn+'" x2="'+xn+'" y1="'+T+'" y2="'+B+'" stroke="#111827" stroke-width="2" stroke-dasharray="6 5"/>';
+  rows.forEach((k,i)=>{const m=METHODS[k],y=ys[i],xl=x(m.lo),xu=x(m.hi),xp=x(m.rr),sel=state.preset===k;s+=svgText(L-12,y+4,m.label,'text-anchor="end" font-size="11" font-weight="850" fill="'+COLORS.ink+'"')+'<line class="method-line" data-method="'+k+'" x1="'+xl+'" x2="'+xu+'" y1="'+y+'" y2="'+y+'" stroke="'+(sel?COLORS.accent:COLORS.blue)+'" stroke-width="5" stroke-linecap="round"/><line x1="'+xl+'" x2="'+xl+'" y1="'+(y-9)+'" y2="'+(y+9)+'" stroke="'+(sel?COLORS.accent:COLORS.blue)+'" stroke-width="2"/><line x1="'+xu+'" x2="'+xu+'" y1="'+(y-9)+'" y2="'+(y+9)+'" stroke="'+(sel?COLORS.accent:COLORS.blue)+'" stroke-width="2"/><circle class="method-point" data-method="'+k+'" cx="'+xp+'" cy="'+y+'" r="8" fill="'+(sel?COLORS.orange:COLORS.green)+'" stroke="#fff" stroke-width="2.5"/>'+svgText(Rx,y-5,'RR '+m.displayRR,'text-anchor="end" font-size="9" font-weight="850" fill="'+COLORS.ink+'"')+svgText(Rx,y+11,'E '+fmt(evalue(m.rr),2),'text-anchor="end" font-size="9" font-weight="850" fill="'+COLORS.green+'"')});
+  s+=svgText((L+Rx)/2,345,'Adjusted risk ratio with 95% bootstrap CI (log scale)','text-anchor="middle" font-size="11" font-weight="750" fill="'+COLORS.ink+'"');svg.innerHTML=s;
+  svg.querySelectorAll('[data-method]').forEach(el=>el.addEventListener('click',()=>setPreset(el.dataset.method)));
+  $('methodBody').innerHTML=rows.map(k=>{const m=METHODS[k],sel=state.preset===k;return '<tr data-method="'+k+'" class="'+(sel?'selected':'')+'"><td>'+m.label+'</td><td>'+m.displayRR+'</td><td>['+fmt(m.lo,2)+', '+fmt(m.hi,2)+']</td><td>'+m.p+'</td><td>'+fmt(evalue(m.rr),2)+'</td><td>'+fmt(ciEvalue(m.lo,m.hi),2)+'</td></tr>'}).join('');
+  $('methodBody').querySelectorAll('tr').forEach(tr=>tr.addEventListener('click',()=>setPreset(tr.dataset.method)));
+}
+
+function renderQuestions(){
+  const svg=$('questionsSvg'),p=niceP(),E=evalue(state.rr),ECI=ciEvalue(state.lo,state.hi),W=800;
+  let s='<style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="800" height="270" fill="#fff"/>';
+  s+='<rect x="55" y="45" width="285" height="150" rx="18" fill="#F3F8FC" stroke="#BDD5EA"/><rect x="460" y="45" width="285" height="150" rx="18" fill="#F8F6FF" stroke="#CFC5FF"/>';
+  s+=svgText(197,78,'Sampling uncertainty','text-anchor="middle" font-size="15" font-weight="900" fill="'+COLORS.blue+'"')+svgText(602,78,'Unmeasured confounding','text-anchor="middle" font-size="15" font-weight="900" fill="'+COLORS.accent+'"');
+  s+=svgText(197,116,'Approx. p-value','text-anchor="middle" font-size="10" font-weight="800" fill="'+COLORS.muted+'"')+svgText(197,151,p,'text-anchor="middle" font-size="27" font-weight="900" fill="'+COLORS.blue+'"')+svgText(197,178,'Is RR statistically distinguishable from 1?','text-anchor="middle" font-size="9" fill="'+COLORS.muted+'"');
+  s+=svgText(602,116,'Point E-value','text-anchor="middle" font-size="10" font-weight="800" fill="'+COLORS.muted+'"')+svgText(602,151,fmt(E,2),'text-anchor="middle" font-size="27" font-weight="900" fill="'+COLORS.accent+'"')+svgText(602,178,'How strong would residual U need to be?','text-anchor="middle" font-size="9" fill="'+COLORS.muted+'"');
+  s+='<path d="M350,120 C385,90 420,90 450,120" fill="none" stroke="#98A2B3" stroke-width="2" stroke-dasharray="6 5"/><path d="M350,145 C385,175 420,175 450,145" fill="none" stroke="#98A2B3" stroke-width="2" stroke-dasharray="6 5"/>'+svgText(400,135,'different questions','text-anchor="middle" font-size="9" font-weight="850" fill="'+COLORS.muted+'"');
+  s+=svgText(400,235,'Neither quantity by itself proves a causal effect.','text-anchor="middle" font-size="12" font-weight="850" fill="'+COLORS.ink+'"');svg.innerHTML=s;
+}
+
+function renderAll(){readControls();updateLabels();metrics();renderAnalysisInterpretation();renderMath();renderDag();renderInterpretation();renderFunction();renderSurface();renderTradeoff();renderCI();renderMethods();renderQuestions()}
+
+function activateTab(name){document.querySelectorAll('.math-tab').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===name?'true':'false'));document.querySelectorAll('.math-panel').forEach(p=>{const on=p.id==='panel-'+name;p.classList.toggle('active',on);p.hidden=!on})}
+function saveSvg(id){const src=$(id),clone=src.cloneNode(true);clone.setAttribute('xmlns',NS);clone.setAttribute('width',src.viewBox.baseVal.width);clone.setAttribute('height',src.viewBox.baseVal.height);download(new XMLSerializer().serializeToString(clone),'image/svg+xml;charset=utf-8',id+'.svg')}
+function download(content,type,name){const blob=new Blob([content],{type}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000)}
+function exportSummary(){const R=awayRR(state.rr),E=evalue(state.rr),ECI=ciEvalue(state.lo,state.hi),B=biasFactor(state.eu,state.uy),csv=x=>'"'+String(x).replace(/"/g,'""')+'"',rows=[['field','value'],['preset',state.preset],['adjusted_rr',state.rr],['ci_lower',state.lo],['ci_upper',state.hi],['rr_away_from_null',R],['point_evalue',E],['ci_evalue',ECI],['RR_EU',state.eu],['RR_UY',state.uy],['bias_factor',B],['residual_away_rr',R/B],['explain_away',B>=R],['interpretation',state.reportText||reportStatement()]];download(rows.map(r=>r.map(csv).join(',')).join('\n'),'text/csv;charset=utf-8','evalue_sensitivity_summary.csv')}
+
+// events
+document.querySelectorAll('[data-preset]').forEach(b=>b.addEventListener('click',()=>setPreset(b.dataset.preset)));
+$('rrRange').addEventListener('input',()=>{markCustom();renderAll()});
+['ciLower','ciUpper'].forEach(id=>$(id).addEventListener('input',()=>{markCustom();renderAll()}));
+['euRange','uyRange','showCiE','showMethodPoints','candidateU'].forEach(id=>$(id).addEventListener('input',renderAll));
+$('setEqualE').addEventListener('click',()=>{const E=evalue(state.rr);state.eu=clamp(E,1,8);state.uy=clamp(E,1,8);updateControls();renderAll()});
+$('resetLinks').addEventListener('click',()=>{state.eu=1.6;state.uy=1.6;updateControls();renderAll()});
+$('resetAll').addEventListener('click',()=>setPreset('ipw'));
+document.querySelectorAll('.math-tab').forEach(b=>b.addEventListener('click',()=>activateTab(b.dataset.tab)));
+document.querySelectorAll('[data-svg]').forEach(b=>b.addEventListener('click',()=>saveSvg(b.dataset.svg)));
+$('exportSummary').addEventListener('click',exportSummary);
+$('copyInterpretation').addEventListener('click',copyCurrentInterpretation);
+window.addEventListener('resize',hideTip);
+updateControls();renderAll();
+})();
+</script>
+</body>
+</html>
