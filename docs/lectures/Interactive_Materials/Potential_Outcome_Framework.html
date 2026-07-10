@@ -1,0 +1,670 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Association Is Not Always Causation and the Potential Outcome Framework — Se Yoon Lee, Ph.D.</title>
+<style>
+:root{
+  color-scheme:light;
+  --ink:#162033;--muted:#667085;--line:#D7DEE8;--panel:#FFFFFF;--bg:#F3F6FA;
+  --treated:#E56B2F;--control:#2F6EA5;--accent:#7157E8;--green:#208A62;
+  --danger:#C23B3B;--amber:#B56A00;--teal:#137A83;--gray:#98A2B3;
+  --soft-orange:#FFF1E8;--soft-blue:#EAF3FB;--soft-purple:#F3EFFF;
+  --soft-green:#ECF8F2;--soft-red:#FFF1F1;--soft-amber:#FFF8E8;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif}
+body{min-width:320px}
+button,select,input{font:inherit}button{cursor:pointer}
+.hero{padding:29px clamp(18px,4vw,58px) 23px;background:linear-gradient(135deg,#fff 0%,#F7F3FF 50%,#EDF7FA 100%);border-bottom:1px solid var(--line)}
+.hero-inner{max-width:1780px;margin:0 auto;display:flex;gap:24px;align-items:flex-start;justify-content:space-between}
+.hero h1{margin:0 0 8px;font-size:clamp(29px,3.15vw,50px);line-height:1.05;letter-spacing:-.75px;max-width:1280px}
+.hero h1 .author{font-weight:600;white-space:nowrap}
+.hero p{margin:0;max-width:1130px;color:var(--muted);font-size:clamp(15px,1.38vw,19px);line-height:1.58}
+.hero-callout{margin-top:14px;display:inline-flex;gap:9px;align-items:center;border:1px solid #BFC9D8;border-radius:12px;background:rgba(255,255,255,.87);padding:9px 13px;font-size:14px;font-weight:680;line-height:1.45}
+.hero-callout b{color:var(--accent)}
+.hero-badge{flex:0 0 auto;padding:11px 15px;border:1px solid #CEC3FF;border-radius:999px;background:#fff;color:#5942C7;font-size:12px;font-weight:850;letter-spacing:.4px;white-space:nowrap}
+.app{max-width:1780px;margin:0 auto;padding:18px;display:grid;grid-template-columns:340px minmax(0,1fr);gap:18px;align-items:start}
+.controls{position:sticky;top:12px;max-height:calc(100vh - 24px);overflow:auto;background:#fff;border:1px solid var(--line);border-radius:20px;box-shadow:0 10px 30px rgba(22,32,51,.08)}
+.controls-head{padding:18px 18px 14px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#fff,#FAFBFD)}
+.controls-head h2{margin:0 0 5px;font-size:19px}.controls-head p{margin:0;color:var(--muted);font-size:13px;line-height:1.48}
+.control-section{padding:15px 18px;border-bottom:1px solid #E7EBF1}.control-section:last-child{border-bottom:0}
+.section-label{font-size:11px;letter-spacing:.8px;text-transform:uppercase;color:#7B8495;font-weight:850;margin-bottom:10px}
+.preset-row{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.preset{border:1px solid var(--line);background:#fff;border-radius:11px;padding:8px 9px;font-size:11px;font-weight:780;color:#344054;line-height:1.35}
+.preset:hover{border-color:var(--accent);color:#5840C8;background:#FAF8FF}
+.control{margin:0 0 14px}.control:last-child{margin-bottom:0}
+.control-top{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:6px}.control label{font-size:13px;font-weight:720}
+.value{font-size:12px;color:#5840C8;font-weight:850;font-variant-numeric:tabular-nums}
+input[type="range"]{width:100%;accent-color:var(--accent)}
+.range-ends{display:flex;justify-content:space-between;gap:8px;color:#98A2B3;font-size:10px;margin-top:2px}
+select,input[type="number"]{width:100%;border:1px solid var(--line);border-radius:10px;background:#fff;padding:9px 10px;color:var(--ink)}
+.checkrow{display:flex;gap:9px;align-items:flex-start;color:#475467;font-size:12px;line-height:1.4}.checkrow input{margin-top:2px;accent-color:var(--accent)}
+.primary-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}.primary,.secondary{border-radius:11px;padding:9px 10px;font-weight:800;font-size:12px}
+.primary{border:1px solid var(--accent);background:var(--accent);color:#fff}.secondary{border:1px solid var(--line);background:#fff;color:#344054}.primary:hover{filter:brightness(.96)}.secondary:hover{border-color:var(--accent);color:#5840C8}
+.teaching-note{margin-top:10px;padding:9px 10px;border-radius:10px;background:#F7F8FB;color:#667085;font-size:11px;line-height:1.5}
+.workspace{min-width:0}.metrics{display:grid;grid-template-columns:repeat(6,minmax(110px,1fr));gap:10px;margin-bottom:12px}
+.metric{background:#fff;border:1px solid var(--line);border-radius:15px;padding:11px 13px;box-shadow:0 3px 12px rgba(22,32,51,.04);min-width:0}
+.metric .k{font-size:9px;color:#7B8495;text-transform:uppercase;font-weight:880;letter-spacing:.55px;white-space:nowrap}.metric .v{margin-top:4px;font-size:19px;font-weight:880;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.metric .s{font-size:9px;color:#98A2B3;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card{background:#fff;border:1px solid var(--line);border-radius:18px;box-shadow:0 6px 20px rgba(22,32,51,.055);min-width:0;overflow:hidden}
+.card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:15px 16px 10px}.card-head h3{margin:0 0 4px;font-size:17px;line-height:1.25}.card-head p{margin:0;color:var(--muted);font-size:12px;line-height:1.48}
+.grid-top{display:grid;grid-template-columns:minmax(0,1.62fr) minmax(310px,.88fr);gap:12px;margin-bottom:12px}.grid-two{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}.full-card{margin-bottom:12px}
+.mini-controls{display:flex;gap:7px;align-items:center;justify-content:flex-end;flex-wrap:wrap}.mini-controls label{font-size:10px;font-weight:800;color:#667085}.mini-controls select{width:auto;min-width:108px;padding:6px 8px;font-size:11px}
+.legend{display:flex;flex-wrap:wrap;gap:12px;padding:0 16px 8px;color:#667085;font-size:11px}.legend span{display:inline-flex;align-items:center;gap:5px}.dot{display:inline-block;width:10px;height:10px;border-radius:50%}.ring{display:inline-block;width:11px;height:11px;border:2px solid #111827;border-radius:50%;background:#fff}.line-key{display:inline-block;width:18px;height:0;border-top:3px solid}.dash-key{display:inline-block;width:18px;height:0;border-top:2px dashed #111827}
+.chart-wrap{position:relative;padding:0 8px 10px}svg.chart{display:block;width:100%;height:auto;overflow:visible;touch-action:none}.chart-note{padding:0 16px 13px;color:#667085;font-size:11px;line-height:1.5}.chart-note strong{color:var(--ink)}
+.tooltip{position:fixed;z-index:50;pointer-events:none;opacity:0;background:rgba(17,24,39,.97);color:#fff;border-radius:10px;padding:9px 10px;box-shadow:0 8px 24px rgba(0,0,0,.23);font-size:11px;line-height:1.45;max-width:285px;transform:translate(10px,10px);transition:opacity .06s}
+/* Mathematical framework */
+.math-card{margin-bottom:12px;border-top:3px solid var(--teal)}
+.math-tabs{display:flex;gap:7px;flex-wrap:wrap;padding:0 16px 12px;border-bottom:1px solid #E7EBF1}.math-tab{border:1px solid var(--line);background:#fff;color:#475467;border-radius:10px;padding:8px 11px;font-size:11px;font-weight:820}.math-tab[aria-selected="true"]{background:var(--accent);border-color:var(--accent);color:#fff}.math-tab:hover{border-color:var(--accent)}
+.math-panel{display:none;padding:16px}.math-panel.active{display:block}.graduate-tag{display:inline-flex;border:1px solid #AFCBD0;background:#F2F9FA;color:#075E68;border-radius:999px;padding:6px 10px;font-size:10px;font-weight:900;letter-spacing:.55px;text-transform:uppercase;white-space:nowrap}
+math{font-family:"Cambria Math","STIX Two Math","Times New Roman",serif;color:var(--ink)}.math-scroll{overflow-x:auto;overflow-y:hidden;padding:4px 1px 7px}.math-scroll math[display="block"]{display:block;width:max-content;min-width:min-content;margin:0 auto;font-size:clamp(17px,1.5vw,25px)}
+.math-chain{border:1px solid #D9D2FF;background:linear-gradient(135deg,#F7F4FF,#F7FBFD);border-radius:15px;padding:14px 11px;margin-bottom:12px}.chain-label{font-size:10px;color:#5B45C8;font-weight:900;letter-spacing:.65px;text-transform:uppercase;margin:0 0 8px 4px}
+.math-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.math-box{border:1px solid #DEE4EC;border-radius:13px;background:#FCFCFD;padding:12px;min-width:0}.math-box h4{margin:0 0 7px;font-size:12px}.math-box p{margin:7px 0 0;color:#667085;font-size:10px;line-height:1.5}.math-box math[display="block"]{font-size:clamp(15px,1.15vw,20px);margin-left:0}
+.identity-box{border:1px solid #B8E5D2;background:#F2FBF7;border-radius:14px;padding:13px;margin-top:10px}.identity-box .label{font-size:10px;color:#176A4C;font-weight:900;letter-spacing:.6px;text-transform:uppercase;margin-bottom:7px}
+.warning-box{margin-top:10px;border-left:4px solid #D18B18;background:#FFF9ED;border-radius:0 10px 10px 0;padding:9px 11px;color:#6E531E;font-size:10px;line-height:1.5}.live-math{margin-top:10px;border:1px solid #D9D2FF;background:#F8F6FF;border-radius:12px;padding:10px 12px;font-size:11px;color:#536075;line-height:1.55}.live-chips{display:flex;gap:7px;flex-wrap:wrap;margin-top:7px}.live-chip{border:1px solid #D9D2FF;background:#fff;border-radius:999px;padding:5px 8px;font-weight:820;color:#344054;font-variant-numeric:tabular-nums}
+/* DAG and verdict */
+.verdict{margin:0 16px 13px;border-radius:13px;padding:11px 12px;border:1px solid;line-height:1.5;font-size:11px}.verdict strong{display:block;font-size:12px;margin-bottom:2px}.verdict.association{border-color:#F1C5A7;background:#FFF7F0;color:#87440E}.verdict.conditional{border-color:#CFC5FF;background:#F8F6FF;color:#514A72}.verdict.causal{border-color:#A9DCC8;background:#F2FBF7;color:#176A4C}.verdict.fail{border-color:#F0BBBB;background:#FFF5F5;color:#9A2E2E}
+/* Subject panel */
+.subject-body{padding:2px 16px 16px}.subject-id{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}.subject-id strong{font-size:23px}.status-pill{padding:5px 8px;border-radius:999px;font-size:10px;font-weight:850}.status-treated{background:var(--soft-orange);color:#A94317}.status-control{background:var(--soft-blue);color:#245C88}
+.kv{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:10px}.kv div{border:1px solid #E4E8EF;border-radius:10px;padding:8px 9px;background:#FCFCFD}.kv .label{font-size:9px;text-transform:uppercase;letter-spacing:.45px;color:#7B8495;font-weight:850}.kv .num{font-size:14px;font-weight:790;margin-top:2px;font-variant-numeric:tabular-nums}
+.world-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.world{border:1px solid;border-radius:13px;padding:10px 11px;position:relative;min-height:105px}.world.t1{border-color:#F2C7AD;background:#FFF7F1}.world.t0{border-color:#BBD5EA;background:#F3F8FC}.world .world-title{font-size:9px;text-transform:uppercase;letter-spacing:.45px;font-weight:880;color:#667085}.world .world-value{font-size:30px;font-weight:900;margin:5px 0 2px}.world .world-sub{font-size:10px;color:#667085;line-height:1.35}.world.missing::after{content:"COUNTERFACTUAL";position:absolute;inset:0;display:grid;place-items:center;background:rgba(255,255,255,.87);backdrop-filter:blur(2px);border-radius:12px;color:#667085;font-size:10px;font-weight:900;letter-spacing:.55px}.subject-equation{margin-top:9px;border:1px solid #D9D2FF;background:#F8F6FF;border-radius:11px;padding:9px 10px;text-align:center;font-family:"Cambria Math","Times New Roman",serif;font-size:16px;line-height:1.5}.subject-nav{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:9px}.subject-nav button{border:1px solid var(--line);background:#fff;border-radius:10px;padding:7px;font-size:11px;font-weight:780}.subject-nav button:hover{border-color:var(--accent);color:#5840C8}
+/* Counterfactual schedule */
+.schedule-controls{display:flex;gap:7px;align-items:center;justify-content:flex-end;flex-wrap:wrap}.mini-button{border:1px solid var(--accent);background:var(--accent);color:#fff;border-radius:9px;padding:7px 9px;font-size:11px;font-weight:800}.mini-button.secondary-mini{background:#fff;color:#475467;border-color:var(--line)}.mini-button:hover{filter:brightness(.97)}.mini-button:disabled{opacity:.5;cursor:not-allowed}
+/* Association / causal comparison */
+.comparison-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:0 16px 13px}.comparison-stat{border:1px solid #E1E6ED;border-radius:12px;padding:10px;background:#FCFCFD}.comparison-stat.assoc{border-color:#F2C7AD;background:#FFF8F3}.comparison-stat.causal{border-color:#A9DCC8;background:#F2FBF7}.comparison-stat.bias{border-color:#D9D2FF;background:#F8F6FF}.comparison-stat .name{font-size:9px;text-transform:uppercase;letter-spacing:.45px;color:#667085;font-weight:850}.comparison-stat .number{font-size:20px;font-weight:900;margin-top:4px;font-variant-numeric:tabular-nums}.comparison-stat .detail{font-size:9px;color:#7B8495;margin-top:2px;line-height:1.35}
+/* Potential type */
+.type-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:0 16px 13px}.type-box{border:1px solid #E1E6ED;border-radius:12px;padding:10px;background:#FCFCFD}.type-box .symbol{font-family:"Cambria Math","Times New Roman",serif;font-size:18px;font-weight:850}.type-box .name{font-size:10px;font-weight:820;margin-top:4px}.type-box .pct{font-size:18px;font-weight:900;margin-top:5px}.type-box .desc{font-size:9px;color:#667085;line-height:1.35;margin-top:3px}
+/* Identification */
+.ident-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:8px;padding:0 16px 13px}.ident-item{border:1px solid #E1E6ED;border-radius:12px;padding:10px;background:#FCFCFD}.ident-item.pass{border-color:#A9DCC8;background:#F2FBF7}.ident-item.warn{border-color:#F0D19F;background:#FFF9EC}.ident-item.fail{border-color:#F0BBBB;background:#FFF5F5}.ident-item .name{font-size:10px;text-transform:uppercase;font-weight:880;letter-spacing:.45px}.ident-item .status{font-size:17px;font-weight:900;margin-top:5px}.ident-item .desc{font-size:9px;color:#667085;line-height:1.4;margin-top:4px}
+/* Repeated assignment */
+.progress-shell{height:7px;margin:0 16px 8px;border-radius:999px;background:#ECEFF4;overflow:hidden}.progress-fill{height:100%;width:0;background:linear-gradient(90deg,#7157E8,#2F6EA5);transition:width .12s}.status-line{min-height:20px;padding:0 16px 8px;color:#667085;font-size:10px;line-height:1.45}.repeat-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:0 16px 12px}.repeat-stat{border:1px solid #E1E6ED;border-radius:11px;padding:9px 10px;background:#FCFCFD}.repeat-stat .name{font-size:9px;text-transform:uppercase;color:#7B8495;font-weight:850;letter-spacing:.4px}.repeat-stat .number{font-size:18px;font-weight:900;margin-top:3px;font-variant-numeric:tabular-nums}.repeat-stat .detail{font-size:9px;color:#667085;margin-top:2px}
+/* Table */
+.table-card{margin-bottom:18px}details summary{cursor:pointer;padding:14px 16px;font-weight:820;list-style:none;display:flex;align-items:center;justify-content:space-between}details summary::-webkit-details-marker{display:none}details summary::after{content:"＋";color:var(--accent);font-size:20px}details[open] summary::after{content:"−"}.table-tools{display:flex;gap:8px;padding:0 16px 10px;flex-wrap:wrap}.table-tools button{border:1px solid var(--line);background:#fff;border-radius:9px;padding:7px 9px;font-size:10px;font-weight:760}.table-wrap{overflow:auto;border-top:1px solid #E6EAF0;max-height:460px}table{border-collapse:collapse;width:100%;font-size:10px;white-space:nowrap}th,td{padding:8px 9px;border-bottom:1px solid #EDF0F4;text-align:right;font-variant-numeric:tabular-nums}th:first-child,td:first-child{text-align:left}th{position:sticky;top:0;background:#F8FAFC;color:#667085;text-transform:uppercase;font-size:9px;letter-spacing:.4px;z-index:1}tbody tr{cursor:pointer}tbody tr:hover{background:#F7F5FF}tbody tr.selected{background:#EEE9FF}.mask-cell{color:#98A2B3;font-style:italic}
+.footer{max-width:1780px;margin:0 auto;padding:0 18px 28px;color:#667085;font-size:11px;line-height:1.55}.kbd{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;border:1px solid #D0D5DD;border-bottom-width:2px;border-radius:5px;background:#fff;padding:1px 5px;color:#344054}
+@media(max-width:1180px){.app{grid-template-columns:1fr}.controls{position:relative;top:auto;max-height:none}.metrics{grid-template-columns:repeat(3,1fr)}.grid-top,.grid-two{grid-template-columns:1fr}}
+@media(max-width:850px){.math-grid{grid-template-columns:1fr}.ident-grid{grid-template-columns:1fr 1fr}.type-grid{grid-template-columns:1fr 1fr}.repeat-summary{grid-template-columns:1fr 1fr}}
+@media(max-width:650px){.hero-inner{display:block}.hero-badge{display:inline-block;margin-top:14px}.hero h1 .author{display:block;margin-top:6px;font-size:.58em;white-space:normal}.app{padding:10px}.metrics{grid-template-columns:repeat(2,1fr)}.math-tabs{display:grid;grid-template-columns:1fr 1fr}.comparison-summary,.ident-grid,.type-grid,.repeat-summary{grid-template-columns:1fr}.card-head{display:block}.mini-controls,.schedule-controls{justify-content:flex-start;margin-top:9px}.kv,.world-grid{grid-template-columns:1fr}}
+@media print{.controls,.hero-badge,.table-card,.footer,.primary-row,.preset-row,.mini-button{display:none!important}.app{display:block;max-width:none}.card{box-shadow:none;break-inside:avoid}.hero{padding:12px}.metrics{grid-template-columns:repeat(6,1fr)}}
+
+.crossworld-box{margin-top:10px;border:1px solid #F0D19F;background:#FFF9EC;border-radius:12px;padding:10px 12px;color:#6F4B08;font-size:10px;line-height:1.55}
+.crossworld-box b{color:#5C3D05}
+.curve-formula{margin:0 16px 12px;border:1px solid #D9D2FF;background:#F8F6FF;border-radius:12px;padding:9px 11px;color:#514A72;font-size:10px;line-height:1.55;text-align:center}
+.curve-formula .formula{font-family:"Cambria Math","Times New Roman",serif;font-size:15px;color:#26203E;margin-bottom:4px;overflow-wrap:anywhere}
+.simulation-parameter-note{font-size:10px;line-height:1.5;color:#667085;background:#F7F8FB;border-radius:10px;padding:8px 9px;margin-top:8px}
+.audit-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;padding:0 16px 12px}.audit-item{border:1px solid #DDE4EC;border-radius:11px;padding:9px 10px;background:#FCFCFD}.audit-item.pass{border-color:#A9DCC8;background:#F2FBF7}.audit-item.hidden{border-color:#D7DEE8;background:#F7F8FB}.audit-item .name{font-size:9px;text-transform:uppercase;letter-spacing:.4px;color:#667085;font-weight:880}.audit-item .status{font-size:14px;font-weight:900;margin-top:3px}.audit-item.pass .status{color:#176A4C}.audit-item.hidden .status{color:#667085}.audit-item .detail{font-size:9px;color:#667085;line-height:1.4;margin-top:2px}@media(max-width:650px){.audit-grid{grid-template-columns:1fr}}
+
+</style>
+</head>
+<body>
+<header class="hero">
+  <div class="hero-inner">
+    <div>
+      <h1>Association Is Not Always Causation and the Potential Outcome Framework <span class="author">— Se Yoon Lee, Ph.D.</span></h1>
+      <p>Use one synthetic smoking–CVD population to distinguish what is observed from what is causal. Change the treatment-assignment mechanism while keeping each person’s two potential outcomes fixed, reveal or hide counterfactuals, and examine when the observed association agrees—or disagrees—with the average causal effect.</p>
+      <div class="hero-callout"><b>Central question:</b> What would happen to the same people if smoking status were changed, rather than merely observed?</div>
+    </div>
+    <div class="hero-badge">GRADUATE-LEVEL • SELF-CONTAINED • INLINE SVG</div>
+  </div>
+</header>
+
+<main class="app">
+<aside class="controls" aria-label="Causal simulation controls">
+  <div class="controls-head"><h2>Construct the study</h2><p>The population’s potential outcomes and the treatment-assignment mechanism can be changed separately.</p></div>
+
+  <div class="control-section">
+    <div class="section-label">Conceptual presets</div>
+    <div class="preset-row">
+      <button class="preset" data-preset="assocOnly">Association without effect</button>
+      <button class="preset" data-preset="causalFair">Causal effect, fair groups</button>
+      <button class="preset" data-preset="exaggerate">Confounding exaggerates</button>
+      <button class="preset" data-preset="mask">Confounding masks effect</button>
+      <button class="preset" data-preset="randomized">Randomized experiment</button>
+      <button class="preset" data-preset="hidden">Hidden confounding</button>
+    </div>
+  </div>
+
+  <div class="control-section">
+    <div class="section-label">Treatment assignment</div>
+    <div class="control"><label for="designSelect" style="display:block;margin-bottom:6px">Design</label><select id="designSelect"><option value="observational" selected>Observational assignment</option><option value="randomized">Completely randomized experiment</option></select></div>
+    <div class="control"><div class="control-top"><label for="selectionRange">Selection by baseline CVD risk</label><span class="value" id="selectionValue"></span></div><input id="selectionRange" type="range" min="-2.5" max="2.5" step="0.05" value="1.35"><div class="range-ends"><span>high-risk less likely</span><span>high-risk more likely</span></div></div>
+    <div class="control"><div class="control-top"><label for="overlapRange">Overlap quality</label><span class="value" id="overlapValue"></span></div><input id="overlapRange" type="range" min="0.15" max="1" step="0.01" value="0.72"><div class="range-ends"><span>limited overlap</span><span>good overlap</span></div></div>
+    <div class="control"><div class="control-top"><label for="prevalenceRange">Target smoking prevalence</label><span class="value" id="prevalenceValue"></span></div><input id="prevalenceRange" type="range" min="15" max="65" step="1" value="35"><div class="range-ends"><span>15%</span><span>65%</span></div></div>
+    <div class="control"><div class="control-top"><label for="hiddenRange">Strength of hidden prognostic factor U</label><span class="value" id="hiddenValue"></span></div><input id="hiddenRange" type="range" min="0" max="1.5" step="0.05" value="0"><div class="range-ends"><span>inactive</span><span>strong U effect</span></div><div class="simulation-parameter-note">Under observational assignment, U affects both treatment and outcome and is therefore an unmeasured confounder. Under complete randomization, U may still predict the outcome, but it does not affect treatment and is not a confounder.</div></div>
+  </div>
+
+  <div class="control-section">
+    <div class="section-label">Potential outcomes</div>
+    <div class="control"><div class="control-top"><label for="nRange">Number of subjects</label><span class="value" id="nValue"></span></div><input id="nRange" type="range" min="120" max="600" step="20" value="320"><div class="range-ends"><span>120</span><span>600</span></div></div>
+    <div class="control"><div class="control-top"><label for="effectRange">Geometric-mean conditional causal OR</label><span class="value" id="effectValue"></span></div><input id="effectRange" type="range" min="0.65" max="3" step="0.05" value="1.80"><div class="range-ends"><span>geometric-mean OR &lt; 1</span><span>geometric-mean OR &gt; 1</span></div></div>
+    <div class="control"><div class="control-top"><label for="heteroRange">Conditional-effect heterogeneity</label><span class="value" id="heteroValue"></span></div><input id="heteroRange" type="range" min="0" max="1.25" step="0.05" value="0.75"><div class="range-ends"><span>common conditional OR</span><span>OR varies with X</span></div><div class="simulation-parameter-note">The conditional odds ratio is a structural simulation parameter, not the marginal ATE or marginal risk ratio. The effect modifier is bounded and centered, so the selected OR is the finite-cohort geometric mean of the subject-specific conditional ORs. When heterogeneity is nonzero, a geometric-mean OR of 1 is not a sharp null because some subject-specific ORs can be above 1 and others below 1.</div></div>
+    <div class="control"><div class="control-top"><label for="seedInput">Population seed</label><span class="value" id="seedValue"></span></div><input id="seedInput" type="number" min="1" max="99999999" value="20260710"></div>
+    <div class="primary-row"><button class="primary" id="newPopulation">New population</button><button class="secondary" id="reassignTreatment">Reassign treatment</button></div>
+  </div>
+
+  <div class="control-section">
+    <div class="section-label">Reveal simulation truth</div>
+    <div class="checkrow"><input id="revealToggle" type="checkbox" checked><label for="revealToggle">Reveal simulation-oracle information: both potential outcomes, the finite-population ATE, true assignment probabilities, and structural effect parameters. <b>Simulation only:</b> real data do not reveal these quantities.</label></div>
+    <div class="teaching-note">Turn this off for an observed-data view. Counterfactual outcomes, oracle assignment probabilities, structural effects, response types, and repeated-reassignment experiments are then hidden or locked.</div>
+  </div>
+
+  <div class="control-section">
+    <div class="section-label">Reset</div>
+    <button class="secondary" id="resetControls" style="width:100%">Restore default scenario</button>
+  </div>
+</aside>
+
+<section class="workspace">
+  <div class="metrics" id="metricStrip" aria-live="polite"></div>
+
+  <article class="card math-card" aria-labelledby="mathFrameworkTitle">
+    <div class="card-head"><div><h3 id="mathFrameworkTitle">Mathematical formulation</h3><p>Potential outcomes separate the causal estimand from the observed-data comparison. The tabs below connect individual counterfactuals, population effects, selection bias, and identification.</p></div><span class="graduate-tag">Graduate-level notation</span></div>
+    <div class="math-tabs" role="tablist" aria-label="Potential outcome framework tabs">
+      <button class="math-tab" role="tab" aria-selected="true" data-tab="potential">Potential outcomes</button>
+      <button class="math-tab" role="tab" aria-selected="false" data-tab="association">Association vs causation</button>
+      <button class="math-tab" role="tab" aria-selected="false" data-tab="identification">Identification</button>
+      <button class="math-tab" role="tab" aria-selected="false" data-tab="randomization">Randomization</button>
+    </div>
+    <section class="math-panel active" id="panelPotential" role="tabpanel">
+      <div class="math-chain"><div class="chain-label">Potential-outcome map</div><div class="math-scroll"><math display="block"><mrow><mo>{</mo><msub><mi>Y</mi><mi>i</mi></msub><mo>(</mo><mn>1</mn><mo>)</mo><mo>,</mo><msub><mi>Y</mi><mi>i</mi></msub><mo>(</mo><mn>0</mn><mo>)</mo><mo>}</mo><mspace width=".7em"/><mo>⟶</mo><mspace width=".7em"/><msub><mi>τ</mi><mi>i</mi></msub><mo>=</mo><msub><mi>Y</mi><mi>i</mi></msub><mo>(</mo><mn>1</mn><mo>)</mo><mo>−</mo><msub><mi>Y</mi><mi>i</mi></msub><mo>(</mo><mn>0</mn><mo>)</mo><mspace width=".7em"/><mo>⟶</mo><mspace width=".7em"/><msub><mi>τ</mi><mtext>ATE</mtext></msub><mo>=</mo><mi>E</mi><mo>{</mo><mi>Y</mi><mo>(</mo><mn>1</mn><mo>)</mo><mo>−</mo><mi>Y</mi><mo>(</mo><mn>0</mn><mo>)</mo><mo>}</mo></mrow></math></div></div>
+      <div class="math-grid">
+        <div class="math-box"><h4>Two outcomes for every subject</h4><div class="math-scroll"><math display="block"><mrow><msub><mi>Y</mi><mi>i</mi></msub><mo>(</mo><mn>1</mn><mo>)</mo><mo>,</mo><mspace width=".7em"/><msub><mi>Y</mi><mi>i</mi></msub><mo>(</mo><mn>0</mn><mo>)</mo></mrow></math></div><p>The potential outcomes are jointly well-defined in the causal model, even though only one can be observed.</p></div>
+        <div class="math-box"><h4>Consistency links worlds to data</h4><div class="math-scroll"><math display="block"><mrow><msub><mi>Y</mi><mi>i</mi></msub><mo>=</mo><msub><mi>T</mi><mi>i</mi></msub><msub><mi>Y</mi><mi>i</mi></msub><mo>(</mo><mn>1</mn><mo>)</mo><mo>+</mo><mo>{</mo><mn>1</mn><mo>−</mo><msub><mi>T</mi><mi>i</mi></msub><mo>}</mo><msub><mi>Y</mi><mi>i</mi></msub><mo>(</mo><mn>0</mn><mo>)</mo></mrow></math></div><p>The observed outcome is the potential outcome under the treatment actually received.</p></div>
+        <div class="math-box"><h4>Finite-population ATE</h4><div class="math-scroll"><math display="block"><mrow><msub><mover><mi>τ</mi><mo>¯</mo></mover><mi>n</mi></msub><mo>=</mo><mfrac><mn>1</mn><mi>n</mi></mfrac><munderover><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></munderover><mo>{</mo><msub><mi>Y</mi><mi>i</mi></msub><mo>(</mo><mn>1</mn><mo>)</mo><mo>−</mo><msub><mi>Y</mi><mi>i</mi></msub><mo>(</mo><mn>0</mn><mo>)</mo><mo>}</mo></mrow></math></div><p>This is the causal risk difference for the generated finite cohort. The expectation in the map above defines the superpopulation ATE; τ̄<sub>n</sub> is its finite-cohort analog used throughout the dashboard.</p></div>
+      </div>
+      <div class="warning-box"><b>Fundamental problem of causal inference.</b> For the same person at the same time, the observed dataset contains either <i>Y</i><sub>i</sub>(1) or <i>Y</i><sub>i</sub>(0), never both. Individual causal effects are therefore not directly observed.</div>
+      <div class="identity-box" style="margin-top:10px"><div class="label">Simulation DGP and cross-world coupling</div><div class="math-scroll"><math display="block"><mtable rowspacing=".5em"><mtr><mtd><msub><mi>p</mi><mrow><mi>t</mi><mi>i</mi></mrow></msub><mo>=</mo><mi>P</mi><mo>{</mo><msub><mi>Y</mi><mi>i</mi></msub><mo>(</mo><mi>t</mi><mo>)</mo><mo>=</mo><mn>1</mn><mo>|</mo><msub><mi>X</mi><mi>i</mi></msub><mo>,</mo><msub><mi>U</mi><mi>i</mi></msub><mo>}</mo><mo>,</mo><mspace width=".7em"/><msub><mi>Y</mi><mi>i</mi></msub><mo>(</mo><mi>t</mi><mo>)</mo><mo>=</mo><mi mathvariant="normal">𝟙</mi><mo>{</mo><msub><mi>R</mi><mi>i</mi></msub><mo>≤</mo><msub><mi>p</mi><mrow><mi>t</mi><mi>i</mi></mrow></msub><mo>}</mo></mtd></mtr><mtr><mtd><mi>log</mi><mfrac><mrow><msub><mi>p</mi><mrow><mn>1</mn><mi>i</mi></mrow></msub><mo>/</mo><mo>(</mo><mn>1</mn><mo>−</mo><msub><mi>p</mi><mrow><mn>1</mn><mi>i</mi></mrow></msub><mo>)</mo></mrow><mrow><msub><mi>p</mi><mrow><mn>0</mn><mi>i</mi></mrow></msub><mo>/</mo><mo>(</mo><mn>1</mn><mo>−</mo><msub><mi>p</mi><mrow><mn>0</mn><mi>i</mi></mrow></msub><mo>)</mo></mrow></mfrac><mo>=</mo><mi>log</mi><mo>(</mo><mi>θ</mi><mo>)</mo><mo>+</mo><mi>δ</mi><msub><mi>h</mi><mi>i</mi></msub><mo>,</mo><mspace width=".5em"/><mfrac><mn>1</mn><mi>n</mi></mfrac><mo>∑</mo><msub><mi>h</mi><mi>i</mi></msub><mo>=</mo><mn>0</mn><mo>,</mo><mspace width=".5em"/><msub><mi>h</mi><mi>i</mi></msub><mtext>&nbsp;bounded</mtext></mtd></mtr></mtable></math></div></div>
+      <div class="crossworld-box"><b>Cross-world caution.</b> A latent rank R<sub>i</sub> ~ Uniform(0,1), generated independently of (X<sub>i</sub>,U<sub>i</sub>), is used for both treatment worlds. This gives a coherent rank-preserving structural model, but it is a simulation choice. The individual effects τ<sub>i</sub> and the four binary response-type proportions depend on this coupling. The marginal ATE depends only on the two marginal means, whereas the joint response-type distribution is generally not identified from observed data.</div>
+      <div class="live-math" id="livePotential"></div>
+    </section>
+    <section class="math-panel" id="panelAssociation" role="tabpanel" hidden>
+      <div class="math-chain"><div class="chain-label">Different comparisons</div><div class="math-scroll"><math display="block"><mtable rowspacing=".6em"><mtr><mtd><msub><mi>Δ</mi><mtext>obs</mtext></msub><mo>=</mo><mi>E</mi><mo>(</mo><mi>Y</mi><mo>|</mo><mi>T</mi><mo>=</mo><mn>1</mn><mo>)</mo><mo>−</mo><mi>E</mi><mo>(</mo><mi>Y</mi><mo>|</mo><mi>T</mi><mo>=</mo><mn>0</mn><mo>)</mo></mtd></mtr><mtr><mtd><msub><mi>Δ</mi><mtext>ATE</mtext></msub><mo>=</mo><mi>E</mi><mo>{</mo><mi>Y</mi><mo>(</mo><mn>1</mn><mo>)</mo><mo>}</mo><mo>−</mo><mi>E</mi><mo>{</mo><mi>Y</mi><mo>(</mo><mn>0</mn><mo>)</mo><mo>}</mo></mtd></mtr></mtable></math></div></div>
+      <div class="identity-box"><div class="label">Exact population association–causal gap decomposition, using consistency</div><div class="math-scroll"><math display="block"><mrow><msub><mi>Δ</mi><mtext>obs</mtext></msub><mo>−</mo><msub><mi>Δ</mi><mtext>ATE</mtext></msub><mo>=</mo><mo>[</mo><mi>E</mi><mo>{</mo><mi>Y</mi><mo>(</mo><mn>1</mn><mo>)</mo><mo>|</mo><mi>T</mi><mo>=</mo><mn>1</mn><mo>}</mo><mo>−</mo><mi>E</mi><mo>{</mo><mi>Y</mi><mo>(</mo><mn>1</mn><mo>)</mo><mo>}</mo><mo>]</mo><mo>+</mo><mo>[</mo><mi>E</mi><mo>{</mo><mi>Y</mi><mo>(</mo><mn>0</mn><mo>)</mo><mo>}</mo><mo>−</mo><mi>E</mi><mo>{</mo><mi>Y</mi><mo>(</mo><mn>0</mn><mo>)</mo><mo>|</mo><mi>T</mi><mo>=</mo><mn>0</mn><mo>}</mo><mo>]</mo></mrow></math></div></div>
+      <div class="math-grid" style="margin-top:10px"><div class="math-box"><h4>Association</h4><p>Compares two different observed groups living under different treatments and usually different covariate distributions.</p></div><div class="math-box"><h4>Causal effect</h4><p>Compares the same target population under two interventions, smoking versus no smoking.</p></div><div class="math-box"><h4>Population gap versus realized gap</h4><p>At the population level, the displayed decomposition is a selection-bias decomposition. In one finite randomized assignment, the observed-minus-ATE gap can be nonzero from random imbalance even though the difference-in-means estimator is unbiased over assignments.</p></div></div>
+      <div class="live-math" id="liveAssociation"></div>
+    </section>
+    <section class="math-panel" id="panelIdentification" role="tabpanel" hidden>
+      <div class="math-grid">
+        <div class="math-box"><h4>Consistency</h4><div class="math-scroll"><math display="block"><mrow><mi>Y</mi><mo>=</mo><mi>Y</mi><mo>(</mo><mi>T</mi><mo>)</mo></mrow></math></div><p>Treatment versions and interference must be handled so the intervention is well-defined.</p></div>
+        <div class="math-box"><h4>Conditional exchangeability</h4><div class="math-scroll"><math display="block"><mrow><mo>{</mo><mi>Y</mi><mo>(</mo><mn>1</mn><mo>)</mo><mo>,</mo><mi>Y</mi><mo>(</mo><mn>0</mn><mo>)</mo><mo>}</mo><mo>⊥</mo><mi>T</mi><mo>|</mo><mi>X</mi></mrow></math></div><p>After conditioning on measured baseline covariates, assignment contains no residual information about the potential outcomes.</p></div>
+        <div class="math-box"><h4>Positivity</h4><div class="math-scroll"><math display="block"><mrow><mn>0</mn><mo>&lt;</mo><mi>e</mi><mo>(</mo><mi>x</mi><mo>)</mo><mo>≡</mo><mi>P</mi><mo>(</mo><mi>T</mi><mo>=</mo><mn>1</mn><mo>|</mo><mi>X</mi><mo>=</mo><mi>x</mi><mo>)</mo><mo>&lt;</mo><mn>1</mn><mspace width=".5em"/><mtext>for&nbsp;</mtext><msub><mi>P</mi><mi>X</mi></msub><mtext>-almost every&nbsp;</mtext><mi>x</mi></mrow></math></div><p>Both treatment choices must be possible on the support of the target covariate distribution. This structural condition is distinct from finite-sample practical overlap.</p></div>
+      </div>
+      <div class="identity-box"><div class="label">G-formula identification</div><div class="math-scroll"><math display="block"><mrow><mi>E</mi><mo>{</mo><mi>Y</mi><mo>(</mo><mi>t</mi><mo>)</mo><mo>}</mo><mo>=</mo><mi>E</mi><mo>[</mo><mi>E</mi><mo>{</mo><mi>Y</mi><mo>|</mo><mi>T</mi><mo>=</mo><mi>t</mi><mo>,</mo><mi>X</mi><mo>}</mo><mo>]</mo><mo>,</mo><mspace width=".7em"/><mi>t</mi><mo>∈</mo><mo>{</mo><mn>0</mn><mo>,</mo><mn>1</mn><mo>}</mo></mrow></math></div></div>
+      <div class="warning-box"><b>Identification is not an observed-data theorem without assumptions.</b> A large sample, a small p-value, or excellent prediction does not by itself transform association into causation. The pass/fail labels in this dashboard are known only because the simulation exposes its data-generating mechanism; they are not empirical tests of exchangeability.</div>
+      <div class="live-math" id="liveIdentification"></div>
+    </section>
+    <section class="math-panel" id="panelRandomization" role="tabpanel" hidden>
+      <div class="math-chain"><div class="chain-label">Complete randomization: exact finite-population statement</div><div class="math-scroll"><math display="block"><mtable rowspacing=".55em"><mtr><mtd><msub><mi>ℱ</mi><mi>n</mi></msub><mo>=</mo><mo>{</mo><msub><mi>X</mi><mi>i</mi></msub><mo>,</mo><msub><mi>Y</mi><mi>i</mi></msub><mo>(</mo><mn>1</mn><mo>)</mo><mo>,</mo><msub><mi>Y</mi><mi>i</mi></msub><mo>(</mo><mn>0</mn><mo>)</mo><msubsup><mo>}</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></msubsup><mo>,</mo><mspace width=".7em"/><msub><mi>P</mi><mi>A</mi></msub><mo>(</mo><mrow><mi mathvariant="bold">T</mi></mrow><mo>=</mo><mrow><mi mathvariant="bold">t</mi></mrow><mo>|</mo><msub><mi>ℱ</mi><mi>n</mi></msub><mo>)</mo><mo>=</mo><mfrac><mrow><mi mathvariant="normal">𝟙</mi><mo>{</mo><mo>∑</mo><msub><mi>t</mi><mi>i</mi></msub><mo>=</mo><msub><mi>n</mi><mn>1</mn></msub><mo>}</mo></mrow><mrow><mo>(</mo><mtable><mtr><mtd><mi>n</mi></mtd></mtr><mtr><mtd><msub><mi>n</mi><mn>1</mn></msub></mtd></mtr></mtable><mo>)</mo></mrow></mfrac></mtd></mtr><mtr><mtd><msub><mover><mi>τ</mi><mo>^</mo></mover><mtext>DM</mtext></msub><mo>=</mo><mfrac><mn>1</mn><msub><mi>n</mi><mn>1</mn></msub></mfrac><mo>∑</mo><msub><mi>T</mi><mi>i</mi></msub><msub><mi>Y</mi><mi>i</mi></msub><mo>−</mo><mfrac><mn>1</mn><msub><mi>n</mi><mn>0</mn></msub></mfrac><mo>∑</mo><mo>(</mo><mn>1</mn><mo>−</mo><msub><mi>T</mi><mi>i</mi></msub><mo>)</mo><msub><mi>Y</mi><mi>i</mi></msub><mo>,</mo><mspace width=".7em"/><msub><mi>E</mi><mi>A</mi></msub><mo>(</mo><msub><mover><mi>τ</mi><mo>^</mo></mover><mtext>DM</mtext></msub><mo>|</mo><msub><mi>ℱ</mi><mi>n</mi></msub><mo>)</mo><mo>=</mo><msub><mover><mi>τ</mi><mo>¯</mo></mover><mi>n</mi></msub><mo>,</mo><mspace width=".5em"/><msub><mi>n</mi><mn>0</mn></msub><mo>=</mo><mi>n</mi><mo>−</mo><msub><mi>n</mi><mn>1</mn></msub></mtd></mtr></mtable></math></div></div>
+      <div class="math-grid"><div class="math-box"><h4>Potential outcomes remain fixed</h4><p>The repeated experiment conditions on the finite schedule ℱ<sub>n</sub>. Only the treatment vector is randomized.</p></div><div class="math-box"><h4>Unbiased—not exactly equal in every assignment</h4><p>A realized difference in means generally differs from τ̄<sub>n</sub>. Its randomization expectation equals τ̄<sub>n</sub>.</p></div><div class="math-box"><h4>Observed covariate balance is random</h4><p>Randomization makes treatment independent of the fixed schedule by design, but one realized assignment can still have nonzero covariate imbalance.</p></div></div>
+      <div class="live-math" id="liveRandomization"></div>
+    </section>
+  </article>
+
+  <div class="grid-two">
+    <article class="card">
+      <div class="card-head"><div><h3>1. Causal graph: causal and backdoor paths</h3><p>Solid arrows encode the current structural graph; dashed arrows show inactive schematic alternatives for orientation. Thickness is only a pedagogical cue and has no formal DAG meaning.</p></div><div class="mini-controls"><label for="dagHighlight">Highlight</label><select id="dagHighlight"><option value="all">All paths</option><option value="causal">Causal path T → Y</option><option value="backdoor">Measured backdoor T ← X → Y</option><option value="hidden">Hidden backdoor T ← U → Y</option></select></div></div>
+      <div class="chart-wrap"><svg id="dagSvg" class="chart" viewBox="0 0 780 385" role="img" aria-label="Causal directed acyclic graph"></svg></div>
+      <div class="verdict" id="causalVerdict"></div>
+    </article>
+    <article class="card">
+      <div class="card-head"><div><h3>2. Association can change while causation stays fixed</h3><p>The curve varies who is selected into smoking while holding every subject’s potential outcomes fixed.</p></div></div>
+      <div class="legend"><span><i class="line-key" style="border-color:var(--treated)"></i>Assignment-probability–weighted contrast</span><span><i class="line-key" style="border-color:var(--green)"></i>Finite-population ATE</span><span><i class="dot" style="background:var(--accent)"></i>Current realized sample</span></div>
+      <div class="chart-wrap"><svg id="associationCurveSvg" class="chart" viewBox="0 0 780 385" role="img" aria-label="Observed association across confounding strengths"></svg></div>
+      <div class="curve-formula"><div class="formula">Δ<sub>sel</sub>(s) = Σ e<sub>i</sub>(s)Y<sub>i</sub>(1) / Σ e<sub>i</sub>(s) − Σ{1−e<sub>i</sub>(s)}Y<sub>i</sub>(0) / Σ{1−e<sub>i</sub>(s)}</div>This ratio-of-weighted-sums is the assignment-probability contrast induced by the selection mechanism. It is not exactly the expectation of a finite-sample ratio. The filled point is the realized crude difference from one assignment.</div>
+      <div class="chart-note" id="associationCurveNote">The causal line is horizontal because the potential outcomes do not change. Only the treatment-assignment mechanism changes.</div>
+    </article>
+  </div>
+
+  <div class="grid-top">
+    <article class="card">
+      <div class="card-head"><div><h3>3. The observed cohort</h3><p>Each point is one subject. Color is observed smoking status; a dark ring marks observed CVD.</p></div><div class="mini-controls"><label for="xVar">x</label><select id="xVar"><option value="age">Age</option><option value="bmi">BMI</option><option value="income">Income ratio</option><option value="riskScore">Baseline risk score</option></select><label for="yVar">y</label><select id="yVar"><option value="bmi">BMI</option><option value="age">Age</option><option value="income">Income ratio</option><option value="riskScore">Baseline risk score</option></select></div></div>
+      <div class="legend"><span><i class="dot" style="background:var(--treated)"></i>Smoker T=1</span><span><i class="dot" style="background:var(--control)"></i>Non-smoker T=0</span><span><i class="ring"></i>Observed CVD Y=1</span><span>larger point = higher oracle assignment extremity (truth-reveal mode)</span></div>
+      <div class="chart-wrap"><svg id="cohortSvg" class="chart" viewBox="0 0 850 470" role="img" aria-label="Observed subject cohort"></svg></div>
+      <div class="chart-note" id="cohortNote">Click a point to inspect its factual and counterfactual outcomes. Treatment assignment may depend on prognosis even though the causal effect is defined within the same person.</div>
+    </article>
+    <article class="card">
+      <div class="card-head"><div><h3>Selected subject: two possible worlds</h3><p>Only one potential outcome is factual; the other is counterfactual.</p></div></div>
+      <div class="subject-body" id="subjectPanel"></div>
+    </article>
+  </div>
+
+  <article class="card full-card">
+    <div class="card-head"><div><h3>4. The fundamental problem: the potential-outcome schedule</h3><p>Each row contains two potential outcomes, but the observed dataset reveals only the cell selected by T.</p></div><div class="schedule-controls"><label for="scheduleFilter">Show</label><select id="scheduleFilter"><option value="all">All subjects</option><option value="pos">τ = +1</option><option value="zero">τ = 0</option><option value="neg">τ = −1</option></select><button class="mini-button secondary-mini" id="prevSchedule">Previous subjects</button><button class="mini-button secondary-mini" id="nextSchedule">Next subjects</button></div></div>
+    <div class="legend"><span><i class="dot" style="background:var(--treated)"></i>Y(1)</span><span><i class="dot" style="background:var(--control)"></i>Y(0)</span><span>solid cell = factual</span><span>hatched cell = counterfactual</span></div>
+    <div class="chart-wrap"><svg id="scheduleSvg" class="chart" viewBox="0 0 960 500" role="img" aria-label="Potential outcome schedule with missing counterfactuals"></svg></div>
+    <div class="chart-note" id="scheduleNote">The reveal switch can display the simulation truth, but this does not change what an actual observational dataset would contain.</div>
+  </article>
+
+  <div class="grid-two">
+    <article class="card">
+      <div class="card-head"><div><h3>5. Observed association versus causal contrast</h3><p>Observed groups and intervention worlds answer different questions.</p></div></div>
+      <div class="legend"><span><i class="dot" style="background:var(--treated)"></i>Smoking</span><span><i class="dot" style="background:var(--control)"></i>No smoking</span><span><i class="dash-key"></i>causal truth</span></div>
+      <div class="chart-wrap"><svg id="comparisonSvg" class="chart" viewBox="0 0 790 410" role="img" aria-label="Observed and causal risk comparisons"></svg></div>
+      <div class="comparison-summary" id="comparisonSummary"></div>
+    </article>
+    <article class="card">
+      <div class="card-head"><div><h3>6. Binary potential-outcome types</h3><p>For the bad outcome Y=1, the ATE equals the proportion harmed minus the proportion protected.</p></div></div>
+      <div class="chart-wrap"><svg id="typesSvg" class="chart" viewBox="0 0 790 310" role="img" aria-label="Potential outcome response types"></svg></div>
+      <div class="type-grid" id="typeGrid"></div>
+      <div class="chart-note"><strong>Finite-cohort identity:</strong> τ̄<sub>n</sub> = (n<sub>10</sub>−n<sub>01</sub>)/n. The response-type proportions require the joint distribution of {Y(1),Y(0)}, which observed data do not identify without additional cross-world assumptions. This simulation defines that joint distribution through a shared latent rank.</div>
+    </article>
+  </div>
+
+  <div class="grid-two">
+    <article class="card">
+      <div class="card-head"><div><h3>7. Repeated treatment assignments</h3><p>Keep X, Y(1), and Y(0) fixed; repeatedly change only T.</p></div><div class="mini-controls"><label for="repeatM">Assignments</label><select id="repeatM"><option value="50">50</option><option value="100" selected>100</option><option value="300">300</option><option value="500">500</option></select><button class="mini-button" id="runAssignments">Run</button><button class="mini-button secondary-mini" id="stopAssignments">Stop</button></div></div>
+      <div class="progress-shell"><div class="progress-fill" id="repeatProgress"></div></div><div class="status-line" id="repeatStatus"></div>
+      <div class="repeat-summary" id="repeatSummary"></div>
+      <div class="chart-wrap"><svg id="repeatSvg" class="chart" viewBox="0 0 790 390" role="img" aria-label="Repeated assignment distribution of observed risk differences"></svg></div>
+      <div class="chart-note"><b>Simulation-only experiment:</b> outcomes after reassignment require the complete potential-outcome schedule. Under complete randomization, the exact randomization expectation is the finite-population ATE; a finite Monte Carlo mean is only approximately equal to it. Observational selection can shift the entire assignment distribution.</div>
+    </article>
+    <article class="card">
+      <div class="card-head"><div><h3>8. Identification checklist</h3><p>The observed association is causal only when the design or assumptions justify the missing counterfactual comparison.</p></div></div>
+      <div class="ident-grid" id="identGrid"></div>
+      <div class="chart-wrap"><svg id="overlapSvg" class="chart" viewBox="0 0 790 300" role="img" aria-label="Treatment propensity overlap"></svg></div>
+      <div class="chart-note" id="identificationNote"></div>
+      <div class="audit-grid" id="auditGrid" aria-live="polite"></div>
+      <div class="chart-note"><strong>Scope of these checks:</strong> they verify algebra and internal simulation construction. They do not establish exchangeability in real observed data.</div>
+    </article>
+  </div>
+
+  <article class="card table-card">
+    <details>
+      <summary>Inspect the subject-level causal schedule</summary>
+      <div class="table-tools"><button id="exportCsv">Export full simulation-truth CSV</button><button data-svg="dagSvg">Save DAG as SVG</button><button data-svg="associationCurveSvg">Save association curve as SVG</button><button data-svg="cohortSvg">Save cohort plot as SVG</button><button data-svg="scheduleSvg">Save potential-outcome schedule as SVG</button><button data-svg="comparisonSvg">Save comparison plot as SVG</button><button data-svg="repeatSvg">Save assignment plot as SVG</button><button onclick="window.print()">Print dashboard</button></div>
+      <div class="table-wrap"><table><thead><tr><th>Subject</th><th>Age</th><th>BMI</th><th>Income</th><th>Female</th><th>College</th><th>HTN</th><th>Risk score</th><th>Oracle eᵢ</th><th>Conditional ORᵢ</th><th>T</th><th>Y observed</th><th>Y(1)</th><th>Y(0)</th><th>τ</th></tr></thead><tbody id="subjectTable"></tbody></table></div>
+    </details>
+  </article>
+</section>
+</main>
+<div class="tooltip" id="tooltip"></div>
+<footer class="footer"><b>Se Yoon Lee, Ph.D.</b> • Synthetic data are generated entirely in the browser. The binary smoking intervention is idealized. Revealing both potential outcomes—and filtering subjects by τ—is possible only because the simulation specifies a cross-world structural coupling. In real studies, the joint distribution of {Y(1),Y(0)} and individual causal effects is not observed. Identification of marginal causal effects still requires a well-defined intervention, consistency, exchangeability, positivity, and appropriate handling of sampling and measurement.</footer>
+<script>
+(function(){
+"use strict";
+const COLORS={treated:'#E56B2F',control:'#2F6EA5',accent:'#7157E8',green:'#208A62',danger:'#C23B3B',amber:'#B56A00',teal:'#137A83',gray:'#98A2B3',ink:'#162033',muted:'#667085',grid:'#E4E8EF'};
+const defaults={n:320,design:'observational',selection:1.35,overlap:.72,prevalence:.35,effect:1.80,hetero:.75,hidden:0,seed:20260710,reveal:true,x:'age',y:'bmi'};
+const state={...defaults,data:[],selected:0,scheduleStart:0,assignmentSeed:731,repeated:{running:false,cancel:false,done:0,total:0,values:[]},trueATE:NaN,trueRisk1:NaN,trueRisk0:NaN,observed:null};
+const $=id=>document.getElementById(id);
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+const logistic=x=>1/(1+Math.exp(-clamp(x,-30,30)));
+const logit=p=>Math.log(clamp(p,1e-8,1-1e-8)/(1-clamp(p,1e-8,1-1e-8)));
+const fmt=(x,d=2)=>Number.isFinite(x)?x.toFixed(d):'—';
+const pct=(x,d=1)=>Number.isFinite(x)?(100*x).toFixed(d)+'%':'—';
+const signedPct=(x,d=1)=>Number.isFinite(x)?(x>=0?'+':'')+pct(x,d):'—';
+const mean=a=>a.length?a.reduce((s,x)=>s+x,0)/a.length:NaN;
+const sum=a=>a.reduce((s,x)=>s+x,0);
+const variance=a=>{if(a.length<2)return 0;const m=mean(a);return a.reduce((s,x)=>s+(x-m)*(x-m),0)/(a.length-1)};
+const sd=a=>Math.sqrt(Math.max(0,variance(a)));
+const esc=s=>String(s).replace(/[&<>\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function mulberry32(seed){let a=seed>>>0;return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function randn(rng){let u=0,v=0;while(u===0)u=rng();while(v===0)v=rng();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)}
+function quantile(a,q){const b=a.filter(Number.isFinite).slice().sort((x,y)=>x-y);if(!b.length)return NaN;const h=(b.length-1)*q,l=Math.floor(h),u=Math.ceil(h);return l===u?b[l]:b[l]+(h-l)*(b[u]-b[l])}
+function covariance(a,b){const ma=mean(a),mb=mean(b);return a.reduce((s,x,i)=>s+(x-ma)*(b[i]-mb),0)/Math.max(1,a.length-1)}
+function correlation(a,b){const den=sd(a)*sd(b);return den?covariance(a,b)/den:0}
+function sx(x,lo,hi,L,R){return L+(R-L)*(x-lo)/(hi-lo)}
+function sy(y,lo,hi,T,B){return B-(B-T)*(y-lo)/(hi-lo)}
+function svgText(x,y,text,attrs=''){return '<text x="'+x+'" y="'+y+'" '+attrs+'>'+esc(text)+'</text>'}
+function axisTicks(lo,hi,n=5){const out=[];for(let i=0;i<=n;i++)out.push(lo+(hi-lo)*i/n);return out}
+function downloadBlob(content,type,name){const blob=new Blob([content],{type}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000)}
+function saveSvg(id){const svg=$(id),clone=svg.cloneNode(true);clone.setAttribute('xmlns','http://www.w3.org/2000/svg');clone.setAttribute('width',svg.viewBox.baseVal.width);clone.setAttribute('height',svg.viewBox.baseVal.height);downloadBlob(new XMLSerializer().serializeToString(clone),'image/svg+xml;charset=utf-8',id+'.svg')}
+function showTip(evt,html){const t=$('tooltip');t.innerHTML=html;t.style.opacity='1';moveTip(evt)}
+function moveTip(evt){const t=$('tooltip');t.style.left=Math.min(window.innerWidth-300,evt.clientX+12)+'px';t.style.top=Math.min(window.innerHeight-170,evt.clientY+12)+'px'}
+function hideTip(){$('tooltip').style.opacity='0'}
+
+const varMeta={
+ age:{label:'Age',domain:[20,84],fmt:v=>v.toFixed(0)},
+ bmi:{label:'BMI',domain:[17,46],fmt:v=>v.toFixed(1)},
+ income:{label:'Income ratio',domain:[.2,6],fmt:v=>v.toFixed(1)},
+ riskScore:{label:'Baseline risk score',domain:null,fmt:v=>v.toFixed(2)}
+};
+function readControls(){
+ state.n=+$('nRange').value;state.design=$('designSelect').value;state.selection=+$('selectionRange').value;state.overlap=+$('overlapRange').value;state.prevalence=+$('prevalenceRange').value/100;state.effect=+$('effectRange').value;state.hetero=+$('heteroRange').value;state.hidden=+$('hiddenRange').value;state.seed=+$('seedInput').value;state.reveal=$('revealToggle').checked;state.x=$('xVar').value;state.y=$('yVar').value;
+}
+function updateLabels(){
+ $('nValue').textContent=state.n;$('selectionValue').textContent=(state.selection>=0?'+':'')+state.selection.toFixed(2);$('overlapValue').textContent=Math.round(100*state.overlap)+'%';$('prevalenceValue').textContent=Math.round(100*state.prevalence)+'%';$('hiddenValue').textContent=state.hidden.toFixed(2);$('effectValue').textContent='OR '+state.effect.toFixed(2);$('heteroValue').textContent=state.hetero.toFixed(2);$('seedValue').textContent=state.seed;
+ const obs=state.design==='observational';$('selectionRange').disabled=!obs;$('overlapRange').disabled=!obs;$('selectionRange').parentElement.style.opacity=obs?'1':'.5';$('overlapRange').parentElement.style.opacity=obs?'1':'.5';
+ if($('scheduleFilter')){if(!state.reveal){$('scheduleFilter').value='all';state.scheduleStart=0}$('scheduleFilter').disabled=!state.reveal;$('scheduleFilter').style.opacity=state.reveal?'1':'.55'}
+ if($('repeatM')){$('repeatM').disabled=!state.reveal;$('repeatM').style.opacity=state.reveal?'1':'.55'}
+ if($('runAssignments')&&!state.repeated.running)$('runAssignments').disabled=!state.reveal;
+ if($('exportCsv'))$('exportCsv').textContent=state.reveal?'Export full simulation-truth CSV':'Export observed-data CSV';
+}
+function calibrateIntercept(scores,target){let lo=-10,hi=10;for(let k=0;k<70;k++){const mid=(lo+hi)/2,m=mean(scores.map(s=>clamp(logistic(mid+s),.005,.995)));if(m<target)lo=mid;else hi=mid}return(lo+hi)/2}
+function standardize(rows,key){const vals=rows.map(r=>r[key]),m=mean(vals),s=sd(vals)||1;rows.forEach(r=>r['z'+key.charAt(0).toUpperCase()+key.slice(1)]=(r[key]-m)/s);return{m,s}}
+function buildPopulation(){
+ readControls();updateLabels();stopRepeated();
+ const rng=mulberry32(state.seed),rows=[];
+ for(let i=0;i<state.n;i++){
+   const age=clamp(51+14*randn(rng),20,84),female=rng()<.52?1:0,ses=randn(rng);
+   const college=rng()<logistic(-.05+.75*ses-.012*(age-48))?1:0;
+   const income=clamp(Math.exp(.72+.42*ses+.17*college-.05*female+.22*randn(rng)),.2,6);
+   const bmi=clamp(27.2+1.05*female-.50*ses+.038*(age-50)+3.8*randn(rng),17,46);
+   const htn=rng()<logistic(-4.9+.050*age+.060*bmi+.20*(income<1.5))?1:0;
+   rows.push({id:'S'+String(i+1).padStart(3,'0'),age,bmi,income,female,college,htn,U:randn(rng),uY:rng()});
+ }
+ standardize(rows,'age');standardize(rows,'bmi');standardize(rows,'income');
+ for(const r of rows){
+   r.riskScore=.58*r.zAge+.38*r.zBmi-.28*r.zIncome+.62*r.htn+.12*r.female-.12*r.college;
+   const lp0=logit(.095)+.62*r.zAge+.38*r.zBmi-.27*r.zIncome+.64*r.htn+.13*r.female-.12*r.college+.72*state.hidden*r.U;
+   r.p0=logistic(lp0);
+   const linearModifier=-1.20*r.zAge+1.40*r.zIncome+.60*r.zBmi-.50*(r.female-.5)-.40*r.htn;r.rawEffectModifier=2*Math.tanh(linearModifier/2);
+ }
+ const modifierMean=mean(rows.map(r=>r.rawEffectModifier));
+ for(const r of rows){
+   r.effectIndex=r.rawEffectModifier-modifierMean;
+   r.logOR=Math.log(state.effect)+state.hetero*r.effectIndex;
+   r.p1=logistic(logit(r.p0)+r.logOR);
+   r.Y0=r.uY<r.p0?1:0;r.Y1=r.uY<r.p1?1:0;r.tau=r.Y1-r.Y0;
+ }
+ state.modelRisk1=mean(rows.map(r=>r.p1));state.modelRisk0=mean(rows.map(r=>r.p0));state.modelATE=state.modelRisk1-state.modelRisk0;state.meanLogOR=mean(rows.map(r=>r.logOR));
+ state.data=rows;state.selected=0;state.scheduleStart=0;state.assignmentSeed=(state.seed^0xA5A5A5A5)>>>0;assignTreatment(false);
+}
+function assignmentProbabilities(selection=state.selection,design=state.design){
+ const rows=state.data;if(design==='randomized'){const n1=clamp(Math.round(state.prevalence*rows.length),1,rows.length-1),pi=n1/rows.length;return rows.map(()=>pi)}
+ const scale=1.65-.85*state.overlap;
+ const scores=rows.map(r=>selection*scale*r.riskScore+state.hidden*.90*r.U);
+ const b=calibrateIntercept(scores,state.prevalence);
+ return scores.map(s=>clamp(logistic(b+s),.005,.995));
+}
+function assignTreatment(increment=true){
+ readControls();updateLabels();stopRepeated();if(increment)state.assignmentSeed=(state.assignmentSeed+104729)>>>0;
+ const rng=mulberry32(state.assignmentSeed),rows=state.data,probs=assignmentProbabilities();
+ if(state.design==='randomized'){
+   const idx=rows.map((_,i)=>i);for(let i=idx.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[idx[i],idx[j]]=[idx[j],idx[i]]}
+   const n1=clamp(Math.round(state.prevalence*rows.length),1,rows.length-1),pi=n1/rows.length,treated=new Set(idx.slice(0,n1));
+   rows.forEach((r,i)=>{r.e=pi;r.T=treated.has(i)?1:0;r.Y=r.T?r.Y1:r.Y0});
+ }else{
+   rows.forEach((r,i)=>{r.e=probs[i];r.T=rng()<r.e?1:0;r.Y=r.T?r.Y1:r.Y0});
+   let n1=sum(rows.map(r=>r.T));if(n1===0||n1===rows.length){state.assignmentSeed=(state.assignmentSeed+7919)>>>0;return assignTreatment(false)}
+ }
+ state.trueRisk1=mean(rows.map(r=>r.Y1));state.trueRisk0=mean(rows.map(r=>r.Y0));state.trueATE=state.trueRisk1-state.trueRisk0;state.observed=computeObserved(rows);renderAll();
+}
+function computeObserved(rows){
+ const r1=rows.filter(r=>r.T===1),r0=rows.filter(r=>r.T===0),risk1=mean(r1.map(r=>r.Y)),risk0=mean(r0.map(r=>r.Y));
+ const meanY1T1=mean(r1.map(r=>r.Y1)),meanY0T0=mean(r0.map(r=>r.Y0)),term1=meanY1T1-state.trueRisk1,term0=state.trueRisk0-meanY0T0;
+ return{n1:r1.length,n0:r0.length,risk1,risk0,rd:risk1-risk0,rr:risk0>0?risk1/risk0:NaN,gap:(risk1-risk0)-state.trueATE,term1,term0};
+}
+function standardizedDifference(key){
+ const a=state.data.filter(r=>r.T===1).map(r=>r[key]),b=state.data.filter(r=>r.T===0).map(r=>r[key]);const den=Math.sqrt((variance(a)+variance(b))/2);return den?(mean(a)-mean(b))/den:0;
+}
+function renderMetrics(){
+ const o=state.observed,smd=standardizedDifference('riskScore'),truth=state.reveal?signedPct(state.trueATE,1):'Hidden',gap=state.reveal?signedPct(o.gap,1):'Hidden';
+ const items=[['Subjects',state.data.length,'finite cohort'],['Design',state.design==='randomized'?'Randomized':'Observational',state.design==='randomized'?'complete assignment':'self-selection by prognosis'],['Smokers',o.n1+' ('+pct(o.n1/state.data.length,0)+')','realized T=1'],['Observed RD',signedPct(o.rd,1),'realized association'],['Finite-population ATE',truth,'causal contrast'],['Observed–ATE gap',gap,'realized RD − τ̄n']];
+ $('metricStrip').innerHTML=items.map(x=>'<div class="metric"><div class="k">'+x[0]+'</div><div class="v">'+x[1]+'</div><div class="s">'+x[2]+'</div></div>').join('');
+}
+function renderMath(){
+ const r=state.data[state.selected]||state.data[0],o=state.observed,ors=state.data.map(q=>Math.exp(q.logOR)),gmOR=Math.exp(mean(state.data.map(q=>q.logOR)));
+ const truthChips=state.reveal?'<span class="live-chip">Model mean n⁻¹Σ(p₁ᵢ−p₀ᵢ) = '+signedPct(state.modelATE,2)+'</span><span class="live-chip">Realized τ̄<sub>n</sub> = '+signedPct(state.trueATE,2)+'</span><span class="live-chip">Geometric-mean OR = '+fmt(gmOR,3)+'</span><span class="live-chip">OR range = ['+fmt(Math.min(...ors),2)+', '+fmt(Math.max(...ors),2)+']</span>':'<span class="live-chip">Cross-world model means and τ̄<sub>n</sub>: hidden</span>';
+ $('livePotential').innerHTML='<b>Current selected subject and current finite cohort:</b><div class="live-chips"><span class="live-chip">T<sub>i</sub> = '+r.T+'</span><span class="live-chip">Y<sub>i</sub> = '+r.Y+'</span><span class="live-chip">Y<sub>i</sub>(1) = '+(state.reveal?r.Y1:'?')+'</span><span class="live-chip">Y<sub>i</sub>(0) = '+(state.reveal?r.Y0:'?')+'</span><span class="live-chip">τ<sub>i</sub> = '+(state.reveal?(r.tau>=0?'+':'')+r.tau:'unobserved')+'</span>'+truthChips+'</div><div style="margin-top:7px">Consistency check: Y<sub>i</sub> = T<sub>i</sub>Y<sub>i</sub>(1) + (1−T<sub>i</sub>)Y<sub>i</sub>(0) = '+r.Y+'. When revealed, the model-mean contrast averages p<sub>1i</sub>−p<sub>0i</sub>, whereas τ̄<sub>n</sub> averages the generated binary potential outcomes.</div>';
+ $('liveAssociation').innerHTML='<b>Current finite-cohort analog of the decomposition:</b><div class="live-chips"><span class="live-chip">Observed RD = '+signedPct(o.rd,2)+'</span><span class="live-chip">τ̄<sub>n</sub> = '+(state.reveal?signedPct(state.trueATE,2):'hidden')+'</span><span class="live-chip">Realized gap = '+(state.reveal?signedPct(o.gap,2):'hidden')+'</span><span class="live-chip">Term 1 = '+(state.reveal?signedPct(o.term1,2):'hidden')+'</span><span class="live-chip">Term 0 = '+(state.reveal?signedPct(o.term0,2):'hidden')+'</span></div><div style="margin-top:7px">For this realized finite assignment, gap = term 1 + term 0 exactly. Under complete randomization, the gap need not equal zero in one assignment even though its randomization expectation is zero.</div>';
+ const minE=Math.min(...state.data.map(q=>q.e)),maxE=Math.max(...state.data.map(q=>q.e)),uncond=state.design==='randomized'||(Math.abs(state.selection)<.001&&state.hidden===0),cond=state.design==='randomized'||state.hidden===0,practical=minE>=.05&&maxE<=.95;
+ const uncondText=state.design==='randomized'?'holds by design':uncond?'holds by DGP':'fails';
+ const condText=state.design==='randomized'?'holds by design':cond?'holds by DGP':'fails because U is omitted';
+ $('liveIdentification').innerHTML='<b>Current assumption status in the simulation DGP—not an observed-data test:</b><div class="live-chips"><span class="live-chip">Consistency: holds by construction for the idealized binary intervention</span><span class="live-chip">Unconditional exchangeability: '+uncondText+'</span><span class="live-chip">Exchangeability given measured X: '+condText+'</span><span class="live-chip">Oracle e range: ['+fmt(minE,3)+', '+fmt(maxE,3)+']</span><span class="live-chip">Strict positivity: holds by construction</span><span class="live-chip">Practical overlap warning: '+(practical?'no':'yes')+'</span></div>';
+ const randomGap=o.rd-state.trueATE;
+ $('liveRandomization').innerHTML='<b>Current assignment:</b><div class="live-chips"><span class="live-chip">Design = '+(state.design==='randomized'?'complete randomization':'observational selection')+'</span><span class="live-chip">Baseline-risk SMD = '+fmt(standardizedDifference('riskScore'),3)+'</span><span class="live-chip">Observed RD = '+signedPct(o.rd,2)+'</span><span class="live-chip">τ̄<sub>n</sub> = '+(state.reveal?signedPct(state.trueATE,2):'hidden')+'</span><span class="live-chip">Realized RD−τ̄<sub>n</sub> = '+(state.reveal?signedPct(randomGap,2):'hidden')+'</span></div><div style="margin-top:7px">The unbiasedness claim concerns the expectation over repeated complete randomizations conditional on the fixed potential-outcome schedule; it is not an equality for every realized assignment.</div>';
+}
+function initTabs(){
+ const tabs=[...document.querySelectorAll('[data-tab]')];tabs.forEach((tab,i)=>{tab.tabIndex=i===0?0:-1;tab.addEventListener('click',()=>activateTab(tab.dataset.tab,false));tab.addEventListener('keydown',e=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;e.preventDefault();let j=i;if(e.key==='ArrowRight')j=(i+1)%tabs.length;if(e.key==='ArrowLeft')j=(i-1+tabs.length)%tabs.length;if(e.key==='Home')j=0;if(e.key==='End')j=tabs.length-1;activateTab(tabs[j].dataset.tab,true)})});
+}
+function activateTab(name,focus){
+ document.querySelectorAll('[data-tab]').forEach(t=>{const on=t.dataset.tab===name;t.setAttribute('aria-selected',on?'true':'false');t.tabIndex=on?0:-1;if(on&&focus)t.focus()});
+ document.querySelectorAll('.math-panel').forEach(p=>{const on=p.id==='panel'+name.charAt(0).toUpperCase()+name.slice(1);p.classList.toggle('active',on);p.hidden=!on});
+}
+function edgePath(x1,y1,x2,y2,curve=0){if(!curve)return'M '+x1+' '+y1+' L '+x2+' '+y2;const mx=(x1+x2)/2,my=(y1+y2)/2-curve;return'M '+x1+' '+y1+' Q '+mx+' '+my+' '+x2+' '+y2}
+function renderDag(){
+ const svg=$('dagSvg'),highlight=$('dagHighlight').value,obs=state.design==='observational',sel=obs?Math.abs(state.selection):0,hidY=state.hidden,hidT=obs?state.hidden:0;
+ const effectMagnitude=mean(state.data.map(r=>Math.abs(r.logOR||0))),effectMean=mean(state.data.map(r=>r.logOR||0));
+ const nodes={X:[145,110],U:[145,285],T:[430,175],Y:[650,175]},edges=[
+  {key:'xt',from:'X',to:'T',w:.7+1.7*Math.min(1,sel/2.5),c:COLORS.accent,label:'measured selection',active:obs&&sel>.03,marker:'arrowAccent'},
+  {key:'xy',from:'X',to:'Y',w:2.4,c:COLORS.teal,label:'measured prognosis',active:true,curve:95,marker:'arrowTeal'},
+  {key:'ty',from:'T',to:'Y',w:.8+2.3*Math.min(1,effectMagnitude/Math.log(3)),c:COLORS.treated,label:state.hetero>.01?'heterogeneous causal effect':(effectMean>=0?'harmful causal effect':'protective causal effect'),active:effectMagnitude>.01,marker:'arrowTreated'},
+  {key:'ut',from:'U',to:'T',w:.9+1.9*Math.min(1,hidT/1.5),c:COLORS.danger,label:'hidden selection',active:hidT>.01,marker:'arrowDanger'},
+  {key:'uy',from:'U',to:'Y',w:.9+1.9*Math.min(1,hidY/1.5),c:COLORS.danger,label:'hidden prognosis',active:hidY>.01,curve:-70,marker:'arrowDanger'}
+ ];
+ let s='<defs>'+
+   '<marker id="arrowAccent" markerWidth="14" markerHeight="12" refX="12" refY="6" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L14,6 L0,12 z" fill="'+COLORS.accent+'"/></marker>'+
+   '<marker id="arrowTeal" markerWidth="14" markerHeight="12" refX="12" refY="6" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L14,6 L0,12 z" fill="'+COLORS.teal+'"/></marker>'+
+   '<marker id="arrowTreated" markerWidth="14" markerHeight="12" refX="12" refY="6" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L14,6 L0,12 z" fill="'+COLORS.treated+'"/></marker>'+
+   '<marker id="arrowDanger" markerWidth="14" markerHeight="12" refX="12" refY="6" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L14,6 L0,12 z" fill="'+COLORS.danger+'"/></marker>'+
+   '</defs><style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="780" height="385" fill="#fff"/>';
+ const pathGroup=key=>key==='ty'?'causal':(key==='xt'||key==='xy'?'backdoor':'hidden');
+ for(const e of edges){
+   const [x1,y1]=nodes[e.from],[x2,y2]=nodes[e.to],group=pathGroup(e.key),dim=highlight!=='all'&&highlight!==group;
+   let opacity,dash='',strokeW=e.w;
+   if(e.active){opacity=dim?.22:.95}
+   else if(group==='hidden'){opacity=highlight==='hidden'?.58:.20;dash='stroke-dasharray="7 5"';strokeW=1.8}
+   else{opacity=dim?.10:.16;strokeW=1.4}
+   const startX=x1+54,endX=x2-56;
+   s+='<path d="'+edgePath(startX,y1,endX,y2,e.curve||0)+'" fill="none" stroke="'+e.c+'" stroke-width="'+strokeW+'" opacity="'+opacity+'" '+dash+' marker-end="url(#'+e.marker+')"/>';
+   if(!dim&&(e.active||(group==='hidden'&&highlight==='hidden'))){const mx=(startX+endX)/2,my=(y1+y2)/2-(e.curve||0)/2,label=e.active?e.label:'inactive in the current design';s+=svgText(mx,my-8,label,'text-anchor="middle" font-size="9" font-weight="750" fill="'+e.c+'" opacity="'+Math.max(opacity,.70)+'"')}
+ }
+ const node=(k,title,sub,color,opacity=1)=>{const [x,y]=nodes[k];s+='<circle cx="'+x+'" cy="'+y+'" r="48" fill="#fff" stroke="'+color+'" stroke-width="3" opacity="'+opacity+'"/><circle cx="'+x+'" cy="'+y+'" r="40" fill="'+color+'" fill-opacity=".10" opacity="'+opacity+'"/>'+svgText(x,y-3,title,'text-anchor="middle" font-size="20" font-weight="900" fill="'+color+'" opacity="'+opacity+'"')+svgText(x,y+17,sub,'text-anchor="middle" font-size="9" font-weight="700" fill="'+COLORS.muted+'" opacity="'+opacity+'"')};
+ node('X','X','measured baseline',COLORS.teal);node('T','T','smoking',COLORS.treated);node('Y','Y','CVD outcome',COLORS.ink);node('U','U','unmeasured prognostic factor',COLORS.danger,(hidY>.01||highlight==='hidden')?1:.35);
+ const hiddenPathOpen=hidT>.01&&hidY>.01;
+ s+=svgText(390,356,'Causal path: T → Y. Measured backdoor: T ← X → Y. Hidden backdoor T ← U → Y is open only when U affects both T and Y.','text-anchor="middle" font-size="10.5" font-weight="700" fill="'+COLORS.muted+'"');svg.innerHTML=s;
+ const minE=Math.min(...state.data.map(r=>r.e)),maxE=Math.max(...state.data.map(r=>r.e)),practical=minE>=.05&&maxE<=.95,v=$('causalVerdict');
+ if(state.design==='randomized'){
+   v.className='verdict causal';v.innerHTML='<strong>Complete randomization removes arrows into T from X and U.</strong>'+(hidY>.01?' U remains prognostic for Y, but because U does not affect T it is not a confounder in the randomized design.':' Treatment is independent of the fixed potential-outcome schedule by design.')+' The realized difference in means can differ from τ̄<sub>n</sub>, but it is unbiased over assignments.'
+ }else if(hiddenPathOpen){
+   v.className='verdict fail';v.innerHTML='<strong>Measured-X adjustment is insufficient.</strong>The open path T ← U → Y violates conditional exchangeability given the displayed X.'
+ }else if(Math.abs(state.selection)>.03){
+   v.className='verdict conditional';v.innerHTML='<strong>The crude comparison is an association, not the ATE.</strong>The path T ← X → Y is open. In this simulation, exchangeability given measured X holds, so appropriate adjustment can identify the marginal ATE in principle.'
+ }else{
+   v.className='verdict causal';v.innerHTML='<strong>Assignment is independent of measured prognosis in the current observational mechanism.</strong>With U inactive, unconditional exchangeability holds by the DGP, although one realized sample may still show random imbalance.'
+ }
+ if(highlight==='hidden'&&!hiddenPathOpen)v.innerHTML+='<br><b>Graph note:</b> dashed red arrows show the schematic hidden path. It is not an open backdoor path unless both U → T and U → Y are active.';
+ if(!practical)v.innerHTML+='<br><b>Practical-overlap warning:</b> true DGP assignment probabilities fall outside [0.05, 0.95]. Strict positivity still holds because probabilities are bounded away from 0 and 1 by construction.';
+}
+function selectionWeightedContrast(selection,design='observational'){
+ const probs=assignmentProbabilities(selection,design),den1=sum(probs),den0=sum(probs.map(e=>1-e));let a=0,b=0;for(let i=0;i<state.data.length;i++){a+=probs[i]*state.data[i].Y1;b+=(1-probs[i])*state.data[i].Y0}return a/den1-b/den0;
+}
+function renderAssociationCurve(){
+ const xs=Array.from({length:51},(_,i)=>-2.5+5*i/50),ys=xs.map(x=>selectionWeightedContrast(x,'observational')),currentX=state.design==='randomized'?0:state.selection,currentContrast=state.design==='randomized'?state.trueATE:selectionWeightedContrast(state.selection,'observational'),currentReal=state.observed.rd;
+ const visibleVals=state.reveal?ys.concat([currentContrast,currentReal,state.trueATE,0]):[currentReal,0],lo=Math.min(...visibleVals),hi=Math.max(...visibleVals),span=Math.max(.12,hi-lo),pad=.14*span,ylo=Math.max(-1,lo-pad),yhi=Math.min(1,hi+pad),L=78,R=750,T=34,B=315;
+ let s='<style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="780" height="385" fill="#fff"/>';
+ for(const y of axisTicks(ylo,yhi,5)){const py=sy(y,ylo,yhi,T,B);s+='<line x1="'+L+'" x2="'+R+'" y1="'+py+'" y2="'+py+'" stroke="'+COLORS.grid+'"/>'+svgText(L-9,py+4,signedPct(y,0),'text-anchor="end" font-size="9" fill="'+COLORS.muted+'"')}
+ for(const x of [-2.5,-1.25,0,1.25,2.5]){const px=sx(x,-2.5,2.5,L,R);s+='<line x1="'+px+'" x2="'+px+'" y1="'+T+'" y2="'+B+'" stroke="'+COLORS.grid+'"/>'+svgText(px,B+22,x.toFixed(2),'text-anchor="middle" font-size="9" fill="'+COLORS.muted+'"')}
+ if(state.reveal){
+   const path=xs.map((x,i)=>(i?'L':'M')+' '+sx(x,-2.5,2.5,L,R)+' '+sy(ys[i],ylo,yhi,T,B)).join(' ');s+='<path d="'+path+'" fill="none" stroke="'+COLORS.treated+'" stroke-width="4" stroke-linecap="round"/>';
+   const py=sy(state.trueATE,ylo,yhi,T,B);s+='<line x1="'+L+'" x2="'+R+'" y1="'+py+'" y2="'+py+'" stroke="'+COLORS.green+'" stroke-width="3" stroke-dasharray="8 5"/>'+svgText(R-3,py-8,'finite-population ATE '+signedPct(state.trueATE,1),'text-anchor="end" font-size="10" font-weight="850" fill="'+COLORS.green+'"');
+ }
+ const px=sx(currentX,-2.5,2.5,L,R),pyR=sy(currentReal,ylo,yhi,T,B);
+ if(state.reveal){const pyC=sy(currentContrast,ylo,yhi,T,B);if(state.design==='randomized')s+='<rect x="'+(px-6)+'" y="'+(pyC-6)+'" width="12" height="12" fill="#fff" stroke="'+COLORS.green+'" stroke-width="3"/>'+svgText(px+10,pyC-10,'current randomized design','font-size="9" font-weight="850" fill="'+COLORS.green+'"');else s+='<circle cx="'+px+'" cy="'+pyC+'" r="6" fill="#fff" stroke="'+COLORS.treated+'" stroke-width="3"/>'+svgText(px+10,pyC-10,'assignment-probability contrast','font-size="9" font-weight="750" fill="'+COLORS.treated+'"')}
+ s+='<line x1="'+px+'" x2="'+px+'" y1="'+T+'" y2="'+B+'" stroke="'+COLORS.accent+'" stroke-width="2" stroke-dasharray="5 4"/><circle cx="'+px+'" cy="'+pyR+'" r="7" fill="'+COLORS.accent+'" stroke="#fff" stroke-width="2"/>'+svgText(px+10,pyR+16,'realized '+signedPct(currentReal,1),'font-size="10" font-weight="850" fill="'+COLORS.accent+'"');
+ if(!state.reveal)s+=svgText((L+R)/2,170,'Cross-world selection curve hidden','text-anchor="middle" font-size="18" font-weight="850" fill="'+COLORS.ink+'"')+svgText((L+R)/2,198,'It requires both Y(1) and Y(0), which are not jointly observed.','text-anchor="middle" font-size="11" fill="'+COLORS.muted+'"');
+ s+=svgText((L+R)/2,373,'Hypothetical observational selection coefficient on measured baseline risk','text-anchor="middle" font-size="10.5" font-weight="750" fill="'+COLORS.ink+'"')+'<g transform="translate(18,'+((T+B)/2)+') rotate(-90)">'+svgText(0,0,'Risk difference','text-anchor="middle" font-size="11" font-weight="750" fill="'+COLORS.ink+'"')+'</g>'; $('associationCurveSvg').innerHTML=s;
+ if(!state.reveal)$('associationCurveNote').innerHTML='Only the current realized crude association is displayed. The assignment-probability curve and finite-population ATE are simulation truths requiring both potential outcomes.';
+ else $('associationCurveNote').innerHTML=state.design==='randomized'?'The orange curve is a hypothetical observational-selection contrast. The open green square shows the current randomized design, whose assignment expectation is τ̄<sub>n</sub>; the filled purple point is one realized randomized difference.':'The orange curve keeps the finite potential-outcome schedule fixed and changes only the observational assignment probabilities. The open circle is the ratio-of-weighted-sums contrast at the current mechanism; the filled point is one realized assignment.';
+}
+function chartDomain(key){
+ if(key!=='riskScore')return varMeta[key].domain;const vals=state.data.map(r=>r.riskScore),lo=Math.min(...vals),hi=Math.max(...vals),p=.08*(hi-lo||1);return[lo-p,hi+p];
+}
+function renderCohort(){
+ const svg=$('cohortSvg'),xkey=state.x,ykey=state.y,xd=chartDomain(xkey),yd=chartDomain(ykey),L=64,R=825,T=20,B=405;
+ let s='<style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="850" height="470" fill="#fff"/>';
+ for(const x of axisTicks(xd[0],xd[1],5)){const px=sx(x,xd[0],xd[1],L,R);s+='<line x1="'+px+'" x2="'+px+'" y1="'+T+'" y2="'+B+'" stroke="'+COLORS.grid+'"/>'+svgText(px,B+22,varMeta[xkey].fmt(x),'text-anchor="middle" font-size="9" fill="'+COLORS.muted+'"')}
+ for(const y of axisTicks(yd[0],yd[1],5)){const py=sy(y,yd[0],yd[1],T,B);s+='<line x1="'+L+'" x2="'+R+'" y1="'+py+'" y2="'+py+'" stroke="'+COLORS.grid+'"/>'+svgText(L-9,py+4,varMeta[ykey].fmt(y),'text-anchor="end" font-size="9" fill="'+COLORS.muted+'"')}
+ const order=state.data.map((r,i)=>({r,i,w:state.reveal?(r.T?1/r.e:1/(1-r.e)):1})).sort((a,b)=>a.w-b.w);
+ for(const q of order){const r=q.r,i=q.i,x=sx(r[xkey],xd[0],xd[1],L,R),y=sy(r[ykey],yd[0],yd[1],T,B),rad=clamp(3+1.55*Math.sqrt(q.w),4,13),c=r.T?COLORS.treated:COLORS.control,sel=i===state.selected;
+   s+='<g class="subject-point" data-index="'+i+'" tabindex="0" style="cursor:pointer">';if(r.Y)s+='<circle cx="'+x+'" cy="'+y+'" r="'+(rad+3)+'" fill="none" stroke="#111827" stroke-width="2" opacity=".82"/>';if(sel)s+='<circle cx="'+x+'" cy="'+y+'" r="'+(rad+7)+'" fill="none" stroke="'+COLORS.accent+'" stroke-width="2" stroke-dasharray="5 4"/>';s+='<circle cx="'+x+'" cy="'+y+'" r="'+rad+'" fill="'+c+'" fill-opacity=".72" stroke="'+(sel?COLORS.accent:'#fff')+'" stroke-width="'+(sel?3:1.1)+'"/></g>';
+ }
+ s+=svgText((L+R)/2,458,varMeta[xkey].label,'text-anchor="middle" font-size="11" font-weight="750" fill="'+COLORS.ink+'"')+'<g transform="translate(17,'+((T+B)/2)+') rotate(-90)">'+svgText(0,0,varMeta[ykey].label,'text-anchor="middle" font-size="11" font-weight="750" fill="'+COLORS.ink+'"')+'</g>';$('cohortSvg').innerHTML=s;
+ $('cohortNote').innerHTML=state.reveal?'Point size uses the inverse probability of the observed assignment as an <b>oracle simulation cue</b>; it is not an estimated weight. Click a point to inspect the two simulated worlds.':'Observed-data view: point sizes are equal because the true assignment probabilities and counterfactual schedule are hidden. Click a point to inspect the factual record.';
+ svg.querySelectorAll('.subject-point').forEach(g=>{const i=+g.dataset.index,r=state.data[i],truthLine=state.reveal?'<br>Oracle eᵢ='+fmt(r.e,3)+' · conditional ORᵢ='+fmt(Math.exp(r.logOR),2)+'<br>Y(1)='+r.Y1+', Y(0)='+r.Y0+', τ='+(r.tau>=0?'+':'')+r.tau:'<br>Oracle assignment probability and counterfactual hidden',html='<b>'+r.id+'</b><br>'+ (r.T?'Smoker':'Non-smoker')+' · observed Y='+r.Y+'<br>Age '+fmt(r.age,0)+', BMI '+fmt(r.bmi,1)+', income '+fmt(r.income,2)+'<br>HTN '+(r.htn?'yes':'no')+truthLine;g.addEventListener('pointerenter',e=>showTip(e,html));g.addEventListener('pointermove',moveTip);g.addEventListener('pointerleave',hideTip);g.addEventListener('click',()=>{state.selected=i;renderCohort();renderSubject();renderSchedule();renderMath();renderTable()});g.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();state.selected=i;renderCohort();renderSubject();renderSchedule();renderMath();renderTable()}})});
+}
+function renderSubject(){
+ const r=state.data[state.selected],factual=r.T?r.Y1:r.Y0,counter=r.T?r.Y0:r.Y1;
+ const world1Missing=!state.reveal&&r.T===0,world0Missing=!state.reveal&&r.T===1,oracle=state.reveal;
+ $('subjectPanel').innerHTML='<div class="subject-id"><strong>'+r.id+'</strong><span class="status-pill '+(r.T?'status-treated':'status-control')+'">'+(r.T?'SMOKER · T=1':'NON-SMOKER · T=0')+'</span></div>'+ 
+ '<div class="kv"><div><div class="label">Age</div><div class="num">'+fmt(r.age,0)+'</div></div><div><div class="label">BMI</div><div class="num">'+fmt(r.bmi,1)+'</div></div><div><div class="label">Income ratio</div><div class="num">'+fmt(r.income,2)+'</div></div><div><div class="label">College</div><div class="num">'+(r.college?'Yes':'No')+'</div></div><div><div class="label">Hypertension</div><div class="num">'+(r.htn?'Yes':'No')+'</div></div><div><div class="label">Baseline risk score</div><div class="num">'+fmt(r.riskScore,2)+'</div></div><div><div class="label">Oracle assignment probability</div><div class="num">'+(oracle?fmt(r.e,3):'Hidden')+'</div></div><div><div class="label">Conditional causal OR</div><div class="num">'+(oracle?fmt(Math.exp(r.logOR),2):'Hidden')+'</div></div></div>'+ 
+ '<div class="world-grid"><div class="world t1 '+(world1Missing?'missing':'')+'"><div class="world-title">World 1 · if smoking</div><div class="world-value">'+(world1Missing?'?':r.Y1)+'</div><div class="world-sub">Y<sub>i</sub>(1) · '+(r.T?'factual outcome':'counterfactual outcome')+'<br>Conditional risk '+(oracle?pct(r.p1,1):'hidden')+'</div></div><div class="world t0 '+(world0Missing?'missing':'')+'"><div class="world-title">World 0 · if no smoking</div><div class="world-value">'+(world0Missing?'?':r.Y0)+'</div><div class="world-sub">Y<sub>i</sub>(0) · '+(!r.T?'factual outcome':'counterfactual outcome')+'<br>Conditional risk '+(oracle?pct(r.p0,1):'hidden')+'</div></div></div>'+ 
+ '<div class="subject-equation">Y<sub>i</sub> = T<sub>i</sub>Y<sub>i</sub>(1) + (1−T<sub>i</sub>)Y<sub>i</sub>(0) = '+factual+(oracle?'<br>τ<sub>i</sub> = Y<sub>i</sub>(1) − Y<sub>i</sub>(0) = '+(r.tau>=0?'+':'')+r.tau:'<br>τ<sub>i</sub> is not observed')+'</div>'+ 
+ '<div class="teaching-note">The observed outcome is '+factual+'. The missing counterfactual would be '+(oracle?counter:'unknown')+'. Oracle probabilities and individual causal effects are available here only because the simulation generated the complete schedule.</div><div class="subject-nav"><button id="prevSubject">← Previous</button><button id="nextSubject">Next →</button></div>';
+ $('prevSubject').onclick=()=>{state.selected=(state.selected-1+state.data.length)%state.data.length;renderCohort();renderSubject();renderSchedule();renderMath();renderTable()};$('nextSubject').onclick=()=>{state.selected=(state.selected+1)%state.data.length;renderCohort();renderSubject();renderSchedule();renderMath();renderTable()};
+}
+function renderSchedule(){
+ const svg=$('scheduleSvg'),count=12,filter=state.reveal&&$('scheduleFilter')?$('scheduleFilter').value:'all';
+ const indexAll=state.data.map((_,i)=>i),filtered=indexAll.filter(i=>filter==='all'||(filter==='pos'&&state.data[i].tau===1)||(filter==='zero'&&state.data[i].tau===0)||(filter==='neg'&&state.data[i].tau===-1));
+ const totalFiltered=filtered.length,start=clamp(state.scheduleStart,0,Math.max(0,totalFiltered-count));state.scheduleStart=start;const page=filtered.slice(start,start+count),cols={id:78,T:185,y1:360,y0:535,y:710,tau:865},top=66,rowH=34;
+ const cPos=state.data.filter(r=>r.tau===1).length,cZero=state.data.filter(r=>r.tau===0).length,cNeg=state.data.filter(r=>r.tau===-1).length;
+ let s='<defs><pattern id="hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="8" height="8" fill="#F7F8FA"/><line x1="0" y1="0" x2="0" y2="8" stroke="#CDD5DF" stroke-width="3"/></pattern></defs><style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="960" height="500" fill="#fff"/>';
+ const headers=[['Subject',cols.id],['T',cols.T],['Y(1)',cols.y1],['Y(0)',cols.y0],['Observed Y',cols.y],['τ',cols.tau]];headers.forEach(h=>s+=svgText(h[1],35,h[0],'text-anchor="middle" font-size="11" font-weight="850" fill="'+COLORS.ink+'"'));
+ s+='<line x1="25" x2="935" y1="48" y2="48" stroke="'+COLORS.grid+'"/>';
+ if(!page.length){s+=svgText(480,228,'No subjects match the current τ filter.','text-anchor="middle" font-size="18" font-weight="850" fill="'+COLORS.ink+'"')+svgText(480,258,'Current counts: τ=+1 '+cPos+' · τ=0 '+cZero+' · τ=−1 '+cNeg+'.','text-anchor="middle" font-size="11" fill="'+COLORS.muted+'"')}
+ else page.forEach((i,j)=>{const r=state.data[i],y=top+j*rowH,selected=i===state.selected;s+='<g class="schedule-row" data-index="'+i+'" style="cursor:pointer">';if(selected)s+='<rect x="22" y="'+(y-17)+'" width="914" height="30" rx="8" fill="#F2EEFF" stroke="'+COLORS.accent+'" stroke-width="1.5"/>';else if(j%2)s+='<rect x="22" y="'+(y-17)+'" width="914" height="30" rx="8" fill="#FAFBFC"/>';s+=svgText(cols.id,y+4,r.id,'text-anchor="middle" font-size="10" font-weight="800" fill="'+COLORS.ink+'"')+svgText(cols.T,y+4,String(r.T),'text-anchor="middle" font-size="11" font-weight="900" fill="'+(r.T?COLORS.treated:COLORS.control)+'"');
+   const cell=(x,val,factual,color)=>{const counterfactual=!factual,hidden=counterfactual&&!state.reveal,fill=counterfactual?'url(#hatch)':(val?'#FDE9E9':'#EEF4F8'),stroke=factual?color:'#AEB9C6',dash=factual?'':'stroke-dasharray="4 3"';s+='<rect x="'+(x-34)+'" y="'+(y-13)+'" width="68" height="24" rx="7" fill="'+fill+'" stroke="'+stroke+'" stroke-width="'+(factual?2.3:1.3)+'" '+dash+'/>'+svgText(x,y+4,hidden?'?':String(val),'text-anchor="middle" font-size="12" font-weight="900" fill="'+(hidden?COLORS.gray:(val?COLORS.danger:COLORS.ink))+'"')};
+   cell(cols.y1,r.Y1,r.T===1,COLORS.treated);cell(cols.y0,r.Y0,r.T===0,COLORS.control);s+=svgText(cols.y,y+4,String(r.Y),'text-anchor="middle" font-size="12" font-weight="900" fill="'+(r.Y?COLORS.danger:COLORS.ink)+'"')+svgText(cols.tau,y+4,state.reveal?(r.tau>=0?'+':'')+r.tau:'?','text-anchor="middle" font-size="11" font-weight="850" fill="'+(state.reveal?(r.tau>0?COLORS.danger:r.tau<0?COLORS.green:COLORS.muted):COLORS.gray)+'"')+'</g>';
+ });
+ const rowText=page.length?('Rows '+(start+1)+'–'+(start+page.length)+' of '+totalFiltered+' filtered subjects ('+state.data.length+' total)'):'0 matching subjects';
+ s+=svgText(480,485,rowText,'text-anchor="middle" font-size="10" fill="'+COLORS.muted+'"');svg.innerHTML=s;
+ if(page.length)svg.querySelectorAll('.schedule-row').forEach(g=>g.addEventListener('click',()=>{state.selected=+g.dataset.index;renderCohort();renderSubject();renderSchedule();renderMath();renderTable()}));
+ $('prevSchedule').disabled=start===0;$('nextSchedule').disabled=start+count>=totalFiltered;
+ let note='The solid-bordered cell is factual. The hatched cell is counterfactual; its simulated value is shown only when the reveal switch is on.';
+ if(state.reveal){note+=' <strong>Current finite-cohort counts:</strong> τ = +1: '+cPos+', τ = 0: '+cZero+', τ = −1: '+cNeg+'. ';if(cPos===0&&cNeg===0)note+='The current DGP produces no individual binary-outcome effect in this finite cohort.';else if(cNeg===0)note+='The generated schedule is monotone nondecreasing in the bad outcome: no subject is protected.';else if(cPos===0)note+='The generated schedule is monotone nonincreasing in the bad outcome: no subject is harmed.';else note+='Both harmed and protected response types are present; use the τ filter to inspect them.';note+=' <b>Simulation-only:</b> filtering by τ uses both potential outcomes and is unavailable in real observed data.'}
+ else note+=' The τ filter is disabled because using it would reveal cross-world information.';
+ $('scheduleNote').innerHTML=note;
+}
+function renderComparison(){
+ const o=state.observed,rows=[{group:'Observed group',name:'Observed mean among T=1',v:o.risk1,c:COLORS.treated,causal:false},{group:'Observed group',name:'Observed mean among T=0',v:o.risk0,c:COLORS.control,causal:false},{group:'Intervention world',name:'Finite mean of Y(1)',v:state.trueRisk1,c:COLORS.treated,causal:true},{group:'Intervention world',name:'Finite mean of Y(0)',v:state.trueRisk0,c:COLORS.control,causal:true}],visibleForScale=state.reveal?rows:rows.filter(r=>!r.causal),max=Math.max(.25,...visibleForScale.map(r=>r.v))*1.18,L=235,R=748,T=45,B=340,ys=[83,145,235,297];
+ let s='<defs><pattern id="lockHatch" width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="9" height="9" fill="#F3F4F6"/><line x1="0" y1="0" x2="0" y2="9" stroke="#D1D5DB" stroke-width="3"/></pattern></defs><style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="790" height="410" fill="#fff"/>';
+ for(let k=0;k<=5;k++){const v=max*k/5,x=L+(R-L)*k/5;s+='<line x1="'+x+'" x2="'+x+'" y1="'+T+'" y2="'+B+'" stroke="'+COLORS.grid+'"/>'+svgText(x,B+23,pct(v,0),'text-anchor="middle" font-size="9" fill="'+COLORS.muted+'"')}
+ s+=svgText(20,30,'Observed comparison','font-size="11" font-weight="850" fill="'+COLORS.ink+'"')+svgText(20,205,'Intervention comparison','font-size="11" font-weight="850" fill="'+COLORS.ink+'"')+'<line x1="20" x2="770" y1="185" y2="185" stroke="'+COLORS.grid+'" stroke-width="2"/>';
+ rows.forEach((r,i)=>{const y=ys[i],hidden=r.causal&&!state.reveal,w=hidden?150:(R-L)*r.v/max;s+=svgText(L-12,y+4,r.name,'text-anchor="end" font-size="10" font-weight="750" fill="'+COLORS.ink+'"')+'<rect x="'+L+'" y="'+(y-14)+'" width="'+w+'" height="28" rx="8" fill="'+(hidden?'url(#lockHatch)':r.c)+'" fill-opacity="'+(hidden?1:.75)+'" stroke="'+(hidden?COLORS.gray:r.c)+'"/>'+svgText(Math.min(R-3,L+w+8),y+4,hidden?'unobserved':pct(r.v,1),'font-size="10" font-weight="850" fill="'+(hidden?COLORS.gray:r.c)+'"')});
+ if(state.reveal)s+=svgText(R-2,166,'Observed RD = '+signedPct(o.rd,1),'text-anchor="end" font-size="10" font-weight="850" fill="'+COLORS.accent+'"')+svgText(R-2,320,'τ̄n = '+signedPct(state.trueATE,1),'text-anchor="end" font-size="10" font-weight="850" fill="'+COLORS.green+'"');
+ s+=svgText((L+R)/2,397,'CVD risk','text-anchor="middle" font-size="11" font-weight="750" fill="'+COLORS.ink+'"');$('comparisonSvg').innerHTML=s;
+ $('comparisonSummary').innerHTML='<div class="comparison-stat assoc"><div class="name">Realized observed association</div><div class="number">'+signedPct(o.rd,2)+'</div><div class="detail">Ȳ₁,obs − Ȳ₀,obs</div></div><div class="comparison-stat causal"><div class="name">Finite-population ATE</div><div class="number">'+(state.reveal?signedPct(state.trueATE,2):'Hidden')+'</div><div class="detail">n⁻¹Σ{Yᵢ(1)−Yᵢ(0)}</div></div><div class="comparison-stat bias"><div class="name">Observed–ATE gap</div><div class="number">'+(state.reveal?signedPct(o.gap,2):'Hidden')+'</div><div class="detail">Term 1 '+(state.reveal?signedPct(o.term1,1):'—')+'; term 0 '+(state.reveal?signedPct(o.term0,1):'—')+'</div></div>';
+}
+function potentialTypes(){
+ const counts={'00':0,'10':0,'01':0,'11':0};state.data.forEach(r=>counts[String(r.Y1)+String(r.Y0)]++);const n=state.data.length;return Object.fromEntries(Object.entries(counts).map(([k,v])=>[k,{n:v,p:v/n}]));
+}
+function renderTypes(){
+ const q=potentialTypes(),defs=[['00','No CVD either way',COLORS.gray,'Y(1)=0, Y(0)=0'],['10','Harmed by smoking',COLORS.danger,'Y(1)=1, Y(0)=0'],['01','Protected by smoking',COLORS.green,'Y(1)=0, Y(0)=1'],['11','CVD either way',COLORS.amber,'Y(1)=1, Y(0)=1']],L=45,R=745,y=105,h=62;let s='<style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="790" height="310" fill="#fff"/>'+svgText(45,35,'Finite-population response-type distribution','font-size="12" font-weight="850" fill="'+COLORS.ink+'"');let x=L;defs.forEach(d=>{const w=(R-L)*q[d[0]].p;s+='<rect x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" fill="'+d[2]+'" fill-opacity=".78"/>';if(w>60)s+=svgText(x+w/2,y+36,pct(q[d[0]].p,1),'text-anchor="middle" font-size="12" font-weight="900" fill="#fff"');x+=w});s+='<rect x="'+L+'" y="'+y+'" width="'+(R-L)+'" height="'+h+'" fill="none" stroke="#CBD3DE" rx="9"/>';
+ if(state.reveal){const pH=q['10'].p,pP=q['01'].p;s+=svgText(395,215,'ATE = P(harmed) − P(protected)','text-anchor="middle" font-size="12" font-weight="800" fill="'+COLORS.ink+'"')+svgText(395,246,pct(pH,1)+' − '+pct(pP,1)+' = '+signedPct(pH-pP,1),'text-anchor="middle" font-size="22" font-weight="900" fill="'+COLORS.accent+'"')}else{s+='<rect x="38" y="82" width="714" height="182" rx="13" fill="rgba(255,255,255,.9)" stroke="#D7DEE8"/>'+svgText(395,160,'Potential-outcome types are hidden','text-anchor="middle" font-size="18" font-weight="850" fill="'+COLORS.ink+'"')+svgText(395,187,'Turn on “Reveal both potential outcomes” to inspect the simulation truth.','text-anchor="middle" font-size="11" fill="'+COLORS.muted+'"')}
+ $('typesSvg').innerHTML=s;$('typeGrid').innerHTML=defs.map(d=>'<div class="type-box"><div class="symbol">('+d[0][0]+','+d[0][1]+')</div><div class="name">'+d[1]+'</div><div class="pct">'+(state.reveal?pct(q[d[0]].p,1):'Hidden')+'</div><div class="desc">'+d[3]+' · n='+(state.reveal?q[d[0]].n:'—')+'</div></div>').join('');
+}
+function simulateAssignmentOnce(rng){
+ const rows=state.data,n=rows.length,T=Array(n).fill(0);
+ if(state.design==='randomized'){
+   const idx=Array.from({length:n},(_,i)=>i);for(let i=n-1;i>0;i--){const j=Math.floor(rng()*(i+1));[idx[i],idx[j]]=[idx[j],idx[i]]}const n1=clamp(Math.round(state.prevalence*n),1,n-1);idx.slice(0,n1).forEach(i=>T[i]=1);
+ }else{
+   const p=assignmentProbabilities();for(let i=0;i<n;i++)T[i]=rng()<p[i]?1:0;const nt=sum(T);if(nt===0||nt===n)return simulateAssignmentOnce(rng);
+ }
+ let n1=0,n0=0,y1=0,y0=0;for(let i=0;i<n;i++){if(T[i]){n1++;y1+=rows[i].Y1}else{n0++;y0+=rows[i].Y0}}return y1/n1-y0/n0;
+}
+function stopRepeated(clear=true){
+ state.repeated.cancel=true;state.repeated.running=false;if(clear){state.repeated.done=0;state.repeated.total=0;state.repeated.values=[]}const b=$('runAssignments');if(b)b.disabled=!state.reveal;const s=$('stopAssignments');if(s)s.disabled=true;
+}
+function runRepeated(){
+ if(!state.reveal||state.repeated.running)return;const total=+$('repeatM').value,rng=mulberry32((state.assignmentSeed^0x9E3779B9)>>>0);state.repeated={running:true,cancel:false,done:0,total,values:[]};$('runAssignments').disabled=true;$('stopAssignments').disabled=false;renderRepeated();
+ function step(){if(state.repeated.cancel){state.repeated.running=false;renderRepeated();return}const end=Math.min(total,state.repeated.done+10);for(;state.repeated.done<end;state.repeated.done++)state.repeated.values.push(simulateAssignmentOnce(rng));renderRepeated();if(state.repeated.done<total)setTimeout(step,0);else{state.repeated.running=false;$('runAssignments').disabled=!state.reveal;$('stopAssignments').disabled=true;renderRepeated()}}
+ setTimeout(step,0);
+}
+function renderRepeated(){
+ const q=state.repeated,p=q.total?q.done/q.total:0;
+ if(!state.reveal){
+  $('repeatProgress').style.width='0%';$('repeatStatus').textContent='Locked in observed-data view: repeated reassignment requires the unobserved potential-outcome schedule.';
+  $('repeatSummary').innerHTML=['Monte Carlo mean RD','Monte Carlo bias estimate','Assignment SD','Sign-discrepancy frequency'].map(x=>'<div class="repeat-stat"><div class="name">'+x+'</div><div class="number">Hidden</div><div class="detail">simulation oracle required</div></div>').join('');
+  $('repeatSvg').innerHTML='<style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="790" height="390" fill="#fff"/><rect x="62" y="78" width="666" height="205" rx="16" fill="#F7F8FB" stroke="#D7DEE8"/>'+svgText(395,165,'Repeated reassignment is simulation-only','text-anchor="middle" font-size="18" font-weight="850" fill="'+COLORS.ink+'"')+svgText(395,198,'Outcomes under newly assigned treatments require Y(1) and Y(0) for every subject.','text-anchor="middle" font-size="11" fill="'+COLORS.muted+'"')+svgText(395,224,'Turn on the oracle-information switch to run this experiment.','text-anchor="middle" font-size="11" fill="'+COLORS.muted+'"');return;
+ }
+ $('repeatProgress').style.width=(100*p).toFixed(1)+'%';$('repeatStatus').textContent=q.running?'Generating assignment '+q.done+' of '+q.total+'…':q.values.length?'Completed '+q.values.length+' assignments under the current '+(state.design==='randomized'?'randomized':'observational')+' mechanism.':'No repeated-assignment experiment has been run for the current scenario.';
+ if(!q.values.length){$('repeatSummary').innerHTML=['Monte Carlo mean RD','Monte Carlo bias estimate','Assignment SD','Sign-discrepancy frequency'].map(x=>'<div class="repeat-stat"><div class="name">'+x+'</div><div class="number">—</div><div class="detail">run experiment</div></div>').join('');$('repeatSvg').innerHTML='<style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="790" height="390" fill="#fff"/>'+svgText(395,170,'Run repeated assignments','text-anchor="middle" font-size="18" font-weight="850" fill="'+COLORS.ink+'"')+svgText(395,200,'The potential outcomes remain fixed while treatment assignment changes.','text-anchor="middle" font-size="11" fill="'+COLORS.muted+'"');return}
+ const vals=q.values,m=mean(vals),assignmentBias=m-state.trueATE,sdev=sd(vals),nearZero=Math.abs(state.trueATE)<1e-8,discrepancy=nearZero?mean(vals.map(v=>Math.abs(v)>.02?1:0)):mean(vals.map(v=>v*state.trueATE<0?1:0)),discName=nearZero?'|RD| > 2 pp frequency':'Opposite-sign frequency',discDetail=nearZero?'non-negligible association when τ̄n=0':'realized RD sign versus τ̄n';$('repeatSummary').innerHTML='<div class="repeat-stat"><div class="name">Monte Carlo mean RD</div><div class="number">'+signedPct(m,2)+'</div><div class="detail">across assignments</div></div><div class="repeat-stat"><div class="name">Monte Carlo bias estimate</div><div class="number">'+(state.reveal?signedPct(assignmentBias,2):'Hidden')+'</div><div class="detail">MC mean RD − τ̄n</div></div><div class="repeat-stat"><div class="name">Assignment SD</div><div class="number">'+pct(sdev,2)+'</div><div class="detail">variation over assignments</div></div><div class="repeat-stat"><div class="name">'+discName+'</div><div class="number">'+(state.reveal?pct(discrepancy,1):'Hidden')+'</div><div class="detail">'+discDetail+'</div></div>';
+ const all=vals.concat([state.observed.rd,0]).concat(state.reveal?[state.trueATE]:[]),lo=Math.min(...all),hi=Math.max(...all),span=Math.max(.12,hi-lo),xlo=Math.max(-1,lo-.12*span),xhi=Math.min(1,hi+.12*span),bins=24,counts=Array(bins).fill(0);vals.forEach(v=>{let b=Math.floor((v-xlo)/(xhi-xlo)*bins);b=clamp(b,0,bins-1);counts[b]++});const maxC=Math.max(...counts,1),L=65,R=758,T=35,B=315,bw=(R-L)/bins;let s='<style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="790" height="390" fill="#fff"/>';
+ for(let k=0;k<=5;k++){const x=L+(R-L)*k/5,v=xlo+(xhi-xlo)*k/5;s+='<line x1="'+x+'" x2="'+x+'" y1="'+T+'" y2="'+B+'" stroke="'+COLORS.grid+'"/>'+svgText(x,B+22,signedPct(v,0),'text-anchor="middle" font-size="9" fill="'+COLORS.muted+'"')}
+ counts.forEach((c,i)=>{const h=(B-T-20)*c/maxC;s+='<rect x="'+(L+i*bw+1)+'" y="'+(B-h)+'" width="'+Math.max(1,bw-2)+'" height="'+h+'" fill="'+(state.design==='randomized'?COLORS.green:COLORS.accent)+'" fill-opacity=".70"/>'});
+ const xm=sx(m,xlo,xhi,L,R),xc=sx(state.observed.rd,xlo,xhi,L,R);s+='<line x1="'+xm+'" x2="'+xm+'" y1="'+T+'" y2="'+B+'" stroke="'+COLORS.accent+'" stroke-width="3"/>'+svgText(xm+5,T+12,'mean','font-size="9" font-weight="850" fill="'+COLORS.accent+'"')+'<line x1="'+xc+'" x2="'+xc+'" y1="'+T+'" y2="'+B+'" stroke="#111827" stroke-width="2" stroke-dasharray="5 4"/>'+svgText(xc+5,B-8,'current sample','font-size="9" font-weight="750" fill="#111827"');
+ if(state.reveal){const xt=sx(state.trueATE,xlo,xhi,L,R);s+='<line x1="'+xt+'" x2="'+xt+'" y1="'+T+'" y2="'+B+'" stroke="'+COLORS.green+'" stroke-width="3" stroke-dasharray="8 5"/>'+svgText(xt+5,T+29,'finite-population ATE','font-size="9" font-weight="850" fill="'+COLORS.green+'"')}
+ s+=svgText((L+R)/2,378,'Observed risk difference across treatment assignments','text-anchor="middle" font-size="11" font-weight="750" fill="'+COLORS.ink+'"');$('repeatSvg').innerHTML=s;
+}
+function renderIdentification(){
+ const minE=Math.min(...state.data.map(r=>r.e)),maxE=Math.max(...state.data.map(r=>r.e)),uncond=state.design==='randomized'||(Math.abs(state.selection)<.001&&state.hidden===0),cond=state.design==='randomized'||state.hidden===0,practical=minE>=.05&&maxE<=.95;
+ const uncondStatus=state.design==='randomized'?'Holds by design':uncond?'Holds by DGP':'Fails';
+ const condStatus=state.design==='randomized'?'Holds by design':cond?'Holds by DGP':'Fails';
+ const items=[
+  {name:'Consistency',status:'Holds in simulation',cls:'pass',desc:'Y=Y(T) for the idealized binary intervention. Real smoking interventions require careful treatment-version and interference considerations.'},
+  {name:'Unconditional exchangeability',status:uncondStatus,cls:uncond?'pass':'fail',desc:state.design==='randomized'?'The treatment vector is randomized independently of the fixed potential-outcome schedule.':uncond?'Assignment probabilities are constant and U is inactive.':'Treatment assignment depends on prognosis through measured X and/or hidden U.'},
+  {name:'Exchangeability given measured X',status:condStatus,cls:cond?'pass':'fail',desc:state.design==='randomized'?'No adjustment is required for identification under the design.':cond?'All common causes of T and Y in the current DGP are contained in measured X.':'U affects both T and Y but is unavailable to the analyst.'},
+  {name:'Strict positivity',status:state.reveal?'Holds by construction':'Oracle status hidden',cls:state.reveal?'pass':'warn',desc:state.reveal?(state.design==='randomized'?'The randomized prevalence is constrained to lie strictly between 0 and 1.':'Observational assignment probabilities are truncated to [0.005, 0.995].'):'Exact positivity is a property of the assignment mechanism and cannot be verified from a finite observed dataset alone.'},
+  {name:'Practical overlap',status:state.reveal?(practical?'Adequate':'Warning'):'Oracle range hidden',cls:state.reveal?(practical?'pass':'warn'):'warn',desc:state.reveal?('Oracle assignment-probability range ['+fmt(minE,3)+', '+fmt(maxE,3)+']; practical guideline [0.05, 0.95].'):'Observed covariate support can be inspected, but the exact true-propensity range is not observed.'}
+ ];$('identGrid').innerHTML=items.map(x=>'<div class="ident-item '+x.cls+'"><div class="name">'+x.name+'</div><div class="status">'+x.status+'</div><div class="desc">'+x.desc+'</div></div>').join('');
+ const bins=20,h1=Array(bins).fill(0),h0=Array(bins).fill(0),n1=sum(state.data.map(r=>r.T)),n0=state.data.length-n1;state.data.forEach(r=>{const b=clamp(Math.floor(r.e*bins),0,bins-1);(r.T?h1:h0)[b]++});for(let i=0;i<bins;i++){h1[i]/=Math.max(1,n1);h0[i]/=Math.max(1,n0)}const max=Math.max(...h1,...h0,.05),L=58,R=760,T=25,B=235,bw=(R-L)/bins;let s='<style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="790" height="300" fill="#fff"/>';
+ if(state.reveal){
+  for(let k=0;k<=5;k++){const x=L+(R-L)*k/5;s+='<line x1="'+x+'" x2="'+x+'" y1="'+T+'" y2="'+B+'" stroke="'+COLORS.grid+'"/>'+svgText(x,B+20,(k/5).toFixed(1),'text-anchor="middle" font-size="9" fill="'+COLORS.muted+'"')}
+  for(let i=0;i<bins;i++){const x=L+i*bw,hA=(B-T-10)*h1[i]/max,hB=(B-T-10)*h0[i]/max;s+='<rect x="'+(x+1)+'" y="'+(B-hB)+'" width="'+(bw-2)+'" height="'+hB+'" fill="'+COLORS.control+'" fill-opacity=".35"/><rect x="'+(x+1)+'" y="'+(B-hA)+'" width="'+(bw-2)+'" height="'+hA+'" fill="'+COLORS.treated+'" fill-opacity=".35"/>'}
+  s+=svgText((L+R)/2,286,'Oracle assignment probability eᵢ under the current DGP/design','text-anchor="middle" font-size="10.5" font-weight="750" fill="'+COLORS.ink+'"')+svgText(L,T+12,'Blue: observed T=0 · Orange: observed T=1','font-size="10" font-weight="750" fill="'+COLORS.muted+'"');
+ }else{
+  s+='<rect x="62" y="48" width="666" height="190" rx="16" fill="#F7F8FB" stroke="#D7DEE8"/>'+svgText(395,132,'Oracle assignment probabilities are hidden','text-anchor="middle" font-size="18" font-weight="850" fill="'+COLORS.ink+'"')+svgText(395,166,'The true eᵢ and exact positivity range are properties of the simulation DGP,','text-anchor="middle" font-size="11" fill="'+COLORS.muted+'"')+svgText(395,190,'not quantities directly observed in a real dataset.','text-anchor="middle" font-size="11" fill="'+COLORS.muted+'"');
+ }
+ $('overlapSvg').innerHTML=s;
+ let note;if(state.design==='randomized')note='<strong>Design-based identification:</strong> complete randomization makes the treatment vector independent of the fixed potential-outcome schedule. A prognostic U does not confound treatment when it does not affect assignment.';else if(state.hidden>.01)note='<strong>Not identified from measured X alone:</strong> even perfect measured-X adjustment cannot block T ← U → Y.';else note='<strong>Conditionally identifiable in this simulation:</strong> the crude difference remains an association, but the ATE is identified from measured X under consistency, conditional exchangeability, and positivity.';if(state.reveal&&!practical)note+='<br><b>Estimation warning:</b> strict positivity holds, but limited practical overlap can make adjusted estimators unstable.';if(!state.reveal)note+='<br><b>Observed-data caution:</b> exchangeability and exact positivity are not empirically testable from these data alone.';$('identificationNote').innerHTML=note;
+}
+
+function renderAudit(){
+ const n=state.data.length,nH=state.data.filter(r=>r.Y1===1&&r.Y0===0).length,nP=state.data.filter(r=>r.Y1===0&&r.Y0===1).length;
+ const tol=1e-10,checks=[
+  {name:'Consistency identity',ok:state.data.every(r=>r.Y===(r.T?r.Y1:r.Y0)),detail:'Yᵢ = TᵢYᵢ(1)+(1−Tᵢ)Yᵢ(0) for every subject'},
+  {name:'Binary response-type identity',ok:Math.abs(state.trueATE-(nH-nP)/n)<tol,detail:'τ̄ₙ = Pₙ(1,0) − Pₙ(0,1)'},
+  {name:'Gap decomposition',ok:Math.abs(state.observed.gap-state.observed.term1-state.observed.term0)<tol,detail:'RDobs−τ̄ₙ = term 1 + term 0'},
+  {name:'Geometric-mean OR calibration',ok:Math.abs(mean(state.data.map(r=>r.logOR))-Math.log(state.effect))<tol,detail:'exp{n⁻¹Σ log(ORᵢ)} = selected OR'},
+  {name:'Binary-domain check',ok:state.data.every(r=>[0,1].includes(r.Y0)&&[0,1].includes(r.Y1)&&[-1,0,1].includes(r.tau)),detail:'Yᵢ(t)∈{0,1} and τᵢ∈{−1,0,1}'},
+  {name:'Assignment-probability check',ok:state.design==='randomized'?state.data.every(r=>Math.abs(r.e-state.observed.n1/n)<tol):state.data.every(r=>r.e>=.005-tol&&r.e<=.995+tol),detail:state.design==='randomized'?'eᵢ = n₁/n under complete randomization':'0.005 ≤ eᵢ ≤ 0.995 under observational assignment'}
+ ];
+ $('auditGrid').innerHTML=checks.map(q=>{if(!state.reveal)return '<div class="audit-item hidden"><div class="name">'+q.name+'</div><div class="status">Internal simulation check hidden</div><div class="detail">Not verifiable from the observed-data view</div></div>';return '<div class="audit-item '+(q.ok?'pass':'')+'"><div class="name">'+q.name+'</div><div class="status">'+(q.ok?'✓ Passed':'✕ Check failed')+'</div><div class="detail">'+q.detail+'</div></div>'}).join('');
+}
+
+function renderTable(){
+ $('subjectTable').innerHTML=state.data.map((r,i)=>{const e=state.reveal?fmt(r.e,4):'hidden',or=state.reveal?fmt(Math.exp(r.logOR),3):'hidden',y1=!state.reveal&&r.T===0?'counterfactual':r.Y1,y0=!state.reveal&&r.T===1?'counterfactual':r.Y0,tau=state.reveal?(r.tau>=0?'+':'')+r.tau:'unobserved';return '<tr class="'+(i===state.selected?'selected':'')+'" data-index="'+i+'"><td>'+r.id+'</td><td>'+fmt(r.age,0)+'</td><td>'+fmt(r.bmi,1)+'</td><td>'+fmt(r.income,2)+'</td><td>'+r.female+'</td><td>'+r.college+'</td><td>'+r.htn+'</td><td>'+fmt(r.riskScore,3)+'</td><td class="'+(!state.reveal?'mask-cell':'')+'">'+e+'</td><td class="'+(!state.reveal?'mask-cell':'')+'">'+or+'</td><td>'+r.T+'</td><td>'+r.Y+'</td><td class="'+(!state.reveal&&r.T===0?'mask-cell':'')+'">'+y1+'</td><td class="'+(!state.reveal&&r.T===1?'mask-cell':'')+'">'+y0+'</td><td>'+tau+'</td></tr>'}).join('');
+ document.querySelectorAll('#subjectTable tr').forEach(tr=>tr.addEventListener('click',()=>{state.selected=+tr.dataset.index;renderCohort();renderSubject();renderSchedule();renderMath();renderTable()}));
+}
+function exportCsv(){
+ let h,lines,name;
+ if(state.reveal){
+   h=['id','age','bmi','income_ratio','female','college','hypertension','measured_risk_score','hidden_U','oracle_assignment_probability','smoking_T','observed_Y','p1','p0','Y1','Y0','individual_effect','conditional_OR','effect_modifier'];lines=[h.join(',')];
+   state.data.forEach(r=>lines.push([r.id,r.age.toFixed(4),r.bmi.toFixed(4),r.income.toFixed(4),r.female,r.college,r.htn,r.riskScore.toFixed(6),r.U.toFixed(6),r.e.toFixed(6),r.T,r.Y,r.p1.toFixed(6),r.p0.toFixed(6),r.Y1,r.Y0,r.tau,Math.exp(r.logOR).toFixed(6),r.effectIndex.toFixed(6)].join(',')));
+   name='potential_outcome_simulation_full_schedule.csv';
+ }else{
+   h=['id','age','bmi','income_ratio','female','college','hypertension','measured_risk_score','smoking_T','observed_Y'];lines=[h.join(',')];
+   state.data.forEach(r=>lines.push([r.id,r.age.toFixed(4),r.bmi.toFixed(4),r.income.toFixed(4),r.female,r.college,r.htn,r.riskScore.toFixed(6),r.T,r.Y].join(',')));
+   name='potential_outcome_observed_data_only.csv';
+ }
+ downloadBlob(lines.join('\n'),'text/csv;charset=utf-8',name);
+}
+function renderAll(){renderMetrics();renderMath();renderDag();renderAssociationCurve();renderCohort();renderSubject();renderSchedule();renderComparison();renderTypes();renderRepeated();renderIdentification();renderAudit();renderTable()}
+function setPreset(name){
+ const p={
+  assocOnly:{design:'observational',selection:1.90,overlap:.70,prevalence:35,hidden:0,effect:1.00,hetero:0,seed:20260710},
+  causalFair:{design:'observational',selection:0,overlap:.90,prevalence:50,hidden:0,effect:1.80,hetero:.65,seed:20260710},
+  exaggerate:{design:'observational',selection:1.85,overlap:.60,prevalence:35,hidden:0,effect:1.80,hetero:.75,seed:20260710},
+  mask:{design:'observational',selection:-1.90,overlap:.62,prevalence:35,hidden:0,effect:1.80,hetero:.75,seed:20260710},
+  randomized:{design:'randomized',selection:0,overlap:1,prevalence:50,hidden:0,effect:1.80,hetero:.65,seed:20260710},
+  hidden:{design:'observational',selection:1.10,overlap:.68,prevalence:35,hidden:1.00,effect:1.80,hetero:.85,seed:20260710}
+ }[name];if(!p)return;$('designSelect').value=p.design;$('selectionRange').value=p.selection;$('overlapRange').value=p.overlap;$('prevalenceRange').value=p.prevalence;$('hiddenRange').value=p.hidden;$('effectRange').value=p.effect;$('heteroRange').value=p.hetero;$('seedInput').value=p.seed;$('scheduleFilter').value='all';state.scheduleStart=0;buildPopulation();
+}
+function reset(){
+ $('nRange').value=defaults.n;$('designSelect').value=defaults.design;$('selectionRange').value=defaults.selection;$('overlapRange').value=defaults.overlap;$('prevalenceRange').value=Math.round(defaults.prevalence*100);$('effectRange').value=defaults.effect;$('heteroRange').value=defaults.hetero;$('hiddenRange').value=defaults.hidden;$('seedInput').value=defaults.seed;$('revealToggle').checked=defaults.reveal;$('xVar').value=defaults.x;$('yVar').value=defaults.y;$('dagHighlight').value='all';$('scheduleFilter').value='all';state.selected=0;state.scheduleStart=0;buildPopulation();
+}
+
+document.querySelectorAll('[data-preset]').forEach(b=>b.addEventListener('click',()=>setPreset(b.dataset.preset)));
+$('designSelect').addEventListener('change',()=>assignTreatment(true));
+['selectionRange','overlapRange','prevalenceRange'].forEach(id=>$(id).addEventListener('input',()=>assignTreatment(false)));
+$('hiddenRange').addEventListener('input',buildPopulation);
+$('nRange').addEventListener('change',buildPopulation);
+['effectRange','heteroRange'].forEach(id=>$(id).addEventListener('input',buildPopulation));
+$('seedInput').addEventListener('change',buildPopulation);
+$('newPopulation').addEventListener('click',()=>{$('seedInput').value=(+$('seedInput').value+104729)%99999999||1;buildPopulation()});
+$('reassignTreatment').addEventListener('click',()=>assignTreatment(true));
+$('revealToggle').addEventListener('input',()=>{readControls();if(!state.reveal){$('scheduleFilter').value='all';state.scheduleStart=0;stopRepeated(true)}updateLabels();renderAll()});
+$('resetControls').addEventListener('click',reset);
+$('xVar').addEventListener('change',()=>{readControls();renderCohort()});$('yVar').addEventListener('change',()=>{readControls();renderCohort()});
+$('dagHighlight').addEventListener('change',renderDag);
+$('scheduleFilter').addEventListener('change',()=>{state.scheduleStart=0;renderSchedule()});
+$('prevSchedule').addEventListener('click',()=>{state.scheduleStart=Math.max(0,state.scheduleStart-12);renderSchedule()});$('nextSchedule').addEventListener('click',()=>{state.scheduleStart=Math.min(Math.max(0,state.data.length-12),state.scheduleStart+12);renderSchedule()});
+$('runAssignments').addEventListener('click',runRepeated);$('stopAssignments').addEventListener('click',()=>{stopRepeated(false);renderRepeated()});
+$('exportCsv').addEventListener('click',exportCsv);document.querySelectorAll('[data-svg]').forEach(b=>b.addEventListener('click',()=>saveSvg(b.dataset.svg)));
+window.addEventListener('resize',hideTip);
+initTabs();reset();
+})();
+</script>
+</body>
+</html>

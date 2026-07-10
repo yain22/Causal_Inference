@@ -1,0 +1,851 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Doubly Robust Estimator — AIPW, Double Robustness, and EIF — Se Yoon Lee, Ph.D.</title>
+<style>
+  :root{
+    color-scheme:light;
+    --ink:#162033;--muted:#667085;--line:#D7DEE8;--panel:#FFFFFF;--bg:#F4F7FB;
+    --smoke:#E56B2F;--control:#2F6EA5;--accent:#7A5AF8;--green:#208A62;
+    --danger:#C23B3B;--amber:#B66A00;--teal:#147D83;--gray:#98A2B3;
+    --soft-orange:#FFF1E8;--soft-blue:#EAF3FB;--soft-purple:#F2EEFF;
+    --soft-green:#EAF8F2;--soft-red:#FFF1F1;--soft-teal:#EAF7F7;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif}
+  body{min-width:320px}
+  button,select,input{font:inherit}button{cursor:pointer}
+  .hero{padding:28px clamp(18px,4vw,58px) 22px;background:linear-gradient(135deg,#FFFFFF 0%,#F6F3FF 52%,#EAF7F7 100%);border-bottom:1px solid var(--line)}
+  .hero-inner{max-width:1760px;margin:0 auto;display:flex;gap:24px;align-items:flex-start;justify-content:space-between}
+  .hero h1{margin:0 0 8px;font-size:clamp(29px,3.1vw,49px);line-height:1.05;letter-spacing:-.7px}
+  .hero .author{font-weight:600;white-space:nowrap}
+  .hero p{margin:0;max-width:1090px;color:var(--muted);font-size:clamp(15px,1.4vw,19px);line-height:1.55}
+  .clarifier{margin-top:13px;display:inline-flex;gap:9px;align-items:center;padding:9px 13px;border:1px solid #BFC9D8;border-radius:12px;background:rgba(255,255,255,.86);font-size:14px;font-weight:650;line-height:1.45}
+  .clarifier b{color:var(--accent)}
+  .hero-badge{flex:0 0 auto;padding:11px 15px;border-radius:999px;border:1px solid #CFC5FF;background:#FFF;color:#5B45C8;font-weight:800;font-size:13px;letter-spacing:.35px;white-space:nowrap}
+  .app{max-width:1760px;margin:0 auto;padding:18px;display:grid;grid-template-columns:350px minmax(0,1fr);gap:18px;align-items:start}
+  .controls{position:sticky;top:12px;max-height:calc(100vh - 24px);overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:20px;box-shadow:0 10px 28px rgba(20,32,55,.08)}
+  .controls-head{padding:18px 18px 14px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#fff,#FAFBFD)}
+  .controls-head h2{margin:0 0 5px;font-size:19px}.controls-head p{margin:0;color:var(--muted);font-size:13px;line-height:1.45}
+  .control-section{padding:15px 18px;border-bottom:1px solid #E7EBF1}.control-section:last-child{border-bottom:0}
+  .section-label{font-size:11px;letter-spacing:.8px;text-transform:uppercase;color:#7B8495;font-weight:850;margin-bottom:10px}
+  .preset-row{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+  .preset{border:1px solid var(--line);background:#fff;border-radius:11px;padding:8px 9px;font-size:11px;font-weight:760;color:#344054;line-height:1.25}
+  .preset:hover,.preset.active{border-color:var(--accent);color:#5B45C8;background:#FAF8FF}
+  .control{margin:0 0 14px}.control:last-child{margin-bottom:0}
+  .control-top{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:6px}
+  .control label{font-size:13px;font-weight:720}.value{font-size:12px;color:#5B45C8;font-weight:850;font-variant-numeric:tabular-nums}
+  input[type="range"]{width:100%;accent-color:var(--accent)}
+  .range-ends{display:flex;justify-content:space-between;color:#98A2B3;font-size:10px;margin-top:2px;gap:8px}
+  select{width:100%;border:1px solid var(--line);border-radius:10px;background:#fff;padding:9px 10px;color:var(--ink)}
+  .primary-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .primary,.secondary{border-radius:11px;padding:9px 10px;font-weight:780;font-size:12px}
+  .primary{border:1px solid var(--accent);background:var(--accent);color:#fff}.secondary{border:1px solid var(--line);background:#fff;color:#344054}
+  .primary:hover{filter:brightness(.96)}.secondary:hover{border-color:var(--accent);color:#5B45C8}
+  .teaching-note{font-size:11px;line-height:1.5;color:#667085;background:#F7F8FB;border-radius:10px;padding:9px 10px;margin-top:10px}
+  .model-status{margin-top:7px;border-radius:9px;padding:7px 9px;font-size:10px;line-height:1.45;font-weight:700}
+  .model-status.good{border:1px solid #B8E5D2;background:#F2FBF7;color:#176A4C}.model-status.bad{border:1px solid #F0BBBB;background:#FFF5F5;color:#A52D2D}
+  .workspace{min-width:0}
+  .metrics{display:grid;grid-template-columns:repeat(7,minmax(105px,1fr));gap:9px;margin-bottom:12px}
+  .metric{background:#fff;border:1px solid var(--line);border-radius:15px;padding:11px 12px;min-width:0;box-shadow:0 3px 12px rgba(20,32,55,.04)}
+  .metric .k{font-size:9px;color:#7B8495;text-transform:uppercase;font-weight:850;letter-spacing:.5px;white-space:nowrap}
+  .metric .v{margin-top:4px;font-size:18px;font-weight:850;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .card{background:#fff;border:1px solid var(--line);border-radius:18px;box-shadow:0 6px 20px rgba(20,32,55,.055);min-width:0;overflow:hidden}
+  .card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:15px 16px 10px}
+  .card-head h3{margin:0 0 4px;font-size:17px;line-height:1.25}.card-head p{margin:0;color:var(--muted);font-size:12px;line-height:1.45}
+  .grid-top{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(310px,.8fr);gap:12px;margin-bottom:12px}
+  .grid-two{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+  .grid-three{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px}
+  .mini-controls{display:flex;gap:7px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+  .mini-controls label{font-size:11px;font-weight:750;color:#667085}.mini-controls select{width:auto;min-width:105px;padding:6px 8px;font-size:12px}
+  .legend{display:flex;flex-wrap:wrap;gap:12px;padding:0 16px 8px;color:#667085;font-size:11px}.legend span{display:inline-flex;align-items:center;gap:5px}
+  .dot{width:10px;height:10px;border-radius:50%;display:inline-block}.ring{width:11px;height:11px;border-radius:50%;display:inline-block;border:2px solid #111;background:#fff}
+  .line-key{width:17px;height:0;border-top:3px solid;display:inline-block}.dash-key{width:17px;height:0;border-top:2px dashed;display:inline-block}
+  svg.chart{display:block;width:100%;height:auto;overflow:visible;touch-action:none}.chart-wrap{position:relative;padding:0 8px 10px}
+  .chart-note{padding:0 16px 13px;color:#667085;font-size:11px;line-height:1.5}.chart-note strong{color:var(--ink)}
+  .tooltip{position:fixed;z-index:40;pointer-events:none;background:#111827;color:white;border-radius:10px;padding:9px 10px;box-shadow:0 8px 24px rgba(0,0,0,.24);font-size:11px;line-height:1.45;opacity:0;transform:translate(10px,10px);transition:opacity .08s;max-width:285px}
+  .subject-body{padding:2px 16px 16px}.subject-id{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}.subject-id strong{font-size:24px}
+  .status-pill{padding:5px 8px;border-radius:999px;font-size:11px;font-weight:850}.status-smoke{background:var(--soft-orange);color:#A94317}.status-control{background:var(--soft-blue);color:#245C88}
+  .kv{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:10px}.kv div{border:1px solid #E4E8EF;border-radius:10px;padding:8px 9px;background:#FCFCFD}
+  .kv .label{font-size:9px;text-transform:uppercase;letter-spacing:.45px;color:#7B8495;font-weight:820}.kv .num{font-size:14px;font-weight:780;margin-top:2px;font-variant-numeric:tabular-nums}
+  .decomp-box{border:1px solid #D9D2FF;background:#F8F6FF;border-radius:13px;padding:11px 12px;margin-top:10px}
+  .decomp-box .small{font-size:10px;color:#6655B8;margin-bottom:6px;font-weight:800;text-transform:uppercase;letter-spacing:.45px}.decomp-box .formula{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11px;line-height:1.6;color:#344054;overflow-wrap:anywhere}
+  .decomp-box .result{margin-top:7px;font-size:18px;font-weight:900;color:#5B45C8}
+  .subject-nav{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:10px}.subject-nav button{border:1px solid var(--line);background:#fff;border-radius:10px;padding:7px;font-size:12px;font-weight:750}
+  .subject-nav button:hover{border-color:var(--accent);color:#5B45C8}
+  .diag-strip{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;padding:0 16px 12px}.diag{border:1px solid #E1E6ED;border-radius:11px;background:#FCFCFD;padding:8px 9px}
+  .diag .name{font-size:9px;color:#7B8495;text-transform:uppercase;font-weight:850;letter-spacing:.4px}.diag .num{font-size:16px;font-weight:850;margin-top:3px;font-variant-numeric:tabular-nums}
+  .math-card{margin-bottom:12px}.math-card .card-head{background:linear-gradient(180deg,#FFFFFF,#FCFBFF)}
+  .graduate-tag{display:inline-flex;border:1px solid #CFC5FF;background:#F7F4FF;color:#5B45C8;border-radius:999px;padding:5px 9px;font-size:10px;font-weight:900;letter-spacing:.55px;text-transform:uppercase;white-space:nowrap}
+  .math-tabs{display:flex;gap:7px;flex-wrap:wrap;padding:0 16px 12px;border-bottom:1px solid #E7EBF1}.math-tab{border:1px solid var(--line);background:#fff;color:#475467;border-radius:10px;padding:8px 11px;font-size:11px;font-weight:820}
+  .math-tab:hover{border-color:#B7A9FF;color:#5B45C8;background:#FAF8FF}.math-tab[aria-selected="true"]{border-color:var(--accent);background:var(--accent);color:#fff}
+  .math-panel{display:none;padding:16px}.math-panel.active{display:block}.math-scroll{overflow-x:auto;overflow-y:hidden;padding:3px 2px 7px}
+  math{font-family:"Cambria Math","STIX Two Math","Times New Roman",serif;color:var(--ink)}math[display="block"]{display:block;width:max-content;min-width:min-content;margin:0 auto;font-size:clamp(17px,1.55vw,25px);line-height:1.35}
+  .math-chain{border:1px solid #D9D2FF;background:linear-gradient(135deg,#F7F4FF,#F8FBFF);border-radius:15px;padding:15px 12px;margin-bottom:12px}.math-chain .label{font-size:10px;color:#5B45C8;font-weight:900;letter-spacing:.65px;text-transform:uppercase;margin:0 0 8px 3px}
+  .math-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.math-box{border:1px solid #DEE4EC;border-radius:13px;background:#FCFCFD;padding:11px 12px;min-width:0}.math-box h4{margin:0 0 6px;font-size:12px}.math-box p{margin:7px 0 0;color:#667085;font-size:10px;line-height:1.5}.math-box math[display="block"]{font-size:clamp(15px,1.15vw,20px);margin-left:0}
+  .theorem-box{border:1px solid #B8E5D2;background:#F2FBF7;border-radius:14px;padding:12px 13px;margin-top:10px}.theorem-box .title{font-size:10px;color:#176A4C;font-weight:900;letter-spacing:.6px;text-transform:uppercase;margin-bottom:7px}
+
+  .theorem-box .math-scroll math[display="block"]{font-size:clamp(13px,.95vw,18px)}
+  .math-box.wide-math .math-scroll math[display="block"]{font-size:clamp(12.5px,.88vw,16.5px)}
+  @media(max-width:650px){.theorem-box .math-scroll math[display="block"],.math-box.wide-math .math-scroll math[display="block"]{font-size:14px}}
+  .warning-box{margin-top:10px;border-left:4px solid #D18B18;background:#FFF9EB;border-radius:9px;padding:9px 11px;color:#6F4B08;font-size:10px;line-height:1.5}
+  .live-equation{margin-top:10px;border:1px solid #D9D2FF;background:#F8F6FF;border-radius:12px;padding:10px 12px;font-size:11px;line-height:1.55;color:#536075}.live-equation strong{color:#5B45C8}
+  .chip-row{display:flex;gap:7px;flex-wrap:wrap;margin-top:7px}.chip{border:1px solid #D9D2FF;background:#fff;border-radius:999px;padding:5px 8px;font-variant-numeric:tabular-nums;font-weight:800;color:#344054}
+  .dr-matrix{display:grid;grid-template-columns:78px 1fr 1fr;gap:8px;padding:0 16px 14px;align-items:stretch}.matrix-corner,.matrix-head,.matrix-side{display:grid;place-items:center;color:#667085;font-size:10px;font-weight:850;text-transform:uppercase;letter-spacing:.45px;text-align:center}
+  .matrix-head{border-bottom:2px solid #E1E6ED;padding:7px}.matrix-side{border-right:2px solid #E1E6ED;padding:7px}
+  .matrix-cell{border:1px solid #DDE3EB;border-radius:13px;background:#FCFCFD;padding:10px 11px;text-align:left;min-height:116px;transition:.15s}.matrix-cell:hover{border-color:#B7A9FF;transform:translateY(-1px)}.matrix-cell.selected{box-shadow:0 0 0 2px #7A5AF8 inset;background:#F8F6FF}
+  .matrix-cell.protected{border-color:#B8E5D2;background:#F2FBF7}.matrix-cell.unprotected{border-color:#F0BBBB;background:#FFF5F5}.matrix-cell.selected.protected{box-shadow:0 0 0 2px #208A62 inset}.matrix-cell.selected.unprotected{box-shadow:0 0 0 2px #C23B3B inset}
+  .matrix-cell .model{font-size:9px;color:#667085;text-transform:uppercase;font-weight:850;letter-spacing:.35px}.matrix-cell .estimate{font-size:19px;font-weight:900;margin:5px 0 2px;font-variant-numeric:tabular-nums}.matrix-cell .bias{font-size:10px;color:#667085}.matrix-cell .guarantee{margin-top:7px;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.35px}
+  .estimate-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;padding:0 16px 12px}.est{border:1px solid #E1E6ED;border-radius:12px;padding:9px;background:#FCFCFD;min-width:0}.est.current{border-color:#CFC5FF;background:#F8F6FF}.est.truth{border-color:#B8E5D2;background:#F2FBF7}
+  .est .name{font-size:9px;color:#667085;text-transform:uppercase;font-weight:850;letter-spacing:.45px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.est .rd{font-size:18px;font-weight:880;margin:4px 0 2px;font-variant-numeric:tabular-nums;white-space:nowrap}.est .sub{font-size:9px;color:#7B8495;line-height:1.35}
+  .ci-status-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:0 16px 15px}.ci-status{border:1px solid #E1E6ED;border-radius:12px;padding:10px 11px;background:#FCFCFD;min-width:0}.ci-status.cover{border-color:#A9DCC8;background:#F2FBF7}.ci-status.miss{border-color:#F0BBBB;background:#FFF5F5}.ci-status.aipw{box-shadow:0 0 0 2px #CFC5FF inset}
+  .ci-status .name{font-size:9px;text-transform:uppercase;letter-spacing:.45px;color:#667085;font-weight:850}.ci-status .value{font-size:11px;font-weight:780;margin:5px 0 7px;font-variant-numeric:tabular-nums;line-height:1.45}.ci-badge{display:inline-flex;border-radius:999px;padding:4px 7px;font-size:9px;font-weight:900;letter-spacing:.35px;text-transform:uppercase}.cover .ci-badge{background:#DDF4EA;color:#176A4C}.miss .ci-badge{background:#FBE1E1;color:#A52D2D}
+  .mini-button{border:1px solid var(--accent);background:var(--accent);color:#fff;border-radius:9px;padding:7px 9px;font-size:11px;font-weight:800;white-space:nowrap}.mini-button.secondary-mini{background:#fff;color:#344054;border-color:var(--line)}.mini-button:hover{filter:brightness(.96)}.mini-button:disabled{opacity:.5;cursor:not-allowed}
+  .coverage-progress{margin:0 16px 10px;border:1px solid #E1E6ED;background:#F8FAFC;border-radius:11px;padding:9px 10px}.coverage-top{display:flex;justify-content:space-between;gap:10px;color:#667085;font-size:10px;font-weight:750;margin-bottom:6px}.progress-track{height:7px;border-radius:999px;background:#E7EBF1;overflow:hidden}.progress-fill{height:100%;width:0;background:var(--accent);transition:width .12s linear}
+  .coverage-matrix{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:0 16px 10px}.coverage-stat{border:1px solid #E1E6ED;background:#FCFCFD;border-radius:12px;padding:9px 10px;cursor:pointer;text-align:left}.coverage-stat:hover,.coverage-stat.selected{border-color:#B7A9FF;background:#F8F6FF}.coverage-stat .name{font-size:9px;color:#667085;text-transform:uppercase;font-weight:850;letter-spacing:.4px}.coverage-stat .number{font-size:19px;font-weight:880;margin-top:3px;font-variant-numeric:tabular-nums}.coverage-stat .detail{font-size:9px;color:#7B8495;margin-top:2px;line-height:1.35}
+  .coverage-empty{padding:22px 18px 28px;text-align:center;color:#667085;font-size:12px;line-height:1.55}.coverage-empty strong{color:var(--ink)}
+  .table-card{margin-bottom:18px}details summary{cursor:pointer;padding:14px 16px;font-weight:800;list-style:none;display:flex;align-items:center;justify-content:space-between}details summary::-webkit-details-marker{display:none}details summary::after{content:"＋";color:var(--accent);font-size:20px}details[open] summary::after{content:"−"}
+  .table-tools{display:flex;gap:8px;padding:0 16px 10px;flex-wrap:wrap}.table-tools button{border:1px solid var(--line);background:#fff;border-radius:9px;padding:7px 9px;font-size:11px;font-weight:750}.table-wrap{overflow:auto;border-top:1px solid #E6EAF0;max-height:460px}
+  table{border-collapse:collapse;width:100%;font-size:10px;white-space:nowrap}th,td{padding:8px 9px;border-bottom:1px solid #EDF0F4;text-align:right;font-variant-numeric:tabular-nums}th:first-child,td:first-child{text-align:left}th{position:sticky;top:0;background:#F8FAFC;color:#667085;text-transform:uppercase;font-size:9px;letter-spacing:.4px;z-index:1}tbody tr{cursor:pointer}tbody tr:hover{background:#F7F5FF}tbody tr.selected{background:#EEE9FF}
+  .footer{max-width:1760px;margin:0 auto;padding:0 18px 28px;color:#667085;font-size:11px;line-height:1.55}.kbd{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;border:1px solid #D0D5DD;border-bottom-width:2px;border-radius:5px;background:white;padding:1px 5px;color:#344054}
+
+  .model-status.warn{border:1px solid #F0D09B;background:#FFF8EA;color:#875100}
+  .audit-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:7px;margin-top:10px}
+  .audit-item{border:1px solid #DCE3EA;border-radius:10px;background:#fff;padding:8px 9px;min-width:0}
+  .audit-item.pass{border-color:#A9DCC8;background:#F2FBF7}.audit-item.fail{border-color:#F0BBBB;background:#FFF5F5}
+  .audit-item .audit-name{font-size:9px;color:#667085;text-transform:uppercase;font-weight:900;letter-spacing:.4px}
+  .audit-item .audit-value{font-size:13px;font-weight:850;margin-top:3px;font-variant-numeric:tabular-nums}
+  .audit-item .audit-note{font-size:9px;color:#7B8495;margin-top:2px;line-height:1.35}
+  .matrix-cell.caution{border-color:#F0D09B;background:#FFF8EA}.matrix-cell.selected.caution{box-shadow:0 0 0 2px #B66A00 inset}
+  .target-explain{margin-top:8px;border-left:4px solid var(--teal);background:#EFF9F9;border-radius:9px;padding:8px 10px;color:#365F63;font-size:10px;line-height:1.5}
+  @media(max-width:900px){.audit-grid{grid-template-columns:1fr 1fr}}
+  @media(max-width:470px){.audit-grid{grid-template-columns:1fr}}
+
+
+  .notation-map{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:10px}
+  .notation-item{border:1px solid #DDE4EC;border-radius:12px;background:#FCFCFD;padding:10px 11px;min-width:0}
+  .notation-item .symbol{font-family:"Cambria Math","STIX Two Math","Times New Roman",serif;font-size:17px;font-weight:750;color:#172033;margin-bottom:3px}
+  .notation-item .meaning{font-size:9.5px;color:#667085;line-height:1.45}
+  .distinction-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-top:10px}
+  .distinction{border:1px solid #DDE4EC;border-radius:12px;background:#fff;padding:10px 11px;min-width:0}
+  .distinction.signal{border-color:#D9D2FF;background:#F8F6FF}.distinction.eif{border-color:#B8E5D2;background:#F2FBF7}.distinction.stack{border-color:#F0D09B;background:#FFF8EA}
+  .distinction h4{margin:0 0 5px;font-size:11px}.distinction p{margin:5px 0 0;color:#667085;font-size:9.5px;line-height:1.48}
+  .distinction math[display="block"]{font-size:clamp(13px,1vw,17px)}
+  .notation-rule{margin-top:9px;border-left:4px solid var(--teal);background:#EFF9F9;border-radius:9px;padding:9px 11px;color:#365F63;font-size:10px;line-height:1.5}
+  .denominator-note{margin-top:8px;border:1px solid #CFC5FF;background:#FFFFFF;border-radius:10px;padding:8px 10px;color:#4E466D;font-size:10px;line-height:1.5;text-align:center}
+  .denominator-note b{color:#5B45C8}
+  .notation-rule b{color:#174E53}
+  @media(max-width:980px){.notation-map{grid-template-columns:1fr 1fr}.distinction-grid{grid-template-columns:1fr}}
+  @media(max-width:520px){.notation-map{grid-template-columns:1fr}}
+
+  @media(max-width:1250px){.app{grid-template-columns:1fr}.controls{position:relative;top:auto;max-height:none}.metrics{grid-template-columns:repeat(4,1fr)}}
+  @media(max-width:980px){.grid-top,.grid-two,.grid-three{grid-template-columns:1fr}.math-grid{grid-template-columns:1fr}.estimate-grid,.ci-status-grid,.coverage-matrix{grid-template-columns:1fr 1fr}}
+  @media(max-width:700px){.hero-inner{display:block}.hero-badge{display:inline-block;margin-top:14px}.hero .author{display:block;margin-top:7px;font-size:.58em;white-space:normal}.app{padding:10px}.metrics{grid-template-columns:repeat(2,1fr)}.card-head{display:block}.mini-controls{justify-content:flex-start;margin-top:9px}.math-tabs{display:grid;grid-template-columns:1fr 1fr}.dr-matrix{grid-template-columns:58px 1fr 1fr;padding:0 10px 12px}.diag-strip{grid-template-columns:1fr}.kv{grid-template-columns:1fr 1fr}}
+  @media(max-width:470px){.estimate-grid,.ci-status-grid,.coverage-matrix{grid-template-columns:1fr}.preset-row{grid-template-columns:1fr}.primary-row{grid-template-columns:1fr}}
+  @media print{.controls,.hero-badge,.table-card,.footer,.preset-row,.primary-row,.mini-button{display:none!important}.app{display:block;max-width:none}.card{break-inside:avoid;box-shadow:none}.hero{padding:12px}.metrics{grid-template-columns:repeat(7,1fr)}}
+</style>
+</head>
+<body>
+<header class="hero">
+  <div class="hero-inner">
+    <div>
+      <h1>Doubly Robust Estimator <span class="author">— Se Yoon Lee, Ph.D.</span></h1>
+      <p>Explore the augmented inverse probability weighted estimator for a marginal causal risk difference. Fit a treatment model and an outcome model, inspect each subject’s residual correction, and verify the “one correct nuisance model is enough” property through repeated simulations.</p>
+      <div class="clarifier"><b>Core operation:</b> outcome-regression predictions provide a starting value; inverse-probability weighted residuals correct those predictions using the observed outcomes.</div>
+    </div>
+    <div class="hero-badge">AIPW • GRADUATE LEVEL • INLINE SVG</div>
+  </div>
+</header>
+
+<main class="app">
+<aside class="controls" aria-label="Simulation and doubly robust estimator controls">
+  <div class="controls-head"><h2>Build the observational study</h2><p>Change the data-generating process and the two nuisance-model specifications independently.</p></div>
+
+  <div class="control-section">
+    <div class="section-label">Double-robustness presets</div>
+    <div class="preset-row">
+      <button class="preset" data-preset="bothCorrect">Both correct</button>
+      <button class="preset" data-preset="psCorrect">PS correct, OR wrong</button>
+      <button class="preset" data-preset="orCorrect">PS wrong, OR correct</button>
+      <button class="preset" data-preset="bothWrong">Both wrong</button>
+      <button class="preset" data-preset="poorOverlap">Poor overlap</button>
+      <button class="preset" data-preset="nonlinear">Strong nonlinearity</button>
+    </div>
+  </div>
+
+  <div class="control-section">
+    <div class="section-label">Data-generating process</div>
+    <div class="control"><div class="control-top"><label for="nRange">Number of subjects</label><span class="value" id="nValue"></span></div><input id="nRange" type="range" min="160" max="600" step="20" value="320"><div class="range-ends"><span>160</span><span>600</span></div></div>
+    <div class="control"><div class="control-top"><label for="confRange">Strength of confounding</label><span class="value" id="confValue"></span></div><input id="confRange" type="range" min="0" max="2.5" step="0.05" value="1.25"><div class="range-ends"><span>treatment ≈ random</span><span>strong selection by X</span></div></div>
+    <div class="control"><div class="control-top"><label for="overlapRange">Treatment overlap</label><span class="value" id="overlapValue"></span></div><input id="overlapRange" type="range" min="0.15" max="1" step="0.01" value="0.72"><div class="range-ends"><span>limited positivity</span><span>good overlap</span></div></div>
+    <div class="control"><div class="control-top"><label for="nonlinRange">Outcome nonlinearity</label><span class="value" id="nonlinValue"></span></div><input id="nonlinRange" type="range" min="0" max="2" step="0.05" value="0.75"><div class="range-ends"><span>mostly linear</span><span>strong curves/interactions</span></div></div>
+    <div class="control"><div class="control-top"><label for="heteroRange">Effect heterogeneity</label><span class="value" id="heteroValue"></span></div><input id="heteroRange" type="range" min="0" max="1.5" step="0.05" value="0.40"><div class="range-ends"><span>common log-OR</span><span>effect varies with X</span></div></div>
+    <div class="control"><div class="control-top"><label for="effectRange">Baseline causal odds ratio</label><span class="value" id="effectValue"></span></div><input id="effectRange" type="range" min="1" max="3" step="0.05" value="1.80"><div class="range-ends"><span>OR 1.0</span><span>OR 3.0</span></div></div>
+    <div class="control"><div class="control-top"><label for="seedInput">Cohort seed</label><span class="value" id="seedValue"></span></div><input id="seedInput" type="number" min="1" max="99999999" value="20260710" style="width:100%;border:1px solid var(--line);border-radius:10px;padding:8px 9px"></div>
+    <div class="primary-row"><button class="primary" id="newCohort">New cohort</button><button class="secondary" id="resetControls">Reset</button></div>
+  </div>
+
+  <div class="control-section">
+    <div class="section-label">Nuisance models</div>
+    <div class="control"><label for="psModel" style="display:block;margin-bottom:6px">Propensity-score model e(X)</label><select id="psModel"><option value="correct" selected>Flexible / correctly specified</option><option value="miss">Sparse / misspecified</option></select><div class="model-status good" id="psStatus"></div></div>
+    <div class="control"><label for="orModel" style="display:block;margin-bottom:6px">Outcome-regression model m(T,X)</label><select id="orModel"><option value="correct" selected>Flexible / correctly specified</option><option value="miss">Sparse / misspecified</option></select><div class="model-status good" id="orStatus"></div></div>
+    <div class="control"><label for="fitMode" style="display:block;margin-bottom:6px">Nuisance-estimation strategy</label><select id="fitMode"><option value="same" selected>Same-sample parametric fits + stacked sandwich</option><option value="cross2">2-fold cross-fitting + block-stacked sandwich</option></select></div>
+    <div class="control"><div class="control-top"><label for="clipRange">Propensity truncation ε</label><span class="value" id="clipValue"></span></div><input id="clipRange" type="range" min="0" max="0.10" step="0.005" value="0"><div class="range-ends"><span>none</span><span>strong truncation</span></div></div>
+    <div class="teaching-note"><b>Double robustness is not double immunity.</b> Consistency still requires causal identification and positivity. Nonvanishing propensity truncation can invalidate the “propensity correct, outcome wrong” guarantee, so the default is no substantive truncation.<br><br><b>Numerical stability:</b> logistic nuisance fits use a fixed ridge penalty λ=5. Because the likelihood score is summed over the training sample, the per-observation penalty is λ/n<sub>train</sub> and vanishes asymptotically while preventing small-fold separation.</div>
+  </div>
+</aside>
+
+<section class="workspace">
+  <div class="metrics" id="metricStrip" aria-live="polite"></div>
+
+  <article class="card math-card" aria-labelledby="mathTitle">
+    <div class="card-head"><div><h3 id="mathTitle">Mathematical formulation</h3><p>One notation system is used throughout: <i>φ</i> is the uncentered AIPW estimating signal, <i>φ</i><sup>c</sup> is that signal centered by its empirical mean, <i>D</i><sup>*</sup> is the true nonparametric efficient influence function, and <i>IF</i><sup>stack</sup> is the influence value of the finite-dimensional stacked M-estimator. These objects are related, but they are not interchangeable.</p></div><span class="graduate-tag">Graduate-level notation</span></div>
+    <div class="math-tabs" role="tablist">
+      <button class="math-tab" data-math-tab="estimator" aria-selected="true">Target &amp; AIPW signal</button>
+      <button class="math-tab" data-math-tab="robustness" aria-selected="false">Double robustness</button>
+      <button class="math-tab" data-math-tab="inference" aria-selected="false">EIF vs stacked IF</button>
+      <button class="math-tab" data-math-tab="crossfit" aria-selected="false">Cross-fitting &amp; rates</button>
+    </div>
+
+    <section class="math-panel active" id="mathPanelEstimator">
+      <div class="notation-map">
+        <div class="notation-item"><div class="symbol">O=(X,T,Y)∼P₀</div><div class="meaning">Observed data. <i>T</i>∈{0,1} is the observed treatment; <i>a</i>∈{0,1} indexes a hypothetical intervention level.</div></div>
+        <div class="notation-item"><div class="symbol">e₀(x)=P₀(T=1|X=x)</div><div class="meaning">True propensity score for treatment 1.</div></div>
+        <div class="notation-item"><div class="symbol">π<sub>a,0</sub>(x)=P₀(T=a|X=x)</div><div class="meaning">Treatment-level probability: π<sub>a,0</sub>(x)=e₀(x)<sup>a</sup>{1−e₀(x)}<sup>1−a</sup>. Hence π<sub>1,0</sub>=e₀ and π<sub>0,0</sub>=1−e₀.</div></div>
+        <div class="notation-item"><div class="symbol">m<sub>a,0</sub>(x)=E₀(Y|T=a,X=x)</div><div class="meaning">True conditional outcome mean under observed treatment level <i>a</i>.</div></div>
+        <div class="notation-item"><div class="symbol">η₀=(e₀,m<sub>0,0</sub>,m<sub>1,0</sub>)</div><div class="meaning">Collection of nuisance functions under the true observed-data law.</div></div>
+        <div class="notation-item"><div class="symbol">Pₙf=n⁻¹Σᵢf(Oᵢ)</div><div class="meaning">Empirical average. The evaluation nuisance fit is η̂ for same-sample fitting and η̂<sup>(−k(i))</sup> for subject <i>i</i> under cross-fitting.</div></div>
+      </div>
+
+      <div class="math-chain"><div class="label">Causal target under consistency, exchangeability, and positivity</div><div class="math-scroll">
+        <math display="block"><mrow>
+          <msub><mi>ψ</mi><mrow><mi>a</mi><mo>,</mo><mn>0</mn></mrow></msub><mo>=</mo><msub><mi>E</mi><mn>0</mn></msub><mo>{</mo><mi>Y</mi><mo>(</mo><mi>a</mi><mo>)</mo><mo>}</mo><mo>=</mo><msub><mi>E</mi><mn>0</mn></msub><mo>{</mo><msub><mi>m</mi><mrow><mi>a</mi><mo>,</mo><mn>0</mn></mrow></msub><mo>(</mo><mi>X</mi><mo>)</mo><mo>}</mo><mo>,</mo><mspace width=".8em"/>
+          <msub><mi>Δ</mi><mn>0</mn></msub><mo>=</mo><msub><mi>ψ</mi><mrow><mn>1</mn><mo>,</mo><mn>0</mn></mrow></msub><mo>−</mo><msub><mi>ψ</mi><mrow><mn>0</mn><mo>,</mo><mn>0</mn></mrow></msub>
+        </mrow></math>
+      </div></div>
+
+      <div class="math-chain"><div class="label">AIPW estimating signal and estimator</div><div class="math-scroll">
+        <math display="block"><mstyle displaystyle="true" scriptlevel="0"><mtable rowspacing=".68em">
+          <mtr><mtd>
+            <msub><mi>π</mi><mi>a</mi></msub><mo>(</mo><mi>x</mi><mo>)</mo><mo>≡</mo><mi>P</mi><mo>(</mo><mi>T</mi><mo>=</mo><mi>a</mi><mo>|</mo><mi>X</mi><mo>=</mo><mi>x</mi><mo>)</mo>
+            <mo>=</mo><msup><mrow><mi>e</mi><mo>(</mo><mi>x</mi><mo>)</mo></mrow><mi>a</mi></msup><msup><mrow><mo>{</mo><mn>1</mn><mo>−</mo><mi>e</mi><mo>(</mo><mi>x</mi><mo>)</mo><mo>}</mo></mrow><mrow><mn>1</mn><mo>−</mo><mi>a</mi></mrow></msup>
+            <mo>=</mo><mi>a</mi><mi>e</mi><mo>(</mo><mi>x</mi><mo>)</mo><mo>+</mo><mo>(</mo><mn>1</mn><mo>−</mo><mi>a</mi><mo>)</mo><mo>{</mo><mn>1</mn><mo>−</mo><mi>e</mi><mo>(</mo><mi>x</mi><mo>)</mo><mo>}</mo><mo>,</mo><mspace width=".6em"/><mi>a</mi><mo>∈</mo><mo>{</mo><mn>0</mn><mo>,</mo><mn>1</mn><mo>}</mo><mo>.</mo>
+          </mtd></mtr>
+          <mtr><mtd>
+            <msub><mi>φ</mi><mi>a</mi></msub><mo>(</mo><mi>O</mi><mo>;</mo><mi>η</mi><mo>)</mo><mo>=</mo><msub><mi>m</mi><mi>a</mi></msub><mo>(</mo><mi>X</mi><mo>)</mo><mo>+</mo>
+            <mfrac linethickness="2px"><mrow><mi mathvariant="normal">𝟙</mi><mo>(</mo><mi>T</mi><mo>=</mo><mi>a</mi><mo>)</mo><mo>{</mo><mi>Y</mi><mo>−</mo><msub><mi>m</mi><mi>a</mi></msub><mo>(</mo><mi>X</mi><mo>)</mo><mo>}</mo></mrow><mrow><msub><mi>π</mi><mi>a</mi></msub><mo>(</mo><mi>X</mi><mo>)</mo></mrow></mfrac><mo>.</mo>
+          </mtd></mtr>
+          <mtr><mtd>
+            <msub><mover accent="true"><mi>φ</mi><mo>^</mo></mover><mrow><mi>a</mi><mo>,</mo><mi>i</mi></mrow></msub><mo>=</mo>
+            <mfenced open="{" close=""><mtable columnalign="left" rowspacing=".30em">
+              <mtr><mtd><msub><mi>φ</mi><mi>a</mi></msub><mo>(</mo><msub><mi>O</mi><mi>i</mi></msub><mo>;</mo><mover accent="true"><mi>η</mi><mo>^</mo></mover><mo>)</mo><mo>,</mo><mspace width=".5em"/><mtext>same-sample fitting,</mtext></mtd></mtr>
+              <mtr><mtd><msub><mi>φ</mi><mi>a</mi></msub><mo>(</mo><msub><mi>O</mi><mi>i</mi></msub><mo>;</mo><msup><mover accent="true"><mi>η</mi><mo>^</mo></mover><mrow><mo>(</mo><mo>−</mo><mi>k</mi><mo>(</mo><mi>i</mi><mo>)</mo><mo>)</mo></mrow></msup><mo>)</mo><mo>,</mo><mspace width=".5em"/><mtext>cross-fitting.</mtext></mtd></mtr>
+            </mtable></mfenced>
+          </mtd></mtr>
+          <mtr><mtd>
+            <msub><mi>φ</mi><mi>Δ</mi></msub><mo>(</mo><mi>O</mi><mo>;</mo><mi>η</mi><mo>)</mo><mo>≡</mo><msub><mi>φ</mi><mn>1</mn></msub><mo>(</mo><mi>O</mi><mo>;</mo><mi>η</mi><mo>)</mo><mo>−</mo><msub><mi>φ</mi><mn>0</mn></msub><mo>(</mo><mi>O</mi><mo>;</mo><mi>η</mi><mo>)</mo><mo>,</mo>
+            <mspace width=".8em"/><msub><mover accent="true"><mi>ψ</mi><mo>^</mo></mover><mi>a</mi></msub><mo>=</mo><msub><mi mathvariant="normal">P</mi><mi>n</mi></msub><msub><mover accent="true"><mi>φ</mi><mo>^</mo></mover><mi>a</mi></msub><mo>,</mo><mspace width=".8em"/><mover accent="true"><mi>Δ</mi><mo>^</mo></mover><mo>=</mo><msub><mi mathvariant="normal">P</mi><mi>n</mi></msub><msub><mover accent="true"><mi>φ</mi><mo>^</mo></mover><mi>Δ</mi></msub><mo>.</mo>
+          </mtd></mtr>
+        </mtable></mstyle></math>
+      </div><div class="denominator-note"><b>Reading rule:</b> the entire indicator–residual product is in the numerator, and π<sub>a</sub>(X) is the denominator. Thus π<sub>1</sub>(X)=e(X) and π<sub>0</sub>(X)=1−e(X); the signal requires π<sub>a</sub>(X)&gt;0 almost surely.</div></div>
+
+      <div class="math-grid">
+        <div class="math-box"><h4>Treated-world signal</h4><div class="math-scroll"><math display="block"><mstyle displaystyle="true"><mrow><msub><mover accent="true"><mi>φ</mi><mo>^</mo></mover><mrow><mn>1</mn><mo>,</mo><mi>i</mi></mrow></msub><mo>=</mo><msub><mover accent="true"><mi>m</mi><mo>^</mo></mover><mn>1</mn></msub><mo>(</mo><msub><mi>X</mi><mi>i</mi></msub><mo>)</mo><mo>+</mo><mfrac linethickness="1.5px"><mrow><msub><mi>T</mi><mi>i</mi></msub><mo>{</mo><msub><mi>Y</mi><mi>i</mi></msub><mo>−</mo><msub><mover accent="true"><mi>m</mi><mo>^</mo></mover><mn>1</mn></msub><mo>(</mo><msub><mi>X</mi><mi>i</mi></msub><mo>)</mo><mo>}</mo></mrow><msub><mover accent="true"><mi>e</mi><mo>~</mo></mover><mi>i</mi></msub></mfrac></mrow></mstyle></math></div><p>The actual weighting score is ẽᵢ=Π<sub>[ε,1−ε]</sub>(êᵢ). With ε=0, ẽᵢ=êᵢ apart from a machine-precision floor.</p></div>
+        <div class="math-box"><h4>Control-world signal</h4><div class="math-scroll"><math display="block"><mstyle displaystyle="true"><mrow><msub><mover accent="true"><mi>φ</mi><mo>^</mo></mover><mrow><mn>0</mn><mo>,</mo><mi>i</mi></mrow></msub><mo>=</mo><msub><mover accent="true"><mi>m</mi><mo>^</mo></mover><mn>0</mn></msub><mo>(</mo><msub><mi>X</mi><mi>i</mi></msub><mo>)</mo><mo>+</mo><mfrac linethickness="1.5px"><mrow><mo>(</mo><mn>1</mn><mo>−</mo><msub><mi>T</mi><mi>i</mi></msub><mo>)</mo><mo>{</mo><msub><mi>Y</mi><mi>i</mi></msub><mo>−</mo><msub><mover accent="true"><mi>m</mi><mo>^</mo></mover><mn>0</mn></msub><mo>(</mo><msub><mi>X</mi><mi>i</mi></msub><mo>)</mo><mo>}</mo></mrow><mrow><mn>1</mn><mo>−</mo><msub><mover accent="true"><mi>e</mi><mo>~</mo></mover><mi>i</mi></msub></mrow></mfrac></mrow></mstyle></math></div><p>The same empirical distribution of X is used for both treatment worlds.</p></div>
+        <div class="math-box"><h4>ATE signal and estimator</h4><div class="math-scroll"><math display="block"><mtable rowspacing=".45em"><mtr><mtd><msub><mover accent="true"><mi>φ</mi><mo>^</mo></mover><mrow><mi>Δ</mi><mo>,</mo><mi>i</mi></mrow></msub><mo>=</mo><msub><mover accent="true"><mi>φ</mi><mo>^</mo></mover><mrow><mn>1</mn><mo>,</mo><mi>i</mi></mrow></msub><mo>−</mo><msub><mover accent="true"><mi>φ</mi><mo>^</mo></mover><mrow><mn>0</mn><mo>,</mo><mi>i</mi></mrow></msub><mo>,</mo></mtd></mtr><mtr><mtd><mover accent="true"><mi>Δ</mi><mo>^</mo></mover><mo>=</mo><mfrac><mn>1</mn><mi>n</mi></mfrac><munderover><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></munderover><msub><mover accent="true"><mi>φ</mi><mo>^</mo></mover><mrow><mi>Δ</mi><mo>,</mo><mi>i</mi></mrow></msub><mo>.</mo></mtd></mtr></mtable></math></div><p>φ̂<sub>Δ,i</sub> is an uncentered AIPW signal, sometimes called an AIPW pseudo-outcome. It is not itself the EIF.</p></div>
+      </div>
+      <div class="notation-rule"><b>Notation rule used everywhere below:</b> φ denotes the uncentered AIPW signal; φ<sup>c</sup>=φ−Pₙφ denotes its empirically centered version; D<sup>*</sup> is reserved for the true nonparametric efficient influence function; IF<sup>stack</sup> denotes the influence value from the finite-dimensional stacked estimating equations.</div>
+      <div class="target-explain"><b>Nuisance evaluation rule:</b> for same-sample fitting, φ̂<sub>a,i</sub>=φ<sub>a</sub>(O<sub>i</sub>;η̂). Under K-fold cross-fitting, if i∈I<sub>k</sub>, then φ̂<sub>a,i</sub>=φ<sub>a</sub>(O<sub>i</sub>;η̂<sup>(−k)</sup>). Thus the observation-specific evaluation fit is not treated as a new population nuisance function.</div>
+      <div class="live-equation" id="mathLiveEstimate"></div><div class="audit-grid" id="numericalAudit" aria-live="polite"></div>
+    </section>
+
+    <section class="math-panel" id="mathPanelRobustness" hidden>
+      <div class="theorem-box"><div class="title">Exact population bias identity for fixed η=(e,m₀,m₁) with 0&lt;e(X)&lt;1 and integrable terms</div><div class="math-scroll"><math display="block"><mrow>
+        <msub><mi>E</mi><mn>0</mn></msub><mo>{</mo><msub><mi>φ</mi><mi>Δ</mi></msub><mo>(</mo><mi>O</mi><mo>;</mo><mi>η</mi><mo>)</mo><mo>}</mo><mo>−</mo><msub><mi>Δ</mi><mn>0</mn></msub><mo>=</mo><msub><mi>R</mi><mn>2</mn></msub><mo>(</mo><mi>η</mi><mo>,</mo><msub><mi>η</mi><mn>0</mn></msub><mo>)</mo>
+        <mo>=</mo><msub><mi>E</mi><mn>0</mn></msub><mo>[</mo><mo>{</mo><mi>e</mi><mo>(</mo><mi>X</mi><mo>)</mo><mo>−</mo><msub><mi>e</mi><mn>0</mn></msub><mo>(</mo><mi>X</mi><mo>)</mo><mo>}</mo>
+        <mrow><mo>{</mo><mfrac linethickness="1.6px"><mrow><msub><mi>m</mi><mn>1</mn></msub><mo>(</mo><mi>X</mi><mo>)</mo><mo>−</mo><msub><mi>m</mi><mrow><mn>1</mn><mo>,</mo><mn>0</mn></mrow></msub><mo>(</mo><mi>X</mi><mo>)</mo></mrow><mrow><mi>e</mi><mo>(</mo><mi>X</mi><mo>)</mo></mrow></mfrac><mo>+</mo><mfrac><mrow><msub><mi>m</mi><mn>0</mn></msub><mo>(</mo><mi>X</mi><mo>)</mo><mo>−</mo><msub><mi>m</mi><mrow><mn>0</mn><mo>,</mo><mn>0</mn></mrow></msub><mo>(</mo><mi>X</mi><mo>)</mo></mrow><mrow><mn>1</mn><mo>−</mo><mi>e</mi><mo>(</mo><mi>X</mi><mo>)</mo></mrow></mfrac><mo>}</mo></mrow><mo>]</mo><mo>.</mo>
+      </mrow></math></div><div class="target-explain">This formula uses the same φ<sub>Δ</sub> defined in the estimator tab. It gives the bias of the uncentered AIPW signal relative to the true ATE. The displayed sign convention is therefore fixed and unambiguous.</div></div>
+      <div class="theorem-box"><div class="title">Treatment-level conditional bias identity</div><div class="math-scroll"><math display="block"><mstyle displaystyle="true"><mrow>
+        <msub><mi>E</mi><mn>0</mn></msub><mo>{</mo><msub><mi>φ</mi><mi>a</mi></msub><mo>(</mo><mi>O</mi><mo>;</mo><mi>η</mi><mo>)</mo><mo>|</mo><mi>X</mi><mo>}</mo><mo>−</mo><msub><mi>m</mi><mrow><mi>a</mi><mo>,</mo><mn>0</mn></mrow></msub><mo>(</mo><mi>X</mi><mo>)</mo>
+        <mo>=</mo><mfrac linethickness="1.5px"><mrow><msub><mi>π</mi><mi>a</mi></msub><mo>(</mo><mi>X</mi><mo>)</mo><mo>−</mo><msub><mi>π</mi><mrow><mi>a</mi><mo>,</mo><mn>0</mn></mrow></msub><mo>(</mo><mi>X</mi><mo>)</mo></mrow><mrow><msub><mi>π</mi><mi>a</mi></msub><mo>(</mo><mi>X</mi><mo>)</mo></mrow></mfrac>
+        <mo>{</mo><msub><mi>m</mi><mi>a</mi></msub><mo>(</mo><mi>X</mi><mo>)</mo><mo>−</mo><msub><mi>m</mi><mrow><mi>a</mi><mo>,</mo><mn>0</mn></mrow></msub><mo>(</mo><mi>X</mi><mo>)</mo><mo>}</mo><mo>.</mo>
+      </mrow></mstyle></math></div><div class="target-explain">This identity is the direct algebraic check: the conditional bias is zero if either π<sub>a</sub>=π<sub>a,0</sub> or m<sub>a</sub>=m<sub>a,0</sub>.</div></div>
+      <div class="math-grid" style="margin-top:10px">
+        <div class="math-box"><h4>Propensity nuisance correct</h4><div class="math-scroll"><math display="block"><mrow><mi>e</mi><mo>=</mo><msub><mi>e</mi><mn>0</mn></msub><mo>⇒</mo><msub><mi>R</mi><mn>2</mn></msub><mo>=</mo><mn>0</mn></mrow></math></div><p>The outcome regressions may be misspecified, provided the untruncated propensity score is correct and positivity holds.</p></div>
+        <div class="math-box"><h4>Outcome nuisances correct</h4><div class="math-scroll"><math display="block"><mrow><msub><mi>m</mi><mi>a</mi></msub><mo>=</mo><msub><mi>m</mi><mrow><mi>a</mi><mo>,</mo><mn>0</mn></mrow></msub><mtext> for a=0,1 </mtext><mo>⇒</mo><msub><mi>R</mi><mn>2</mn></msub><mo>=</mo><mn>0</mn></mrow></math></div><p>Then each weighted residual has conditional mean zero for any positive weighting score.</p></div>
+        <div class="math-box"><h4>Both nuisance components wrong</h4><div class="math-scroll"><math display="block"><mrow><mi>e</mi><mo>≠</mo><msub><mi>e</mi><mn>0</mn></msub><mo>,</mo><mspace width=".4em"/><msub><mi>m</mi><mi>a</mi></msub><mo>≠</mo><msub><mi>m</mi><mrow><mi>a</mi><mo>,</mo><mn>0</mn></mrow></msub><mo>⇒</mo><msub><mi>R</mi><mn>2</mn></msub><mtext> need not vanish</mtext></mrow></math></div><p>Double robustness is a union-model property, not protection against simultaneous misspecification.</p></div>
+        <div class="math-box wide-math"><h4>Product-error bound</h4><div class="math-scroll"><math display="block"><mrow>
+          <mo>|</mo><msub><mi>R</mi><mn>2</mn></msub><mo>|</mo><mo>≤</mo><msub><mi>K</mi><mi>ε</mi></msub>
+          <msub><mrow><mo>∥</mo><mi>e</mi><mo>−</mo><msub><mi>e</mi><mn>0</mn></msub><mo>∥</mo></mrow><mrow><msub><mi>P</mi><mn>0</mn></msub><mo>,</mo><mn>2</mn></mrow></msub>
+          <mrow><mo>(</mo><msub><mrow><mo>∥</mo><msub><mi>m</mi><mn>1</mn></msub><mo>−</mo><msub><mi>m</mi><mrow><mn>1</mn><mo>,</mo><mn>0</mn></mrow></msub><mo>∥</mo></mrow><mrow><msub><mi>P</mi><mn>0</mn></msub><mo>,</mo><mn>2</mn></mrow></msub><mo>+</mo><msub><mrow><mo>∥</mo><msub><mi>m</mi><mn>0</mn></msub><mo>−</mo><msub><mi>m</mi><mrow><mn>0</mn><mo>,</mo><mn>0</mn></mrow></msub><mo>∥</mo></mrow><mrow><msub><mi>P</mi><mn>0</mn></msub><mo>,</mo><mn>2</mn></mrow></msub><mo>)</mo></mrow>
+        </mrow></math></div><p>If ε≤e(X)≤1−ε, K<sub>ε</sub> may be taken proportional to 1/ε. The errors enter as a product. Here ‖h‖<sub>P₀,2</sub>={E₀[h(O)²]}<sup>1/2</sup>.</p></div>
+      </div>
+      <div class="warning-box"><b>Truncation distinction:</b> the theorem above applies to the actual function e used inside φ<sub>Δ</sub>. If a correct fitted ê is replaced by a nonvanishing clipped ẽ≠e₀ on a set of positive probability, the propensity-only branch is no longer exact. The outcome-correct branch remains valid.</div>
+      <div class="warning-box"><b>Simulation labels are not diagnostics:</b> “correct” and “misspecified” are known only because the data-generating law is programmed. They cannot be verified from one observational dataset.</div><div class="warning-box" id="truncationTheoryWarning"></div>
+    </section>
+
+    <section class="math-panel" id="mathPanelInference" hidden>
+      <div class="distinction-grid">
+        <div class="distinction signal"><h4>1. Uncentered AIPW signal</h4><div class="math-scroll"><math display="block"><mrow><msub><mi>φ</mi><mi>Δ</mi></msub><mo>(</mo><mi>O</mi><mo>;</mo><mi>η</mi><mo>)</mo><mo>=</mo><msub><mi>φ</mi><mn>1</mn></msub><mo>(</mo><mi>O</mi><mo>;</mo><mi>η</mi><mo>)</mo><mo>−</mo><msub><mi>φ</mi><mn>0</mn></msub><mo>(</mo><mi>O</mi><mo>;</mo><mi>η</mi><mo>)</mo></mrow></math></div><p>Its mean estimates the ATE. It is not mean zero and therefore is not an influence function.</p></div>
+        <div class="distinction eif"><h4>2. Nonparametric EIF</h4><div class="math-scroll"><math display="block"><mrow><msubsup><mi>D</mi><mi>Δ</mi><mo>*</mo></msubsup><mo>(</mo><mi>O</mi><mo>;</mo><msub><mi>P</mi><mn>0</mn></msub><mo>)</mo><mo>=</mo><msub><mi>φ</mi><mi>Δ</mi></msub><mo>(</mo><mi>O</mi><mo>;</mo><msub><mi>η</mi><mn>0</mn></msub><mo>)</mo><mo>−</mo><msub><mi>Δ</mi><mn>0</mn></msub></mrow></math></div><p>This is mean zero under P₀ and attains the nonparametric efficiency bound.</p></div>
+        <div class="distinction stack"><h4>3. Stacked-estimator IF</h4><div class="math-scroll"><math display="block"><mrow><msubsup><mover accent="true"><mi>IF</mi><mo>^</mo></mover><mrow><mi>Δ</mi><mo>,</mo><mi>i</mi></mrow><mtext>stack</mtext></msubsup><mo>=</mo><mo>−</mo><msup><mi>c</mi><mi>T</mi></msup><msup><mover accent="true"><mi>A</mi><mo>^</mo></mover><mrow><mo>−</mo><mn>1</mn></mrow></msup><msub><mi>U</mi><mi>i</mi></msub><mo>(</mo><mover accent="true"><mi>θ</mi><mo>^</mo></mover><mo>)</mo></mrow></math></div><p>This is the dashboard’s finite-dimensional M-estimation influence value. It equals the EIF asymptotically only under the corresponding efficiency conditions.</p></div>
+      </div>
+
+      <div class="math-chain">
+        <div class="label">Efficient influence function: compact and expanded forms</div>
+        <div class="math-scroll">
+          <math display="block">
+            <mstyle displaystyle="true" scriptlevel="0">
+              <mtable rowspacing=".70em" columnalign="left">
+                <mtr><mtd>
+                  <msubsup><mi>D</mi><mrow><mi>a</mi></mrow><mo>*</mo></msubsup>
+                  <mo>(</mo><mi>O</mi><mo>;</mo><msub><mi>P</mi><mn>0</mn></msub><mo>)</mo>
+                  <mo>=</mo>
+                  <msub><mi>m</mi><mrow><mi>a</mi><mo>,</mo><mn>0</mn></mrow></msub><mo>(</mo><mi>X</mi><mo>)</mo>
+                  <mo>+</mo>
+                  <mfrac linethickness="2px">
+                    <mrow><mi mathvariant="normal">𝟙</mi><mo>(</mo><mi>T</mi><mo>=</mo><mi>a</mi><mo>)</mo><mo>{</mo><mi>Y</mi><mo>−</mo><msub><mi>m</mi><mrow><mi>a</mi><mo>,</mo><mn>0</mn></mrow></msub><mo>(</mo><mi>X</mi><mo>)</mo><mo>}</mo></mrow>
+                    <mrow><msub><mi>π</mi><mrow><mi>a</mi><mo>,</mo><mn>0</mn></mrow></msub><mo>(</mo><mi>X</mi><mo>)</mo></mrow>
+                  </mfrac>
+                  <mo>−</mo><msub><mi>ψ</mi><mrow><mi>a</mi><mo>,</mo><mn>0</mn></mrow></msub><mo>,</mo>
+                  <mspace width=".8em"/><mi>a</mi><mo>∈</mo><mo>{</mo><mn>0</mn><mo>,</mo><mn>1</mn><mo>}</mo><mo>.</mo>
+                </mtd></mtr>
+                <mtr><mtd>
+                  <msubsup><mi>D</mi><mi>Δ</mi><mo>*</mo></msubsup><mo>(</mo><mi>O</mi><mo>;</mo><msub><mi>P</mi><mn>0</mn></msub><mo>)</mo>
+                  <mo>=</mo><msubsup><mi>D</mi><mn>1</mn><mo>*</mo></msubsup><mo>(</mo><mi>O</mi><mo>;</mo><msub><mi>P</mi><mn>0</mn></msub><mo>)</mo>
+                  <mo>−</mo><msubsup><mi>D</mi><mn>0</mn><mo>*</mo></msubsup><mo>(</mo><mi>O</mi><mo>;</mo><msub><mi>P</mi><mn>0</mn></msub><mo>)</mo><mo>.</mo>
+                </mtd></mtr>
+                <mtr><mtd>
+                  <msubsup><mi>D</mi><mi>Δ</mi><mo>*</mo></msubsup><mo>(</mo><mi>O</mi><mo>;</mo><msub><mi>P</mi><mn>0</mn></msub><mo>)</mo>
+                  <mo>=</mo>
+                  <msub><mi>m</mi><mrow><mn>1</mn><mo>,</mo><mn>0</mn></mrow></msub><mo>(</mo><mi>X</mi><mo>)</mo>
+                  <mo>−</mo><msub><mi>m</mi><mrow><mn>0</mn><mo>,</mo><mn>0</mn></mrow></msub><mo>(</mo><mi>X</mi><mo>)</mo>
+                  <mo>−</mo><msub><mi>Δ</mi><mn>0</mn></msub>
+                </mtd></mtr>
+                <mtr><mtd>
+                  <mspace width="2.2em"/>
+                  <mo>+</mo>
+                  <mfrac linethickness="2px">
+                    <mrow><mi>T</mi></mrow>
+                    <mrow><msub><mi>e</mi><mn>0</mn></msub><mo>(</mo><mi>X</mi><mo>)</mo></mrow>
+                  </mfrac>
+                  <mo>{</mo><mi>Y</mi><mo>−</mo><msub><mi>m</mi><mrow><mn>1</mn><mo>,</mo><mn>0</mn></mrow></msub><mo>(</mo><mi>X</mi><mo>)</mo><mo>}</mo>
+                </mtd></mtr>
+                <mtr><mtd>
+                  <mspace width="2.2em"/>
+                  <mo>−</mo>
+                  <mfrac linethickness="2px">
+                    <mrow><mn>1</mn><mo>−</mo><mi>T</mi></mrow>
+                    <mrow><mn>1</mn><mo>−</mo><msub><mi>e</mi><mn>0</mn></msub><mo>(</mo><mi>X</mi><mo>)</mo></mrow>
+                  </mfrac>
+                  <mo>{</mo><mi>Y</mi><mo>−</mo><msub><mi>m</mi><mrow><mn>0</mn><mo>,</mo><mn>0</mn></mrow></msub><mo>(</mo><mi>X</mi><mo>)</mo><mo>}</mo><mo>.</mo>
+                </mtd></mtr>
+              </mtable>
+            </mstyle>
+          </math>
+        </div>
+        <div class="denominator-note"><b>Critical reading check:</b> the treated residual is multiplied by <b>T/e₀(X)</b>, not by T·e₀(X). Likewise, the control residual is multiplied by <b>(1−T)/{1−e₀(X)}</b>. These are the two inverse-probability residual corrections in the nonparametric EIF.</div>
+      </div>
+
+      <div class="math-grid">
+        <div class="math-box"><h4>Empirically centered AIPW signal</h4><div class="math-scroll"><math display="block"><mrow><msubsup><mover accent="true"><mi>φ</mi><mo>^</mo></mover><mrow><mi>Δ</mi><mo>,</mo><mi>i</mi></mrow><mi>c</mi></msubsup><mo>≡</mo><msub><mover accent="true"><mi>φ</mi><mo>^</mo></mover><mrow><mi>Δ</mi><mo>,</mo><mi>i</mi></mrow></msub><mo>−</mo><mover accent="true"><mi>Δ</mi><mo>^</mo></mover><mo>,</mo><mspace width=".6em"/><msub><mi mathvariant="normal">P</mi><mi>n</mi></msub><msubsup><mover accent="true"><mi>φ</mi><mo>^</mo></mover><mi>Δ</mi><mi>c</mi></msubsup><mo>=</mo><mn>0</mn><mo>.</mo></mrow></math></div><p>φ̂<sup>c</sup><sub>Δ,i</sub> is exactly centered in the sample. It is an empirical surrogate for D<sub>Δ</sub><sup>*</sup> only when the nuisance estimates and the target estimate converge to their true counterparts.</p></div>
+        <div class="math-box"><h4>EIF-style variance from the centered signal</h4><div class="math-scroll"><math display="block"><mrow><mover accent="true"><mi>SE</mi><mo>^</mo></mover><mo>(</mo><mover accent="true"><mi>Δ</mi><mo>^</mo></mover><mo>)</mo><mo>=</mo><msqrt><mfrac linethickness="1.5px"><mrow><munderover><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></munderover><msup><msubsup><mover accent="true"><mi>φ</mi><mo>^</mo></mover><mrow><mi>Δ</mi><mo>,</mo><mi>i</mi></mrow><mi>c</mi></msubsup><mn>2</mn></msup></mrow><mrow><mi>n</mi><mo>(</mo><mi>n</mi><mo>−</mo><mn>1</mn><mo>)</mo></mrow></mfrac></msqrt><mo>.</mo></mrow></math></div><p>No additional centering term is needed because Pₙφ̂<sup>c</sup><sub>Δ</sub>=0 exactly. This estimates the EIF variance only when φ̂<sup>c</sup><sub>Δ,i</sub> consistently approximates D<sub>Δ</sub><sup>*</sup>.</p></div>
+        <div class="math-box"><h4>Stacked sandwich actually used</h4><div class="math-scroll"><math display="block"><mtable rowspacing=".45em"><mtr><mtd><mover accent="true"><mi>A</mi><mo>^</mo></mover><mo>=</mo><msub><mi mathvariant="normal">P</mi><mi>n</mi></msub><mfrac><mrow><mo>∂</mo><mi>U</mi><mo>(</mo><mi>O</mi><mo>;</mo><mover accent="true"><mi>θ</mi><mo>^</mo></mover><mo>)</mo></mrow><mrow><mo>∂</mo><msup><mi>θ</mi><mi>T</mi></msup></mrow></mfrac><mo>,</mo><mspace width=".5em"/><mover accent="true"><mi>B</mi><mo>^</mo></mover><mo>=</mo><msub><mi mathvariant="normal">P</mi><mi>n</mi></msub><mo>{</mo><mi>U</mi><msup><mi>U</mi><mi>T</mi></msup><mo>}</mo><mo>,</mo></mtd></mtr><mtr><mtd><mover accent="true"><mi>Var</mi><mo>^</mo></mover><mo>(</mo><mover accent="true"><mi>Δ</mi><mo>^</mo></mover><mo>)</mo><mo>=</mo><mfrac><mn>1</mn><mi>n</mi></mfrac><msup><mi>c</mi><mi>T</mi></msup><msup><mover accent="true"><mi>A</mi><mo>^</mo></mover><mrow><mo>−</mo><mn>1</mn></mrow></msup><mover accent="true"><mi>B</mi><mo>^</mo></mover><msup><mover accent="true"><mi>A</mi><mo>^</mo></mover><mrow><mo>−</mo><mi>T</mi></mrow></msup><mi>c</mi><mo>.</mo></mtd></mtr></mtable></math></div><p>Here θ stacks the nuisance-model coefficients with ψ₁ and ψ₀, and c extracts ψ₁−ψ₀.</p></div>
+      </div>
+      <div class="warning-box"><b>Crucial distinction:</b> under one-model misspecification, the centered signal φ̂<sup>c</sup><sub>Δ,i</sub>=φ̂<sub>Δ,i</sub>−Δ̂ is generally not the full influence function of the stacked working-model estimator. The dashboard therefore calculates and displays IF̂<sup>stack</sup><sub>Δ,i</sub> separately.</div>
+      <div class="warning-box"><b>Efficiency statement:</b> when both nuisance functions are consistently estimated at suitable rates, no substantive truncation is active, and regularity conditions hold, IF̂<sup>stack</sup> and the centered signal φ̂<sup>c</sup><sub>Δ</sub> both approach the nonparametric EIF. The sign convention is treatment minus control throughout: +T/e₀(X) for the treated residual and −(1−T)/{1−e₀(X)} for the control residual.</div>
+      <div class="live-equation" id="mathLiveInference"></div>
+    </section>
+
+    <section class="math-panel" id="mathPanelCrossfit" hidden>
+      <div class="math-grid">
+        <div class="math-box"><h4>Shared-fold nuisance estimates</h4><div class="math-scroll"><math display="block"><mtable rowspacing=".45em"><mtr><mtd><msup><mover accent="true"><mi>η</mi><mo>^</mo></mover><mrow><mo>(</mo><mo>−</mo><mi>k</mi><mo>)</mo></mrow></msup><mtext> is fitted on </mtext><msubsup><mi>I</mi><mi>k</mi><mi>c</mi></msubsup><mo>,</mo></mtd></mtr><mtr><mtd><msub><mover accent="true"><mi>φ</mi><mo>^</mo></mover><mrow><mi>Δ</mi><mo>,</mo><mi>i</mi></mrow></msub><mo>=</mo><msub><mi>φ</mi><mi>Δ</mi></msub><mo>(</mo><msub><mi>O</mi><mi>i</mi></msub><mo>;</mo><msup><mover accent="true"><mi>η</mi><mo>^</mo></mover><mrow><mo>(</mo><mo>−</mo><mi>k</mi><mo>)</mo></mrow></msup><mo>)</mo><mtext> for </mtext><mi>i</mi><mo>∈</mo><msub><mi>I</mi><mi>k</mi></msub><mo>.</mo></mtd></mtr></mtable></math></div><p>The propensity and both outcome-regression predictions use the same fold partition.</p></div>
+        <div class="math-box"><h4>Cross-fitted AIPW estimator</h4><div class="math-scroll"><math display="block"><mrow><mover accent="true"><mi>Δ</mi><mo>^</mo></mover><mo>=</mo><munderover><mo>∑</mo><mrow><mi>k</mi><mo>=</mo><mn>1</mn></mrow><mi>K</mi></munderover><mfrac><msub><mi>n</mi><mi>k</mi></msub><mi>n</mi></mfrac><msub><mi mathvariant="normal">P</mi><mrow><mi>n</mi><mo>,</mo><mi>k</mi></mrow></msub><msub><mover accent="true"><mi>φ</mi><mo>^</mo></mover><mi>Δ</mi></msub></mrow></math></div><p>Each observation is evaluated by nuisance fits that excluded its fold.</p></div>
+        <div class="math-box wide-math"><h4>Product-rate condition for convergence to the nonparametric EIF</h4><div class="math-scroll"><math display="block"><mrow>
+          <msub><mrow><mo>∥</mo><mover accent="true"><mi>e</mi><mo>~</mo></mover><mo>−</mo><msub><mi>e</mi><mn>0</mn></msub><mo>∥</mo></mrow><mrow><msub><mi>P</mi><mn>0</mn></msub><mo>,</mo><mn>2</mn></mrow></msub>
+          <mrow><mo>(</mo><msub><mrow><mo>∥</mo><msub><mover accent="true"><mi>m</mi><mo>^</mo></mover><mn>1</mn></msub><mo>−</mo><msub><mi>m</mi><mrow><mn>1</mn><mo>,</mo><mn>0</mn></mrow></msub><mo>∥</mo></mrow><mrow><msub><mi>P</mi><mn>0</mn></msub><mo>,</mo><mn>2</mn></mrow></msub><mo>+</mo><msub><mrow><mo>∥</mo><msub><mover accent="true"><mi>m</mi><mo>^</mo></mover><mn>0</mn></msub><mo>−</mo><msub><mi>m</mi><mrow><mn>0</mn><mo>,</mo><mn>0</mn></mrow></msub><mo>∥</mo></mrow><mrow><msub><mi>P</mi><mn>0</mn></msub><mo>,</mo><mn>2</mn></mrow></msub><mo>)</mo></mrow>
+          <mo>=</mo><msub><mi>o</mi><mi>p</mi></msub><mo>(</mo><msup><mi>n</mi><mrow><mo>−</mo><mn>1</mn><mo>/</mo><mn>2</mn></mrow></msup><mo>)</mo><mo>.</mo>
+        </mrow></math></div><p>Here ẽ is the treatment probability actually used in the AIPW denominator (equal to ê when no substantive clipping is active). Together with L₂ consistency of ẽ and both outcome regressions, this product-rate condition yields convergence to the efficient influence function. Product smallness alone is not enough if one nuisance converges to a wrong limit.</p></div>
+        <div class="math-box"><h4>Identification assumptions</h4><p><b>Consistency:</b> Y=Y(T).<br><b>Conditional exchangeability:</b> {Y(1),Y(0)} ⟂ T | X.<br><b>Positivity:</b> 0&lt;e₀(X)&lt;1 almost surely.<br><b>Regularity:</b> finite variance and stable nuisance estimates.</p></div>
+      </div>
+      <div class="warning-box"><b>Point consistency versus efficient inference:</b> one correct nuisance can make R₂ vanish, but convergence to the nonparametric EIF generally requires both nuisance functions to converge. In the finite-dimensional union model used here, the block-stacked sandwich accounts for first-order nuisance-estimation terms when one working model is misspecified.</div>
+      <div class="warning-box"><b>Cross-fitting does not repair identification.</b> It reduces own-observation overfitting and empirical-process restrictions, but it cannot fix unmeasured confounding or structural positivity failure.</div>
+    </section>
+  </article>
+
+  <div class="grid-top">
+    <article class="card">
+      <div class="card-head"><div><h3>1. Subjects in the observational cohort</h3><p>Color is observed smoking status, ring is observed CVD, and point size can display inverse weight, augmentation, or the stacked-estimator influence value.</p></div><div class="mini-controls"><label for="xVar">x</label><select id="xVar"><option value="age">Age</option><option value="bmi">BMI</option><option value="income">Income ratio</option></select><label for="yVar">y</label><select id="yVar"><option value="bmi">BMI</option><option value="age">Age</option><option value="income">Income ratio</option></select><label for="sizeVar">size</label><select id="sizeVar"><option value="augmentation">|augmentation|</option><option value="weight">inverse weight</option><option value="influence">|stacked influence value|</option></select></div></div>
+      <div class="legend"><span><i class="dot" style="background:var(--smoke)"></i>Smoker</span><span><i class="dot" style="background:var(--control)"></i>Non-smoker</span><span><i class="ring"></i>CVD</span><span><i class="ring" style="border-color:var(--danger)"></i>limited support</span></div>
+      <div class="chart-wrap"><svg id="scatterSvg" class="chart" viewBox="0 0 850 470" role="img" aria-label="Subject-level observational cohort"></svg></div>
+      <div class="chart-note">Click a subject to inspect its outcome-model contrast, augmentation, uncentered AIPW signal, centered AIPW signal, and stacked-estimator influence value.</div>
+    </article>
+    <article class="card"><div class="card-head"><div><h3>Selected subject</h3><p>The uncentered AIPW signal is assembled one person at a time. Centering creates φ̂ᶜΔ,i; stacked linearization creates IF̂stackΔ,i. Only the latter is automatically the working-model influence value under one-model misspecification.</p></div></div><div class="subject-body" id="subjectPanel"></div></article>
+  </div>
+
+  <div class="grid-two">
+    <article class="card"><div class="card-head"><div><h3>2. Propensity-score overlap</h3><p>Estimated P(smoker | X) by observed treatment group.</p></div></div><div class="legend"><span><i class="line-key" style="border-color:var(--smoke)"></i>Smokers</span><span><i class="line-key" style="border-color:var(--control)"></i>Non-smokers</span><span><i class="dash-key" style="border-color:#111"></i>truncation bounds</span></div><div class="chart-wrap"><svg id="propensitySvg" class="chart" viewBox="0 0 780 360" role="img" aria-label="Propensity-score overlap"></svg></div><div class="chart-note">The doubly robust property does not eliminate the need for positivity. Large inverse weights can still dominate the correction term.</div></article>
+    <article class="card"><div class="card-head"><div><h3>3. Outcome-model calibration</h3><p>Observed CVD frequency versus fitted observed-treatment risk.</p></div></div><div class="diag-strip" id="calibrationStrip"></div><div class="chart-wrap"><svg id="calibrationSvg" class="chart" viewBox="0 0 780 360" role="img" aria-label="Outcome-model calibration"></svg></div><div class="chart-note">Prediction calibration is informative but does not establish causal exchangeability or correct counterfactual extrapolation.</div></article>
+  </div>
+
+  <div class="grid-two">
+    <article class="card"><div class="card-head"><div><h3>4. Prediction plus augmentation correction</h3><p>The final AIPW estimate is the outcome-regression contrast plus a weighted residual correction.</p></div></div><div class="chart-wrap"><svg id="decompSvg" class="chart" viewBox="0 0 780 360" role="img" aria-label="AIPW estimate decomposition"></svg></div><div class="chart-note" id="decompNote"></div></article>
+    <article class="card"><div class="card-head"><div><h3>5. Distribution of subject-level AIPW signals</h3><p>φ̂<sub>Δ,i</sub> can be negative or exceed one even though its average estimates a risk difference.</p></div></div><div class="legend"><span><i class="dot" style="background:var(--smoke)"></i>Observed smokers</span><span><i class="dot" style="background:var(--control)"></i>Observed non-smokers</span><span><i class="dash-key" style="border-color:#111"></i>sample mean</span></div><div class="chart-wrap"><svg id="pseudoSvg" class="chart" viewBox="0 0 780 360" role="img" aria-label="Distribution of uncentered AIPW signals"></svg></div><div class="chart-note">Extreme AIPW signals often reflect poor overlap, large outcome residuals, or both. The signal itself is not the EIF because it is not centered at zero.</div></article>
+  </div>
+
+  <article class="card" style="margin-bottom:12px">
+    <div class="card-head"><div><h3>6. The double-robustness matrix</h3><p>Click any cell to refit the dashboard. Green cells satisfy the theoretical union-model condition under the displayed, untruncated propensity score; amber indicates that nonvanishing truncation compromises propensity-only protection.</p></div></div>
+    <div class="dr-matrix" id="drMatrix"></div>
+    <div class="chart-note">One cohort can still be noisy. The repeated-sampling experiment below distinguishes sampling variation from systematic misspecification bias.</div>
+  </article>
+
+  <div class="grid-two">
+    <article class="card"><div class="card-head"><div><h3>7. Estimator comparison</h3><p>Crude, IPW, outcome regression, and AIPW estimates under the currently selected nuisance models.</p></div></div><div class="estimate-grid" id="estimateGrid"></div><div class="chart-wrap"><svg id="forestSvg" class="chart" viewBox="0 0 800 390" role="img" aria-label="Estimator comparison with 95 percent confidence intervals"></svg></div><div class="ci-status-grid" id="ciStatusGrid"></div><div class="chart-note" id="forestNote"></div></article>
+    <article class="card"><div class="card-head"><div><h3>8. Repeated-sampling double-robustness experiment</h3><p>Generate independent cohorts, refit all four nuisance-model combinations, and compare bias and 95% CI coverage.</p></div><div class="mini-controls"><label for="coverageM">Studies</label><select id="coverageM"><option value="25">25</option><option value="40" selected>40</option><option value="80">80</option><option value="120">120</option></select><button class="mini-button" id="runCoverage">Run experiment</button><button class="mini-button secondary-mini" id="stopCoverage">Stop</button></div></div><div class="coverage-progress"><div class="coverage-top"><span id="coverageProgressText">No experiment run yet</span><span id="coverageProgressPct">0%</span></div><div class="progress-track"><div class="progress-fill" id="coverageProgressFill"></div></div></div><div class="coverage-matrix" id="coverageMatrix"></div><div class="chart-wrap"><svg id="coverageSvg" class="chart" viewBox="0 0 800 430" role="img" aria-label="Repeated AIPW confidence intervals"></svg></div><div class="coverage-empty" id="coverageEmpty"><strong>Run the experiment</strong> to see the double-robustness pattern emerge across repeated studies.</div><div class="chart-note">Intervals are centered by the fixed reference-population approximation to the superpopulation ATE for the selected data-generating law. Green intervals contain zero after centering; red intervals miss it. Every repetition refits all nuisance models and recomputes the appropriate stacked sandwich.</div></article>
+  </div>
+
+  <article class="card table-card"><details><summary>Inspect subject-level nuisance predictions and AIPW contributions</summary><div class="table-tools"><button id="exportCsv">Export cohort CSV</button><button data-svg="scatterSvg">Save subject plot as SVG</button><button data-svg="decompSvg">Save decomposition plot as SVG</button><button data-svg="forestSvg">Save CI plot as SVG</button><button data-svg="coverageSvg">Save coverage plot as SVG</button><button onclick="window.print()">Print dashboard</button></div><div class="table-wrap"><table><thead><tr><th>Subject</th><th>Age</th><th>BMI</th><th>Income</th><th>T</th><th>Y</th><th>ê raw</th><th>ẽ used</th><th>m̂0</th><th>m̂1</th><th>OR contrast</th><th>T correction</th><th>Control correction</th><th>φ̂Δ,i signal</th><th>φ̂ᶜΔ,i=φ̂Δ,i−Δ̂</th><th>IF̂stack</th></tr></thead><tbody id="subjectTable"></tbody></table></div></details></article>
+</section>
+</main>
+
+<div class="tooltip" id="tooltip"></div>
+<footer class="footer"><b>Se Yoon Lee, Ph.D.</b> • Synthetic data are generated entirely in the browser. Confidence intervals target a fixed superpopulation ATE approximated with a large deterministic Monte Carlo reference population; the realized cohort-specific conditional contrast is displayed separately. The application is educational and does not replace subject-matter assessment of exchangeability, positivity, measurement quality, or treatment consistency.</footer>
+
+<script>
+(function(){
+"use strict";
+
+const COLORS={smoke:'#E56B2F',control:'#2F6EA5',accent:'#7A5AF8',green:'#208A62',danger:'#C23B3B',amber:'#B66A00',teal:'#147D83',gray:'#98A2B3',ink:'#162033',muted:'#667085',grid:'#E4E8EF'};
+const LOGISTIC_RIDGE=5.0,TRUTH_MC_N=60000;
+const defaults={n:320,conf:1.25,overlap:.72,nonlin:.75,hetero:.40,effect:1.80,seed:20260710,psSpec:'correct',orSpec:'correct',fitMode:'same',clip:0,x:'age',y:'bmi',size:'augmentation'};
+const state={...defaults,rows:[],selected:0,nuisance:null,combos:{},current:null,inference:{},animation:null,rebuildTimer:null,targetATE:NaN,targetRisk0:NaN,targetRisk1:NaN,finiteATE:NaN,finiteRisk0:NaN,finiteRisk1:NaN,truncationRate:0,coverage:{running:false,token:0,done:0,total:0,records:[],selectedKey:'correct|correct'}};
+const $=id=>document.getElementById(id);
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+const logistic=x=>1/(1+Math.exp(-clamp(x,-30,30)));
+const logit=p=>Math.log(clamp(p,1e-8,1-1e-8)/(1-clamp(p,1e-8,1-1e-8)));
+const fmt=(x,d=2)=>Number.isFinite(x)?x.toFixed(d):'—';
+const pct=(x,d=1)=>Number.isFinite(x)?(100*x).toFixed(d)+'%':'—';
+const signedPct=(x,d=1)=>Number.isFinite(x)?(x>=0?'+':'')+pct(x,d):'—';
+const esc=s=>String(s).replace(/[&<>\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[c]));
+function sum(a){return a.reduce((s,x)=>s+x,0)}
+function mean(a){return a.length?sum(a)/a.length:NaN}
+function variance(a){if(a.length<2)return NaN;const m=mean(a);return a.reduce((s,x)=>s+(x-m)*(x-m),0)/(a.length-1)}
+function sd(a){return Math.sqrt(Math.max(0,variance(a)))}
+function quantile(a,p){const v=a.filter(Number.isFinite).slice().sort((x,y)=>x-y);if(!v.length)return NaN;const h=(v.length-1)*p,lo=Math.floor(h),hi=Math.ceil(h);return lo===hi?v[lo]:v[lo]+(h-lo)*(v[hi]-v[lo])}
+function weightedMean(x,w){let sw=0,sx=0;for(let i=0;i<x.length;i++){sw+=w[i];sx+=x[i]*w[i]}return sw?sx/sw:NaN}
+function mulberry32(seed){let a=seed>>>0;return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function randn(rng){let u=0,v=0;while(!u)u=rng();while(!v)v=rng();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)}
+function dot(a,b){let s=0;for(let i=0;i<a.length;i++)s+=a[i]*b[i];return s}
+function outerAdd(A,u,scale=1){for(let j=0;j<u.length;j++)for(let k=0;k<u.length;k++)A[j][k]+=scale*u[j]*u[k]}
+function transpose(A){return A[0].map((_,j)=>A.map(r=>r[j]))}
+function matMul(A,B){const out=Array.from({length:A.length},()=>Array(B[0].length).fill(0));for(let i=0;i<A.length;i++)for(let k=0;k<B.length;k++){const aik=A[i][k];for(let j=0;j<B[0].length;j++)out[i][j]+=aik*B[k][j]}return out}
+function solveLinear(A,b){const n=b.length,M=A.map((r,i)=>r.slice().concat([b[i]]));for(let c=0;c<n;c++){let p=c;for(let r=c+1;r<n;r++)if(Math.abs(M[r][c])>Math.abs(M[p][c]))p=r;if(Math.abs(M[p][c])<1e-10)M[p][c]+=1e-7;[M[c],M[p]]=[M[p],M[c]];const d=M[c][c];for(let j=c;j<=n;j++)M[c][j]/=d;for(let r=0;r<n;r++)if(r!==c){const f=M[r][c];if(f===0)continue;for(let j=c;j<=n;j++)M[r][j]-=f*M[c][j]}}return M.map(r=>r[n])}
+function inverse(A){const n=A.length,cols=[];for(let j=0;j<n;j++){const e=Array(n).fill(0);e[j]=1;cols.push(solveLinear(A,e))}return Array.from({length:n},(_,i)=>Array.from({length:n},(_,j)=>cols[j][i]))}
+function svgText(x,y,t,attrs=''){return '<text x="'+x+'" y="'+y+'" '+attrs+'>'+esc(t)+'</text>'}
+function sx(x,a,b,L,R){return L+(x-a)/(b-a)*(R-L)}
+function sy(y,a,b,T,B){return B-(y-a)/(b-a)*(B-T)}
+function axisTicks(a,b,k=5){const out=[];for(let i=0;i<=k;i++)out.push(a+(b-a)*i/k);return out}
+function niceRange(values,minSpan=.1){let lo=Math.min(...values),hi=Math.max(...values),span=hi-lo;if(!Number.isFinite(span)||span<minSpan){const mid=Number.isFinite((lo+hi)/2)?(lo+hi)/2:0;lo=mid-minSpan/2;hi=mid+minSpan/2;span=minSpan}return[lo-.12*span,hi+.12*span]}
+function downloadBlob(content,type,name){const blob=new Blob([content],{type}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000)}
+function saveSvg(id){const svg=$(id),copy=svg.cloneNode(true);copy.setAttribute('xmlns','http://www.w3.org/2000/svg');downloadBlob(new XMLSerializer().serializeToString(copy),'image/svg+xml;charset=utf-8',id+'.svg')}
+
+function psDesign(r,spec){
+  if(spec==='miss')return[1,r.zAge,r.zBmi,r.female];
+  return[1,r.zAge,r.zBmi,r.zInc,r.female,r.college,r.htn,r.zAge*r.zAge-1,r.zAge*r.zBmi];
+}
+function orDesign(r,t,spec){
+  if(spec==='miss')return[1,t,r.zAge,r.zBmi,r.female];
+  return[1,t,r.zAge,r.zBmi,r.zInc,r.female,r.college,r.htn,r.zAge*r.zAge-1,r.zAge*r.zBmi,t*r.zAge,t*r.htn,t*r.female];
+}
+function fitLogistic(X,y,lambda=LOGISTIC_RIDGE){
+  const n=X.length,p=X[0].length;let beta=Array(p).fill(0);
+  for(let it=0;it<35;it++){
+    const g=Array(p).fill(0),H=Array.from({length:p},()=>Array(p).fill(0));
+    for(let i=0;i<n;i++){
+      const pr=clamp(logistic(dot(X[i],beta)),1e-6,1-1e-6),w=pr*(1-pr),res=y[i]-pr;
+      for(let j=0;j<p;j++){g[j]+=X[i][j]*res;for(let k=0;k<p;k++)H[j][k]+=X[i][j]*w*X[i][k]}
+    }
+    for(let j=1;j<p;j++){g[j]-=lambda*beta[j];H[j][j]+=lambda}
+    let delta;try{delta=solveLinear(H,g)}catch(e){break}
+    let maxD=0;for(let j=0;j<p;j++){beta[j]+=delta[j];maxD=Math.max(maxD,Math.abs(delta[j]))}
+    if(maxD<1e-7)break;
+  }
+  return beta;
+}
+function predictLogistic(X,beta){return X.map(r=>clamp(logistic(dot(r,beta)),1e-6,1-1e-6))}
+function shuffledFolds(n,K,seed){const rng=mulberry32(seed),idx=Array.from({length:n},(_,i)=>i);for(let i=n-1;i>0;i--){const j=Math.floor(rng()*(i+1));[idx[i],idx[j]]=[idx[j],idx[i]]}const f=Array(n);idx.forEach((v,i)=>f[v]=i%K);return f}
+function findIntercept(scores,target=.32){let lo=-10,hi=10;for(let it=0;it<70;it++){const mid=(lo+hi)/2,m=mean(scores.map(s=>logistic(mid+s)));if(m<target)lo=mid;else hi=mid}return(lo+hi)/2}
+
+let TRUTH_X=null;
+const truthCache=new Map(),interceptCache=new Map(),truncationCache=new Map();
+function generateCovariateRows(n,seed,withUniforms=true){
+  const rng=mulberry32(seed),rows=[];
+  for(let i=0;i<n;i++){
+    const age=clamp(52+12*randn(rng),20,82),female=rng()<.52?1:0,ses=randn(rng);
+    const college=rng()<logistic(-.05+.85*ses+.012*(age-45))?1:0;
+    const income=clamp(Math.exp(.72+.46*ses+.14*college-.08*(1-female)+.22*randn(rng)),.25,5.5);
+    const bmi=clamp(27.2+1.15*female-.55*ses+.035*(age-50)+3.7*randn(rng),16,46);
+    const htn=rng()<logistic(-5.0+.047*age+.065*bmi+.20*(income<1.5))?1:0;
+    const zAge=(age-52)/12,zBmi=(bmi-27.2)/4,zInc=(Math.log(income)-.72)/.55;
+    const r={id:'S'+String(i+1).padStart(3,'0'),age,bmi,income,female,college,htn,zAge,zBmi,zInc};
+    if(withUniforms){r.uT=rng();r.uY=rng()}
+    rows.push(r);
+  }
+  return rows;
+}
+function ensureTruthPopulation(){if(!TRUTH_X)TRUTH_X=generateCovariateRows(TRUTH_MC_N,91827364,false);return TRUTH_X}
+function treatmentScore(r){return .53*r.zAge+.34*r.zBmi-.43*r.zInc-.24*r.female-.34*r.college+.58*r.htn+.22*(r.zAge*r.zAge-1)+.28*r.zAge*r.zBmi}
+function treatmentScale(settings){return settings.conf*(1.62-.92*settings.overlap)}
+function treatmentIntercept(settings){
+  const key=settings.conf.toFixed(3)+'|'+settings.overlap.toFixed(3);if(interceptCache.has(key))return interceptCache.get(key);
+  const sep=treatmentScale(settings),scores=ensureTruthPopulation().map(r=>sep*treatmentScore(r)),a=findIntercept(scores,.32);interceptCache.set(key,a);return a;
+}
+function outcomeRisks(r,settings){
+  const lp0=logit(.09)+.55*r.zAge+.35*r.zBmi-.25*r.zInc-.15*r.female-.18*r.college+.65*r.htn+settings.nonlin*(.32*(r.zAge*r.zAge-1)+.24*r.zAge*r.zBmi);
+  const trt=Math.log(settings.effect)+settings.hetero*(.22*r.zAge+.32*r.htn-.14*r.female);
+  return{q0:logistic(lp0),q1:logistic(lp0+trt)};
+}
+function superpopulationTruth(settings){
+  const key=settings.nonlin.toFixed(3)+'|'+settings.hetero.toFixed(3)+'|'+settings.effect.toFixed(3);if(truthCache.has(key))return truthCache.get(key);
+  let s0=0,s1=0;for(const r of ensureTruthPopulation()){const q=outcomeRisks(r,settings);s0+=q.q0;s1+=q.q1}
+  const ans={risk0:s0/TRUTH_MC_N,risk1:s1/TRUTH_MC_N,ate:(s1-s0)/TRUTH_MC_N};truthCache.set(key,ans);return ans;
+}
+function populationTruncationRate(settings,clip){
+  const eps=Math.max(1e-6,clip),key=settings.conf.toFixed(3)+'|'+settings.overlap.toFixed(3)+'|'+eps.toFixed(6);if(truncationCache.has(key))return truncationCache.get(key);
+  const sep=treatmentScale(settings),a=treatmentIntercept(settings);let n=0;for(const r of ensureTruthPopulation()){const e=logistic(a+sep*treatmentScore(r));if(e<eps||e>1-eps)n++}
+  const rate=n/TRUTH_MC_N;truncationCache.set(key,rate);return rate;
+}
+function generateCohort(settings,seed){
+  const rows=generateCovariateRows(settings.n,seed,true),sep=treatmentScale(settings),intercept=treatmentIntercept(settings);let s0=0,s1=0;
+  rows.forEach(r=>{
+    const trueE=logistic(intercept+sep*treatmentScore(r)),T=r.uT<trueE?1:0,q=outcomeRisks(r,settings),q0=q.q0,q1=q.q1,Y=r.uY<(T?q1:q0)?1:0;
+    Object.assign(r,{trueE,T,Y,q0,q1});s0+=q0;s1+=q1;
+  });
+  const target=superpopulationTruth(settings);
+  return{rows,finiteRisk0:s0/settings.n,finiteRisk1:s1/settings.n,finiteATE:(s1-s0)/settings.n,targetRisk0:target.risk0,targetRisk1:target.risk1,targetATE:target.ate};
+}
+
+function fitPS(rows,spec,mode,seed,sharedFolds=null){
+  const n=rows.length,pred=Array(n),y=rows.map(r=>r.T),Xall=rows.map(r=>psDesign(r,spec));
+  if(mode==='same'){
+    const beta=fitLogistic(Xall,y);return{pred:predictLogistic(Xall,beta),beta,betas:[beta],mode};
+  }
+  const folds=sharedFolds||shuffledFolds(n,2,seed^0xA51F),betas=[];
+  for(let k=0;k<2;k++){
+    const train=[],yt=[];for(let i=0;i<n;i++)if(folds[i]!==k){train.push(Xall[i]);yt.push(y[i])}
+    const b=fitLogistic(train,yt);betas.push(b);for(let i=0;i<n;i++)if(folds[i]===k)pred[i]=clamp(logistic(dot(Xall[i],b)),1e-6,1-1e-6);
+  }
+  return{pred,beta:null,betas,folds,mode};
+}
+function fitOR(rows,spec,mode,seed,sharedFolds=null){
+  const n=rows.length,y=rows.map(r=>r.Y),Xobs=rows.map(r=>orDesign(r,r.T,spec)),X0=rows.map(r=>orDesign(r,0,spec)),X1=rows.map(r=>orDesign(r,1,spec)),m0=Array(n),m1=Array(n),mobs=Array(n);
+  if(mode==='same'){
+    const beta=fitLogistic(Xobs,y);const p0=predictLogistic(X0,beta),p1=predictLogistic(X1,beta),po=predictLogistic(Xobs,beta);return{m0:p0,m1:p1,mobs:po,beta,betas:[beta],mode};
+  }
+  const folds=sharedFolds||shuffledFolds(n,2,seed^0xC3A5),betas=[];
+  for(let k=0;k<2;k++){
+    const train=[],yt=[];for(let i=0;i<n;i++)if(folds[i]!==k){train.push(Xobs[i]);yt.push(y[i])}
+    const b=fitLogistic(train,yt);betas.push(b);for(let i=0;i<n;i++)if(folds[i]===k){m0[i]=clamp(logistic(dot(X0[i],b)),1e-6,1-1e-6);m1[i]=clamp(logistic(dot(X1[i],b)),1e-6,1-1e-6);mobs[i]=clamp(logistic(dot(Xobs[i],b)),1e-6,1-1e-6)}
+  }
+  return{m0,m1,mobs,beta:null,betas,folds,mode};
+}
+function fitAllNuisance(rows,mode,seed){
+  const folds=mode==='cross2'?shuffledFolds(rows.length,2,seed^0x7F4A7C15):null;
+  return{folds,ps:{correct:fitPS(rows,'correct',mode,seed+11,folds),miss:fitPS(rows,'miss',mode,seed+17,folds)},or:{correct:fitOR(rows,'correct',mode,seed+23,folds),miss:fitOR(rows,'miss',mode,seed+29,folds)}};
+}
+
+function comboKey(ps,or){return ps+'|'+or}
+function empiricalInference(values,est){const centered=values.map(v=>v-est),se=sd(centered)/Math.sqrt(values.length),z=1.959963984540054;return{se,ci:[est-z*se,est+z*se],if:centered,ifValues:centered,ifMean:mean(centered),ifSeCheck:se}}
+function crudeEstimate(rows){
+  const g1=rows.filter(r=>r.T),g0=rows.filter(r=>!r.T),p1=mean(g1.map(r=>r.Y)),p0=mean(g0.map(r=>r.Y)),rd=p1-p0,se=Math.sqrt(p1*(1-p1)/Math.max(1,g1.length)+p0*(1-p0)/Math.max(1,g0.length)),z=1.959963984540054;
+  return{r1:p1,r0:p0,rd,se,ci:[rd-z*se,rd+z*se]};
+}
+function computeCombo(rows,nuisance,psSpec,orSpec,clip){
+  const ps=nuisance.ps[psSpec],om=nuisance.or[orSpec],n=rows.length;
+  const eps=Math.max(1e-6,clip),eRaw=ps.pred.slice(),e=eRaw.map(v=>clamp(v,eps,1-eps)),m0=om.m0,m1=om.m1;
+  const orXi=[],ipwXi=[],c1=[],c0=[],aipwXi=[],psi1Xi=[],psi0Xi=[],weights=[];
+  for(let i=0;i<n;i++){
+    const r=rows[i],orv=m1[i]-m0[i],a1=r.T/e[i]*(r.Y-m1[i]),a0=(1-r.T)/(1-e[i])*(r.Y-m0[i]);
+    orXi.push(orv);ipwXi.push(r.T*r.Y/e[i]-(1-r.T)*r.Y/(1-e[i]));c1.push(a1);c0.push(a0);aipwXi.push(orv+a1-a0);psi1Xi.push(m1[i]+a1);psi0Xi.push(m0[i]+a0);weights.push(r.T?1/e[i]:1/(1-e[i]));
+  }
+  const orRD=mean(orXi),ipwRD=mean(ipwXi),aipwRD=mean(aipwXi),r1=mean(psi1Xi),r0=mean(psi0Xi),orInf=empiricalInference(orXi,orRD),ipwInf=empiricalInference(ipwXi,ipwRD),aipwInf=empiricalInference(aipwXi,aipwRD);
+  return{psSpec,orSpec,eRaw,e,m0,m1,mobs:om.mobs,orXi,ipwXi,c1,c0,aipwXi,psi1Xi,psi0Xi,weights,orRD,ipwRD,aipwRD,r1,r0,orInf,ipwInf,aipwInf,orPart:orRD,correction:mean(c1)-mean(c0),meanC1:mean(c1),meanC0:mean(c0)};
+}
+
+function scoreRowsForSame(method,theta,rows,psSpec,orSpec,clip){
+  const pG=psDesign(rows[0],psSpec).length,pB=orDesign(rows[0],rows[0].T,orSpec).length,n=rows.length;
+  let gamma=[],beta=[],psi1,psi0,idx=0;
+  if(method==='ipw'||method==='aipw'){gamma=theta.slice(idx,idx+pG);idx+=pG}
+  if(method==='or'||method==='aipw'){beta=theta.slice(idx,idx+pB);idx+=pB}
+  psi1=theta[idx];psi0=theta[idx+1];const d=theta.length,out=[],eps=Math.max(1e-6,clip);
+  for(const r of rows){
+    const u=Array(d).fill(0);let pos=0,e,mObs,m0,m1;
+    if(method==='ipw'||method==='aipw'){
+      const zg=psDesign(r,psSpec),eRaw=clamp(logistic(dot(zg,gamma)),1e-6,1-1e-6);e=clamp(eRaw,eps,1-eps);
+      for(let j=0;j<pG;j++)u[pos+j]=zg[j]*(r.T-eRaw)-(j?LOGISTIC_RIDGE*gamma[j]/n:0);pos+=pG;
+    }
+    if(method==='or'||method==='aipw'){
+      const zo=orDesign(r,r.T,orSpec);mObs=clamp(logistic(dot(zo,beta)),1e-6,1-1e-6);m0=clamp(logistic(dot(orDesign(r,0,orSpec),beta)),1e-6,1-1e-6);m1=clamp(logistic(dot(orDesign(r,1,orSpec),beta)),1e-6,1-1e-6);
+      for(let j=0;j<pB;j++)u[pos+j]=zo[j]*(r.Y-mObs)-(j?LOGISTIC_RIDGE*beta[j]/n:0);pos+=pB;
+    }
+    if(method==='ipw'){u[pos]=r.T*r.Y/e-psi1;u[pos+1]=(1-r.T)*r.Y/(1-e)-psi0}
+    else if(method==='or'){u[pos]=m1-psi1;u[pos+1]=m0-psi0}
+    else{u[pos]=m1+r.T/e*(r.Y-m1)-psi1;u[pos+1]=m0+(1-r.T)/(1-e)*(r.Y-m0)-psi0}
+    out.push(u);
+  }
+  return out;
+}
+function crossfitLayout(method,pG,pB,K){
+  let pos=0;const g=[],b=[];if(method==='ipw'||method==='aipw')for(let k=0;k<K;k++){g[k]=pos;pos+=pG}if(method==='or'||method==='aipw')for(let k=0;k<K;k++){b[k]=pos;pos+=pB}return{g,b,i1:pos,i0:pos+1,d:pos+2};
+}
+function scoreRowsForCross(method,theta,rows,folds,psSpec,orSpec,clip){
+  const pG=psDesign(rows[0],psSpec).length,pB=orDesign(rows[0],rows[0].T,orSpec).length,n=rows.length,K=Math.max(...folds)+1,L=crossfitLayout(method,pG,pB,K),eps=Math.max(1e-6,clip),nTrain=Array(K).fill(0);
+  for(let i=0;i<n;i++)for(let k=0;k<K;k++)if(folds[i]!==k)nTrain[k]++;
+  const gammas=[],betas=[];for(let k=0;k<K;k++)if(L.g.length)gammas[k]=theta.slice(L.g[k],L.g[k]+pG);for(let k=0;k<K;k++)if(L.b.length)betas[k]=theta.slice(L.b[k],L.b[k]+pB);
+  const psi1=theta[L.i1],psi0=theta[L.i0],out=[];
+  for(let i=0;i<n;i++){
+    const r=rows[i],u=Array(L.d).fill(0),vf=folds[i];
+    if(L.g.length)for(let k=0;k<K;k++)if(folds[i]!==k){const zg=psDesign(r,psSpec),g=gammas[k],eRaw=clamp(logistic(dot(zg,g)),1e-6,1-1e-6);for(let j=0;j<pG;j++)u[L.g[k]+j]=zg[j]*(r.T-eRaw)-(j?LOGISTIC_RIDGE*g[j]/nTrain[k]:0)}
+    if(L.b.length)for(let k=0;k<K;k++)if(folds[i]!==k){const zo=orDesign(r,r.T,orSpec),b=betas[k],mObs=clamp(logistic(dot(zo,b)),1e-6,1-1e-6);for(let j=0;j<pB;j++)u[L.b[k]+j]=zo[j]*(r.Y-mObs)-(j?LOGISTIC_RIDGE*b[j]/nTrain[k]:0)}
+    let e,m0,m1;
+    if(L.g.length){const eRaw=clamp(logistic(dot(psDesign(r,psSpec),gammas[vf])),1e-6,1-1e-6);e=clamp(eRaw,eps,1-eps)}
+    if(L.b.length){const b=betas[vf];m0=clamp(logistic(dot(orDesign(r,0,orSpec),b)),1e-6,1-1e-6);m1=clamp(logistic(dot(orDesign(r,1,orSpec),b)),1e-6,1-1e-6)}
+    if(method==='ipw'){u[L.i1]=r.T*r.Y/e-psi1;u[L.i0]=(1-r.T)*r.Y/(1-e)-psi0}
+    else if(method==='or'){u[L.i1]=m1-psi1;u[L.i0]=m0-psi0}
+    else{u[L.i1]=m1+r.T/e*(r.Y-m1)-psi1;u[L.i0]=m0+(1-r.T)/(1-e)*(r.Y-m0)-psi0}
+    out.push(u);
+  }
+  return out;
+}
+function sandwichFromScores(theta,scoreFunction,rd,methodLabel){
+  const d=theta.length,n=scoreFunction(theta).length;
+  try{
+    const base=scoreFunction(theta),B=Array.from({length:d},()=>Array(d).fill(0));for(const u of base)outerAdd(B,u,1/n);
+    const meanScore=th=>{const rr=scoreFunction(th),m=Array(d).fill(0);for(const u of rr)for(let j=0;j<d;j++)m[j]+=u[j]/n;return m};
+    const A=Array.from({length:d},()=>Array(d).fill(0));for(let j=0;j<d;j++){const h=1e-5*(1+Math.abs(theta[j])),up=theta.slice(),dn=theta.slice();up[j]+=h;dn[j]-=h;const gu=meanScore(up),gd=meanScore(dn);for(let k=0;k<d;k++)A[k][j]=(gu[k]-gd[k])/(2*h)}
+    const invA=inverse(A),V=matMul(matMul(invA,B),transpose(invA));for(let j=0;j<d;j++)for(let k=0;k<d;k++)V[j][k]/=n;
+    const i1=d-2,i0=d-1,v=Math.max(0,V[i1][i1]+V[i0][i0]-2*V[i1][i0]),se=Math.sqrt(v),z=1.959963984540054,maxEq=Math.max(...meanScore(theta).map(Math.abs));
+    const contrast=Array(d).fill(0);contrast[i1]=1;contrast[i0]=-1;
+    const cAinv=Array(d).fill(0);for(let j=0;j<d;j++)for(let k=0;k<d;k++)cAinv[j]+=contrast[k]*invA[k][j];
+    const ifValues=base.map(u=>-dot(cAinv,u)),ifMean=mean(ifValues),ifSeCheck=sd(ifValues)/Math.sqrt(n);
+    if(!Number.isFinite(se)||se>5)throw new Error('unstable sandwich');return{se,ci:[rd-z*se,rd+z*se],method:methodLabel,maxEquationResidual:maxEq,fallback:false,ifValues,ifMean,ifSeCheck};
+  }catch(err){return null}
+}
+function stackedInference(method,rows,nuisance,combo,psSpec,orSpec,clip,mode){
+  const pG=psDesign(rows[0],psSpec).length,pB=orDesign(rows[0],rows[0].T,orSpec).length;
+  const psi1=method==='ipw'?mean(rows.map((r,i)=>r.T*r.Y/combo.e[i])):method==='or'?mean(combo.m1):combo.r1;
+  const psi0=method==='ipw'?mean(rows.map((r,i)=>(1-r.T)*r.Y/(1-combo.e[i]))):method==='or'?mean(combo.m0):combo.r0,rd=psi1-psi0;
+  let theta=[],scoreFn,label;
+  if(mode==='same'){
+    if(method==='ipw'||method==='aipw')theta=theta.concat(nuisance.ps[psSpec].beta);
+    if(method==='or'||method==='aipw')theta=theta.concat(nuisance.or[orSpec].beta);
+    theta=theta.concat([psi1,psi0]);scoreFn=th=>scoreRowsForSame(method,th,rows,psSpec,orSpec,clip);label='Same-sample stacked M-estimation sandwich';
+  }else{
+    const folds=nuisance.folds,K=Math.max(...folds)+1;
+    if(method==='ipw'||method==='aipw')for(let k=0;k<K;k++)theta=theta.concat(nuisance.ps[psSpec].betas[k]);
+    if(method==='or'||method==='aipw')for(let k=0;k<K;k++)theta=theta.concat(nuisance.or[orSpec].betas[k]);
+    theta=theta.concat([psi1,psi0]);scoreFn=th=>scoreRowsForCross(method,th,rows,folds,psSpec,orSpec,clip);label='Cross-fitted fold-specific block sandwich';
+  }
+  const ans=sandwichFromScores(theta,scoreFn,rd,label);if(ans)return ans;
+  const fallback=method==='aipw'?combo.aipwInf:method==='ipw'?combo.ipwInf:combo.orInf;return{...fallback,ifValues:fallback.ifValues||fallback.if,ifMean:mean(fallback.ifValues||fallback.if),ifSeCheck:fallback.se,method:'Centered-AIPW-signal fallback; nuisance-estimation uncertainty omitted',fallback:true,maxEquationResidual:NaN};
+}
+
+function readControls(){
+  state.n=+$('nRange').value;state.conf=+$('confRange').value;state.overlap=+$('overlapRange').value;state.nonlin=+$('nonlinRange').value;state.hetero=+$('heteroRange').value;state.effect=+$('effectRange').value;state.seed=+$('seedInput').value||1;state.psSpec=$('psModel').value;state.orSpec=$('orModel').value;state.fitMode=$('fitMode').value;state.clip=+$('clipRange').value;state.x=$('xVar').value;state.y=$('yVar').value;state.size=$('sizeVar').value;
+}
+function updateLabels(){
+  $('nValue').textContent=state.n;$('confValue').textContent=fmt(state.conf,2)+'×';$('overlapValue').textContent=pct(state.overlap,0);$('nonlinValue').textContent=fmt(state.nonlin,2)+'×';$('heteroValue').textContent=fmt(state.hetero,2)+'×';$('effectValue').textContent='OR '+fmt(state.effect,2);$('seedValue').textContent=state.seed;$('clipValue').textContent=state.clip>0?fmt(state.clip,3):'none';
+  if(state.psSpec==='correct'){const warn=state.truncationRate>1e-5;$('psStatus').className='model-status '+(warn?'warn':'good');$('psStatus').textContent=warn?'Structurally correct PS model, but '+pct(state.truncationRate,1)+' of the reference population is truncated; PS-only double robustness is no longer exact.':'Correct for the fixed simulated treatment law; no substantive truncation is active.'}else{$('psStatus').className='model-status bad';$('psStatus').textContent='Misspecified: omits income, education, hypertension, and nonlinear terms.'}
+  $('orStatus').className='model-status '+(state.orSpec==='correct'?'good':'bad');$('orStatus').textContent=state.orSpec==='correct'?'Correct for the simulated conditional outcome law.':'Misspecified: omits several prognostic variables, nonlinearities, and effect modifiers.';
+}
+function settingsSnapshot(){return{n:state.n,conf:state.conf,overlap:state.overlap,nonlin:state.nonlin,hetero:state.hetero,effect:state.effect}}
+function rebuild(){
+  readControls();updateLabels();state.coverage.token++;state.coverage.running=false;state.coverage.records=[];state.coverage.done=0;state.coverage.total=0;
+  const settings=settingsSnapshot(),study=generateCohort(settings,state.seed);state.rows=study.rows;state.targetRisk0=study.targetRisk0;state.targetRisk1=study.targetRisk1;state.targetATE=study.targetATE;state.finiteRisk0=study.finiteRisk0;state.finiteRisk1=study.finiteRisk1;state.finiteATE=study.finiteATE;state.truncationRate=populationTruncationRate(settings,state.clip);updateLabels();state.nuisance=fitAllNuisance(state.rows,state.fitMode,state.seed);
+  state.combos={};for(const ps of ['correct','miss'])for(const or of ['correct','miss'])state.combos[comboKey(ps,or)]=computeCombo(state.rows,state.nuisance,ps,or,state.clip);
+  state.selected=clamp(state.selected,0,state.rows.length-1);computeCurrentInference();renderAll();
+}
+function scheduleRebuild(){clearTimeout(state.rebuildTimer);state.rebuildTimer=setTimeout(rebuild,130)}
+function selectCombo(ps,or){state.psSpec=ps;state.orSpec=or;$('psModel').value=ps;$('orModel').value=or;updateLabels();computeCurrentInference();renderAll()}
+function computeCurrentInference(){
+  state.current=state.combos[comboKey(state.psSpec,state.orSpec)];if(!state.current)return;
+  const crude=crudeEstimate(state.rows);state.inference={crude,ipw:stackedInference('ipw',state.rows,state.nuisance,state.current,state.psSpec,state.orSpec,state.clip,state.fitMode),or:stackedInference('or',state.rows,state.nuisance,state.current,state.psSpec,state.orSpec,state.clip,state.fitMode),aipw:stackedInference('aipw',state.rows,state.nuisance,state.current,state.psSpec,state.orSpec,state.clip,state.fitMode)};
+}
+
+function renderMetrics(){
+  const smokers=state.rows.filter(r=>r.T).length,events=state.rows.filter(r=>r.Y).length,c=state.current,ci=state.inference.aipw;
+  const maxW=Math.max(...c.weights),cover=ci.ci[0]<=state.targetATE&&state.targetATE<=ci.ci[1];
+  const cards=[['Subjects',state.rows.length],['Smokers',smokers+' ('+pct(smokers/state.rows.length,0)+')'],['CVD events',events+' ('+pct(events/state.rows.length,0)+')'],['Target ATE',signedPct(state.targetATE,2)],['Cohort q₁−q₀',signedPct(state.finiteATE,2)],['AIPW RD',signedPct(c.aipwRD,2)],['95% CI','['+pct(ci.ci[0],1)+', '+pct(ci.ci[1],1)+']'],['Largest weight',fmt(maxW,2)]];
+  $('metricStrip').innerHTML=cards.map((x,i)=>'<div class="metric"><div class="k">'+x[0]+'</div><div class="v" style="color:'+(i===5?'var(--accent)':i===3?'var(--green)':i===6?(cover?'var(--green)':'var(--danger)'):'var(--ink)')+'">'+x[1]+'</div></div>').join('');
+}
+
+function renderMath(){
+  const c=state.current,inf=state.inference.aipw,cover=inf.ci[0]<=state.targetATE&&state.targetATE<=inf.ci[1],truncActive=state.truncationRate>1e-5;
+  $('mathLiveEstimate').innerHTML='<strong>Current numerical decomposition</strong><div class="chip-row"><span class="chip">Pₙ(m̂₁−m̂₀) = '+signedPct(c.orPart,2)+'</span><span class="chip">Pₙ augmentation = '+signedPct(c.correction,2)+'</span><span class="chip">Δ̂ = Pₙφ̂Δ = '+signedPct(c.aipwRD,2)+'</span><span class="chip">ψ̂₁ = '+pct(c.r1,2)+'</span><span class="chip">ψ̂₀ = '+pct(c.r0,2)+'</span></div><div style="margin-top:7px">Δ̂ = '+signedPct(c.orPart,2)+' + '+signedPct(c.correction,2)+' = <b>'+signedPct(c.aipwRD,2)+'</b>. Current nuisance combination: propensity <b>'+(state.psSpec==='correct'?'structurally correct':'misspecified')+'</b>, outcome regression <b>'+(state.orSpec==='correct'?'correct':'misspecified')+'</b>.</div><div class="target-explain">Inference targets a fixed Monte Carlo approximation to the superpopulation ATE '+signedPct(state.targetATE,2)+'. The realized cohort-specific mean of q₁(X)−q₀(X) is '+signedPct(state.finiteATE,2)+'.</div>';
+  const stackVals=inf.ifValues||[],checks=[
+    ['AIPW signal mean',Math.abs(mean(c.aipwXi)-c.aipwRD),'Pₙφ̂Δ − Δ̂'],
+    ['Decomposition identity',Math.abs((c.orPart+c.correction)-c.aipwRD),'plug-in + augmentation − Δ̂'],
+    ['Centered-signal identity',Math.abs(mean(c.aipwXi.map(v=>v-c.aipwRD))),'Pₙφ̂ᶜΔ'],
+    ['Stacked IF centering',stackVals.length?Math.abs(mean(stackVals)):NaN,'PₙIF̂stack'],
+    ['Risk contrast identity',Math.abs((c.r1-c.r0)-c.aipwRD),'ψ̂₁−ψ̂₀−Δ̂']
+  ];
+  $('numericalAudit').innerHTML=checks.map(x=>{const pass=x[1]<1e-10;return'<div class="audit-item '+(pass?'pass':'fail')+'"><div class="audit-name">'+x[0]+'</div><div class="audit-value">'+x[1].toExponential(2)+'</div><div class="audit-note">'+x[2]+' · '+(pass?'passed':'check failed')+'</div></div>'}).join('');
+  $('mathLiveInference').innerHTML='<strong>Current AIPW uncertainty</strong><div class="chip-row"><span class="chip">sandwich SE = '+pct(inf.se,2)+'</span><span class="chip">IF reconstruction SE = '+pct(inf.ifSeCheck,2)+'</span><span class="chip">mean IF̂stack = '+(Number.isFinite(inf.ifMean)?inf.ifMean.toExponential(2):'—')+'</span><span class="chip">95% CI ['+pct(inf.ci[0],2)+', '+pct(inf.ci[1],2)+']</span><span class="chip" style="border-color:'+(cover?'#A9DCC8':'#F0BBBB')+';background:'+(cover?'#F2FBF7':'#FFF5F5')+';color:'+(cover?'#176A4C':'#A52D2D')+'">'+(cover?'target contained':'target missed')+'</span></div><div style="margin-top:7px">Variance method: '+inf.method+'. The subject-level IF̂stack values reconstruct the same stacked sandwich up to finite-sample centering. The fixed reference-population target is '+signedPct(state.targetATE,2)+'.'+(inf.fallback?' <b>Warning:</b> the fallback uses empirically centered AIPW signals and omits nuisance-estimation uncertainty.':'')+'</div>';
+  $('truncationTheoryWarning').innerHTML=truncActive?'<b>Active truncation warning:</b> ε='+fmt(state.clip,3)+' truncates approximately '+pct(state.truncationRate,1)+' of the fixed reference population. Cells relying only on a correct propensity model are therefore not given exact double-robust protection.':'<b>No substantive propensity truncation:</b> the propensity-correct branch of the double-robust theorem is represented without a nonvanishing clipping bias.';
+}
+
+function activateMathTab(name,focus=false){
+  const target='mathPanel'+name.charAt(0).toUpperCase()+name.slice(1);document.querySelectorAll('[data-math-tab]').forEach(b=>{const on=b.dataset.mathTab===name;b.setAttribute('aria-selected',on?'true':'false');b.tabIndex=on?0:-1;if(on&&focus)b.focus()});document.querySelectorAll('.math-panel').forEach(p=>{const on=p.id===target;p.classList.toggle('active',on);p.hidden=!on});
+}
+function initMathTabs(){const tabs=[...document.querySelectorAll('[data-math-tab]')];tabs.forEach((b,i)=>{b.tabIndex=i===0?0:-1;b.onclick=()=>activateMathTab(b.dataset.mathTab);b.onkeydown=e=>{if(!['ArrowRight','ArrowLeft','Home','End'].includes(e.key))return;e.preventDefault();let j=i;if(e.key==='ArrowRight')j=(i+1)%tabs.length;if(e.key==='ArrowLeft')j=(i-1+tabs.length)%tabs.length;if(e.key==='Home')j=0;if(e.key==='End')j=tabs.length-1;activateMathTab(tabs[j].dataset.mathTab,true)}})}
+
+const varMeta={age:{label:'Age',domain:[20,82]},bmi:{label:'BMI',domain:[16,46]},income:{label:'Income ratio',domain:[.2,5.5]}};
+function currentSubjectValues(i){
+  const r=state.rows[i],c=state.current,base=c.orXi[i],a1=c.c1[i],a0=c.c0[i],signal=c.aipwXi[i],centeredSignal=signal-c.aipwRD;
+  const stackValues=state.inference&&state.inference.aipw&&state.inference.aipw.ifValues,stackIF=stackValues&&Number.isFinite(stackValues[i])?stackValues[i]:centeredSignal;
+  return{r,eRaw:c.eRaw?c.eRaw[i]:c.e[i],e:c.e[i],m0:c.m0[i],m1:c.m1[i],base,a1,a0,signal,centeredSignal,stackIF,w:c.weights[i]};
+}
+function showTip(evt,html){const t=$('tooltip');t.innerHTML=html;t.style.opacity=1;moveTip(evt)}
+function moveTip(evt){const t=$('tooltip');t.style.left=Math.min(window.innerWidth-300,evt.clientX+12)+'px';t.style.top=Math.min(window.innerHeight-180,evt.clientY+12)+'px'}
+function hideTip(){$('tooltip').style.opacity=0}
+function subjectTip(i){const q=currentSubjectValues(i),r=q.r,ep=Math.abs(q.eRaw-q.e)>1e-9?' → ẽ='+fmt(q.e,3):'';return'<b>'+r.id+'</b> · '+(r.T?'Smoker':'Non-smoker')+' · '+(r.Y?'CVD':'No CVD')+'<br>Age '+fmt(r.age,0)+', BMI '+fmt(r.bmi,1)+', income '+fmt(r.income,2)+'<br>ê='+fmt(q.eRaw,3)+ep+', m̂₀='+fmt(q.m0,3)+', m̂₁='+fmt(q.m1,3)+'<br>plug-in contrast '+signedPct(q.base,2)+'; augmentation '+signedPct(q.a1-q.a0,2)+'<br>φ̂Δ,i='+signedPct(q.signal,2)+'; φ̂ᶜΔ,i='+signedPct(q.centeredSignal,2)+'; IF̂stack='+signedPct(q.stackIF,2)}
+function renderScatter(){
+  const svg=$('scatterSvg'),W=850,H=470,m={l:62,r:20,t:18,b:55},pw=W-m.l-m.r,ph=H-m.t-m.b,xm=varMeta[state.x],ym=varMeta[state.y],x=xv=>m.l+(xv-xm.domain[0])/(xm.domain[1]-xm.domain[0])*pw,y=yv=>m.t+ph-(yv-ym.domain[0])/(ym.domain[1]-ym.domain[0])*ph;
+  let s='<style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="'+W+'" height="'+H+'" fill="#fff"/>';
+  for(let k=0;k<=5;k++){const xv=xm.domain[0]+(xm.domain[1]-xm.domain[0])*k/5,px=x(xv);s+='<line x1="'+px+'" x2="'+px+'" y1="'+m.t+'" y2="'+(m.t+ph)+'" stroke="'+COLORS.grid+'"/>'+svgText(px,m.t+ph+23,fmt(xv,state.x==='income'?1:0),'text-anchor="middle" font-size="10" fill="'+COLORS.muted+'"')}
+  for(let k=0;k<=5;k++){const yv=ym.domain[0]+(ym.domain[1]-ym.domain[0])*k/5,py=y(yv);s+='<line x1="'+m.l+'" x2="'+(m.l+pw)+'" y1="'+py+'" y2="'+py+'" stroke="'+COLORS.grid+'"/>'+svgText(m.l-8,py+4,fmt(yv,state.y==='income'?1:0),'text-anchor="end" font-size="10" fill="'+COLORS.muted+'"')}
+  s+='<line x1="'+m.l+'" x2="'+(m.l+pw)+'" y1="'+(m.t+ph)+'" y2="'+(m.t+ph)+'" stroke="#AAB4C3"/><line x1="'+m.l+'" x2="'+m.l+'" y1="'+m.t+'" y2="'+(m.t+ph)+'" stroke="#AAB4C3"/>'+svgText(m.l+pw/2,H-12,xm.label,'text-anchor="middle" font-size="12" font-weight="750" fill="'+COLORS.ink+'"')+'<g transform="translate(16 '+(m.t+ph/2)+') rotate(-90)">'+svgText(0,0,ym.label,'text-anchor="middle" font-size="12" font-weight="750" fill="'+COLORS.ink+'"')+'</g>';
+  const vals=state.rows.map((_,i)=>{const q=currentSubjectValues(i);return state.size==='weight'?q.w:state.size==='influence'?Math.abs(q.stackIF):Math.abs(q.a1-q.a0)}),q95=Math.max(1e-6,quantile(vals,.95));
+  const order=state.rows.map((_,i)=>i).sort((a,b)=>vals[a]-vals[b]);
+  order.forEach(i=>{const q=currentSubjectValues(i),r=q.r,rv=clamp(3.5+7*Math.sqrt(vals[i]/q95),3.5,13),cx=x(r[state.x]),cy=y(r[state.y]),col=r.T?COLORS.smoke:COLORS.control,limited=q.e<=state.clip+.005||q.e>=1-state.clip-.005;
+    if(limited)s+='<circle cx="'+cx+'" cy="'+cy+'" r="'+(rv+5)+'" fill="none" stroke="'+COLORS.danger+'" stroke-width="2" stroke-dasharray="4 3" opacity=".82"/>';
+    if(r.Y)s+='<circle cx="'+cx+'" cy="'+cy+'" r="'+(rv+2.5)+'" fill="none" stroke="#111827" stroke-width="2" opacity=".85"/>';
+    s+='<circle class="subject-point" data-i="'+i+'" cx="'+cx+'" cy="'+cy+'" r="'+rv+'" fill="'+col+'" fill-opacity=".72" stroke="'+(i===state.selected?COLORS.accent:'#fff')+'" stroke-width="'+(i===state.selected?3.5:1.2)+'" style="cursor:pointer"/>';
+  });
+  s+=svgText(m.l+6,m.t+16,'Point size: '+({weight:'inverse weight',influence:'|stacked-estimator influence value|',augmentation:'|augmentation correction|'}[state.size]),'font-size="11" font-weight="750" fill="'+COLORS.muted+'"');svg.innerHTML=s;
+  svg.querySelectorAll('.subject-point').forEach(el=>{const i=+el.dataset.i;el.onpointerenter=e=>showTip(e,subjectTip(i));el.onpointermove=moveTip;el.onpointerleave=hideTip;el.onclick=()=>{state.selected=i;renderScatter();renderSubject();renderTable()}});
+}
+function renderSubject(){
+  const q=currentSubjectValues(state.selected),r=q.r,limited=q.eRaw<=state.clip+.005||q.eRaw>=1-state.clip-.005,clipped=Math.abs(q.eRaw-q.e)>1e-9;
+  $('subjectPanel').innerHTML='<div class="subject-id"><strong>'+r.id+'</strong><span class="status-pill '+(r.T?'status-smoke':'status-control')+'">'+(r.T?'SMOKER':'NON-SMOKER')+'</span></div><div class="kv">'+
+    [['Observed outcome',r.Y?'CVD':'No CVD'],['Age',fmt(r.age,0)+' y'],['BMI',fmt(r.bmi,1)],['Income ratio',fmt(r.income,2)],['Female',r.female?'Yes':'No'],['College',r.college?'Yes':'No'],['Hypertension',r.htn?'Yes':'No'],['Fitted ê(X)',fmt(q.eRaw,3)],['Used ẽ(X)',fmt(q.e,3)+(clipped?' (clipped)':'')],['m̂₀(X)',fmt(q.m0,3)],['m̂₁(X)',fmt(q.m1,3)],['Inverse weight',fmt(q.w,2)],['Support',limited?'Limited':'Adequate']].map(x=>'<div><span class="label">'+x[0]+'</span><span class="num">'+x[1]+'</span></div>').join('')+'</div><div class="decomp-box"><div class="small">Subject-level AIPW signal</div><div class="formula">plug-in contrast = m̂₁(Xᵢ) − m̂₀(Xᵢ) = '+fmt(q.m1,3)+' − '+fmt(q.m0,3)+' = '+signedPct(q.base,2)+'</div><div class="formula">treated augmentation = Tᵢ/ẽᵢ · {Yᵢ−m̂₁(Xᵢ)} = '+signedPct(q.a1,2)+'</div><div class="formula">control augmentation = (1−Tᵢ)/(1−ẽᵢ) · {Yᵢ−m̂₀(Xᵢ)} = '+signedPct(q.a0,2)+'</div><div class="formula">φ̂Δ,i = plug-in contrast + treated augmentation − control augmentation</div><div class="result">φ̂Δ,i = '+signedPct(q.signal,2)+'</div><div class="formula" style="margin-top:5px">φ̂ᶜΔ,i = φ̂Δ,i − Δ̂ = '+signedPct(q.centeredSignal,2)+'</div><div class="formula">IF̂stackΔ,i = −cᵀÂ⁻¹Uᵢ(θ̂) = '+signedPct(q.stackIF,2)+'</div><div class="meaning" style="margin-top:5px">φ̂ᶜΔ is the empirically centered AIPW signal. IF̂stack is the actual influence value used by the finite-dimensional sandwich; they need not be equal under one-model misspecification.</div></div><div class="subject-nav"><button id="prevSubject">← Previous</button><button id="nextSubject">Next →</button></div>';
+  $('prevSubject').onclick=()=>{state.selected=(state.selected-1+state.rows.length)%state.rows.length;renderScatter();renderSubject();renderTable()};$('nextSubject').onclick=()=>{state.selected=(state.selected+1)%state.rows.length;renderScatter();renderSubject();renderTable()};
+}
+
+function histogram(values,weights,bins=20,domain=[0,1]){const out=Array(bins).fill(0),[lo,hi]=domain;let sw=0;for(let i=0;i<values.length;i++){const x=clamp(values[i],lo,hi-1e-10),b=Math.floor((x-lo)/(hi-lo)*bins),w=weights?weights[i]:1;out[b]+=w;sw+=w}return out.map(v=>sw?v/sw:0)}
+function renderPropensity(){
+  const c=state.current,g1=[],g0=[];state.rows.forEach((r,i)=>(r.T?g1:g0).push(c.eRaw?c.eRaw[i]:c.e[i]));const h1=histogram(g1,null,24,[0,1]),h0=histogram(g0,null,24,[0,1]),W=780,H=360,m={l:52,r:22,t:25,b:52},pw=W-m.l-m.r,ph=H-m.t-m.b,max=Math.max(...h1,...h0,.01)*1.18,bw=pw/24;let s='<style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="780" height="360" fill="#fff"/>';
+  for(let k=0;k<=5;k++){const x=m.l+pw*k/5;s+='<line x1="'+x+'" x2="'+x+'" y1="'+m.t+'" y2="'+(m.t+ph)+'" stroke="'+COLORS.grid+'"/>'+svgText(x,m.t+ph+22,(k/5).toFixed(1),'text-anchor="middle" font-size="10" fill="'+COLORS.muted+'"')}
+  for(let i=0;i<24;i++){const x=m.l+i*bw;s+='<rect x="'+(x+1)+'" y="'+(m.t+ph-ph*h0[i]/max)+'" width="'+(bw-2)+'" height="'+(ph*h0[i]/max)+'" fill="'+COLORS.control+'" fill-opacity=".30"/><rect x="'+(x+1)+'" y="'+(m.t+ph-ph*h1[i]/max)+'" width="'+(bw-2)+'" height="'+(ph*h1[i]/max)+'" fill="'+COLORS.smoke+'" fill-opacity=".30"/>'}
+  const path=a=>a.map((v,i)=>(i?'L':'M')+' '+(m.l+(i+.5)*bw)+' '+(m.t+ph-ph*v/max)).join(' ');s+='<path d="'+path(h0)+'" fill="none" stroke="'+COLORS.control+'" stroke-width="3"/><path d="'+path(h1)+'" fill="none" stroke="'+COLORS.smoke+'" stroke-width="3"/>';
+  for(const v of [state.clip,1-state.clip]){const x=m.l+pw*v;s+='<line x1="'+x+'" x2="'+x+'" y1="'+m.t+'" y2="'+(m.t+ph)+'" stroke="#111827" stroke-width="2" stroke-dasharray="6 4"/>'}
+  s+='<line x1="'+m.l+'" x2="'+(m.l+pw)+'" y1="'+(m.t+ph)+'" y2="'+(m.t+ph)+'" stroke="#AAB4C3"/>'+svgText(W/2,H-12,'Raw fitted propensity score ê(X); AIPW uses clipped ẽ when ε>0','text-anchor="middle" font-size="12" font-weight="750" fill="'+COLORS.ink+'"')+svgText(m.l+4,m.t+14,'Max observed inverse weight '+fmt(Math.max(...c.weights),2),'font-size="10" font-weight="750" fill="'+COLORS.muted+'"');$('propensitySvg').innerHTML=s;
+}
+function calibrationBins(){const a=state.rows.map((r,i)=>({p:state.current.mobs[i],y:r.Y})).sort((x,y)=>x.p-y.p),K=10,out=[];for(let k=0;k<K;k++){const lo=Math.floor(k*a.length/K),hi=Math.floor((k+1)*a.length/K),g=a.slice(lo,hi);if(g.length)out.push({p:mean(g.map(x=>x.p)),y:mean(g.map(x=>x.y)),n:g.length})}return out}
+function renderCalibration(){
+  const bins=calibrationBins(),W=780,H=360,m={l:62,r:24,t:25,b:55},L=m.l,R=W-m.r,T=m.t,B=H-m.b;let max=Math.max(.25,...bins.flatMap(b=>[b.p,b.y]))*1.12;max=Math.min(1,max);let s='<style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="780" height="360" fill="#fff"/>';
+  for(let k=0;k<=5;k++){const v=max*k/5,x=sx(v,0,max,L,R),y=sy(v,0,max,T,B);s+='<line x1="'+x+'" x2="'+x+'" y1="'+T+'" y2="'+B+'" stroke="'+COLORS.grid+'"/><line x1="'+L+'" x2="'+R+'" y1="'+y+'" y2="'+y+'" stroke="'+COLORS.grid+'"/>'+svgText(x,B+22,pct(v,0),'text-anchor="middle" font-size="10" fill="'+COLORS.muted+'"')+svgText(L-8,y+4,pct(v,0),'text-anchor="end" font-size="10" fill="'+COLORS.muted+'"')}
+  s+='<line x1="'+L+'" x2="'+R+'" y1="'+B+'" y2="'+T+'" stroke="#111827" stroke-width="2" stroke-dasharray="6 4"/>';
+  bins.forEach((b,i)=>{const x=sx(b.p,0,max,L,R),y=sy(b.y,0,max,T,B);s+='<circle cx="'+x+'" cy="'+y+'" r="'+(4+Math.sqrt(b.n)/3)+'" fill="'+COLORS.accent+'" fill-opacity=".78" stroke="#fff" stroke-width="1.5"/>'+svgText(x,y-10,String(i+1),'text-anchor="middle" font-size="8" fill="'+COLORS.muted+'"')});
+  s+=svgText((L+R)/2,H-13,'Mean fitted observed-treatment risk','text-anchor="middle" font-size="12" font-weight="750" fill="'+COLORS.ink+'"')+'<g transform="translate(16 '+((T+B)/2)+') rotate(-90)">'+svgText(0,0,'Observed CVD frequency','text-anchor="middle" font-size="12" font-weight="750" fill="'+COLORS.ink+'"')+'</g>';$('calibrationSvg').innerHTML=s;
+  const y=state.rows.map(r=>r.Y),p=state.current.mobs,brier=mean(y.map((v,i)=>(v-p[i])**2)),meanRes=mean(y.map((v,i)=>v-p[i])),auc=computeAUC(y,p);$('calibrationStrip').innerHTML=[['Brier score',fmt(brier,3)],['Mean residual',signedPct(meanRes,2)],['Apparent AUC',fmt(auc,3)]].map(x=>'<div class="diag"><div class="name">'+x[0]+'</div><div class="num">'+x[1]+'</div></div>').join('');
+}
+function computeAUC(y,p){let pos=0,neg=0,score=0;for(let i=0;i<y.length;i++)if(y[i])pos++;else neg++;if(!pos||!neg)return NaN;for(let i=0;i<y.length;i++)if(y[i])for(let j=0;j<y.length;j++)if(!y[j])score+=p[i]>p[j]?1:p[i]===p[j]?.5:0;return score/(pos*neg)}
+
+function renderDecomposition(){
+  const c=state.current,vals=[c.orPart,c.correction,c.aipwRD,state.targetATE,0],range=niceRange(vals,.10),lo=range[0],hi=range[1],W=780,H=360,L=165,R=730,T=42,B=290,rows=[{name:'Plug-in contrast',sub:'Pₙ[m̂₁−m̂₀]',v:c.orPart,c:COLORS.teal,y:92},{name:'Augmentation correction',sub:'Pₙ[T/ê·res₁ − (1−T)/(1−ê)·res₀]',v:c.correction,c:COLORS.amber,y:170},{name:'Final AIPW estimate',sub:'Pₙφ̂Δ = sum of rows above',v:c.aipwRD,c:COLORS.accent,y:248}];let s='<style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="780" height="360" fill="#fff"/>';
+  for(const t of axisTicks(lo,hi,5)){const x=sx(t,lo,hi,L,R);s+='<line x1="'+x+'" x2="'+x+'" y1="'+T+'" y2="'+B+'" stroke="'+COLORS.grid+'"/>'+svgText(x,315,signedPct(t,0),'text-anchor="middle" font-size="9" fill="'+COLORS.muted+'"')}
+  if(lo<=0&&hi>=0){const x=sx(0,lo,hi,L,R);s+='<line x1="'+x+'" x2="'+x+'" y1="'+T+'" y2="'+B+'" stroke="#667085" stroke-width="2" stroke-dasharray="5 4"/>'}
+  const xt=sx(state.targetATE,lo,hi,L,R);s+='<line x1="'+xt+'" x2="'+xt+'" y1="'+T+'" y2="'+B+'" stroke="'+COLORS.green+'" stroke-width="2.5" stroke-dasharray="6 4"/>'+svgText(xt,T-10,'target '+signedPct(state.targetATE,1),'text-anchor="middle" font-size="9" font-weight="850" fill="'+COLORS.green+'"');
+  rows.forEach(r=>{const x0=sx(0,lo,hi,L,R),xv=sx(r.v,lo,hi,L,R),x=Math.min(x0,xv),w=Math.abs(xv-x0);s+=svgText(L-12,r.y-2,r.name,'text-anchor="end" font-size="11" font-weight="800" fill="'+COLORS.ink+'"')+svgText(L-12,r.y+12,r.sub,'text-anchor="end" font-size="8" fill="'+COLORS.muted+'"')+'<rect x="'+x+'" y="'+(r.y-14)+'" width="'+Math.max(1,w)+'" height="28" rx="8" fill="'+r.c+'" fill-opacity=".78"/><circle cx="'+xv+'" cy="'+r.y+'" r="5.5" fill="'+r.c+'" stroke="#fff" stroke-width="1.5"/>'+svgText(r.v>=0?xv+8:xv-8,r.y-19,signedPct(r.v,2),'text-anchor="'+(r.v>=0?'start':'end')+'" font-size="10" font-weight="850" fill="'+r.c+'"')});
+  s+=svgText((L+R)/2,348,'Risk-difference scale','text-anchor="middle" font-size="11" font-weight="750" fill="'+COLORS.ink+'"');$('decompSvg').innerHTML=s;
+  $('decompNote').innerHTML='<strong>Current correction:</strong> smoker residual correction '+signedPct(c.meanC1,2)+' minus non-smoker residual correction '+signedPct(c.meanC0,2)+' = '+signedPct(c.correction,2)+'. When the outcome model is correct, these correction means should be close to zero in expectation.';
+}
+function renderPseudo(){
+  const vals=state.current.aipwXi,lo=quantile(vals,.02),hi=quantile(vals,.98),domain=niceRange([lo,hi,0,state.current.aipwRD],.20),a=domain[0],b=domain[1],bins=28,g1=[],g0=[];state.rows.forEach((r,i)=>(r.T?g1:g0).push(vals[i]));const h1=histogram(g1,null,bins,[a,b]),h0=histogram(g0,null,bins,[a,b]),W=780,H=360,m={l:55,r:22,t:25,b:55},pw=W-m.l-m.r,ph=H-m.t-m.b,max=Math.max(...h1,...h0,.01)*1.2,bw=pw/bins;let s='<style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="780" height="360" fill="#fff"/>';
+  for(let k=0;k<=5;k++){const v=a+(b-a)*k/5,x=m.l+pw*k/5;s+='<line x1="'+x+'" x2="'+x+'" y1="'+m.t+'" y2="'+(m.t+ph)+'" stroke="'+COLORS.grid+'"/>'+svgText(x,m.t+ph+22,signedPct(v,0),'text-anchor="middle" font-size="9" fill="'+COLORS.muted+'"')}
+  for(let i=0;i<bins;i++){const x=m.l+i*bw;s+='<rect x="'+(x+1)+'" y="'+(m.t+ph-ph*h0[i]/max)+'" width="'+(bw-2)+'" height="'+(ph*h0[i]/max)+'" fill="'+COLORS.control+'" fill-opacity=".30"/><rect x="'+(x+1)+'" y="'+(m.t+ph-ph*h1[i]/max)+'" width="'+(bw-2)+'" height="'+(ph*h1[i]/max)+'" fill="'+COLORS.smoke+'" fill-opacity=".30"/>'}
+  const path=h=>h.map((v,i)=>(i?'L':'M')+' '+(m.l+(i+.5)*bw)+' '+(m.t+ph-ph*v/max)).join(' ');s+='<path d="'+path(h0)+'" fill="none" stroke="'+COLORS.control+'" stroke-width="3"/><path d="'+path(h1)+'" fill="none" stroke="'+COLORS.smoke+'" stroke-width="3"/>';
+  const xm=m.l+pw*(state.current.aipwRD-a)/(b-a);s+='<line x1="'+xm+'" x2="'+xm+'" y1="'+m.t+'" y2="'+(m.t+ph)+'" stroke="#111827" stroke-width="2.5" stroke-dasharray="6 4"/>'+svgText(xm,m.t+15,'mean '+signedPct(state.current.aipwRD,1),'text-anchor="middle" font-size="9" font-weight="850" fill="#111827"')+svgText(W/2,H-12,'Uncentered AIPW signal φ̂Δ,i','text-anchor="middle" font-size="12" font-weight="750" fill="'+COLORS.ink+'"');$('pseudoSvg').innerHTML=s;
+}
+
+function renderMatrix(){
+  let h='<div class="matrix-corner">Outcome model →<br>Propensity ↓</div><div class="matrix-head">OR correct</div><div class="matrix-head">OR misspecified</div>',truncActive=state.truncationRate>1e-5;
+  for(const ps of ['correct','miss']){
+    h+='<div class="matrix-side">PS '+(ps==='correct'?'correct':'misspecified')+'</div>';
+    for(const or of ['correct','miss']){
+      const key=comboKey(ps,or),c=state.combos[key],selected=key===comboKey(state.psSpec,state.orSpec),bias=c.aipwRD-state.targetATE;
+      const protectedCell=or==='correct'||(ps==='correct'&&!truncActive),caution=ps==='correct'&&or==='miss'&&truncActive,cls=protectedCell?'protected':caution?'caution':'unprotected';
+      const guarantee=protectedCell?'theoretically protected':caution?'PS-only protection altered by truncation':'no DR protection',col=protectedCell?COLORS.green:caution?COLORS.amber:COLORS.danger;
+      h+='<button class="matrix-cell '+cls+' '+(selected?'selected':'')+'" data-ps="'+ps+'" data-or="'+or+'"><div class="model">PS '+(ps==='correct'?'correct':'wrong')+' · OR '+(or==='correct'?'correct':'wrong')+'</div><div class="estimate">'+signedPct(c.aipwRD,1)+'</div><div class="bias">bias vs target '+signedPct(bias,1)+'</div><div class="guarantee" style="color:'+col+'">'+guarantee+'</div></button>';
+    }
+  }
+  $('drMatrix').innerHTML=h;$('drMatrix').querySelectorAll('.matrix-cell').forEach(b=>b.onclick=()=>selectCombo(b.dataset.ps,b.dataset.or));
+}
+
+function renderForest(){
+  const c=state.current,inf=state.inference,methods=[
+    {name:'Crude',est:inf.crude.rd,ci:inf.crude.ci,se:inf.crude.se,color:COLORS.gray,note:'Unadjusted difference in risks'},
+    {name:'IPW',est:c.ipwRD,ci:inf.ipw.ci,se:inf.ipw.se,color:COLORS.smoke,note:inf.ipw.method},
+    {name:'Outcome regression',est:c.orRD,ci:inf.or.ci,se:inf.or.se,color:COLORS.teal,note:inf.or.method},
+    {name:'AIPW / doubly robust',est:c.aipwRD,ci:inf.aipw.ci,se:inf.aipw.se,color:COLORS.accent,note:inf.aipw.method}
+  ];
+  $('estimateGrid').innerHTML=methods.map((r,i)=>'<div class="est '+(i===3?'current':'')+'"><div class="name">'+r.name+'</div><div class="rd">'+signedPct(r.est,1)+'</div><div class="sub">SE '+pct(r.se,1)+'</div></div>').join('');
+  const vals=[state.targetATE,0];methods.forEach(r=>vals.push(r.ci[0],r.ci[1],r.est));let [lo,hi]=niceRange(vals,.12);lo=Math.max(-.8,lo);hi=Math.min(.8,hi);const W=800,H=390,L=190,R=650,T=45,B=310,ys=[88,151,214,277];let s='<style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="800" height="390" fill="#fff"/>';
+  for(const t of axisTicks(lo,hi,5)){const x=sx(t,lo,hi,L,R);s+='<line x1="'+x+'" x2="'+x+'" y1="'+T+'" y2="'+B+'" stroke="'+COLORS.grid+'"/>'+svgText(x,339,signedPct(t,0),'text-anchor="middle" font-size="9" fill="'+COLORS.muted+'"')}
+  if(lo<=0&&hi>=0){const x=sx(0,lo,hi,L,R);s+='<line x1="'+x+'" x2="'+x+'" y1="'+T+'" y2="'+B+'" stroke="#667085" stroke-width="1.7" stroke-dasharray="4 4"/>'}
+  const xt=sx(state.targetATE,lo,hi,L,R);s+='<line x1="'+xt+'" x2="'+xt+'" y1="'+(T-5)+'" y2="'+B+'" stroke="'+COLORS.green+'" stroke-width="2.5" stroke-dasharray="7 5"/>'+svgText(xt,T-11,'target RD '+signedPct(state.targetATE,1),'text-anchor="middle" font-size="9" font-weight="850" fill="'+COLORS.green+'"');
+  methods.forEach((r,i)=>{const y=ys[i],xl=sx(clamp(r.ci[0],lo,hi),lo,hi,L,R),xu=sx(clamp(r.ci[1],lo,hi),lo,hi,L,R),xe=sx(clamp(r.est,lo,hi),lo,hi,L,R),cover=r.ci[0]<=state.targetATE&&state.targetATE<=r.ci[1],cc=cover?COLORS.green:COLORS.danger;s+=svgText(L-12,y+4,r.name,'text-anchor="end" font-size="11" font-weight="800" fill="'+COLORS.ink+'"')+'<line x1="'+xl+'" x2="'+xu+'" y1="'+y+'" y2="'+y+'" stroke="'+cc+'" stroke-width="5" stroke-linecap="round"/><line x1="'+xl+'" x2="'+xl+'" y1="'+(y-8)+'" y2="'+(y+8)+'" stroke="'+cc+'" stroke-width="2"/><line x1="'+xu+'" x2="'+xu+'" y1="'+(y-8)+'" y2="'+(y+8)+'" stroke="'+cc+'" stroke-width="2"/><circle cx="'+xe+'" cy="'+y+'" r="7" fill="'+r.color+'" stroke="#fff" stroke-width="2"/>'+svgText(678,y-2,signedPct(r.est,1),'font-size="10" font-weight="850" fill="'+COLORS.ink+'"')+svgText(678,y+13,cover?'CONTAINS TARGET':'MISSES TARGET','font-size="8" font-weight="900" fill="'+cc+'"')});
+  s+=svgText((L+R)/2,377,'Risk difference','text-anchor="middle" font-size="11" font-weight="750" fill="'+COLORS.ink+'"');$('forestSvg').innerHTML=s;
+  $('ciStatusGrid').innerHTML=methods.map((r,i)=>{const cover=r.ci[0]<=state.targetATE&&state.targetATE<=r.ci[1];return'<div class="ci-status '+(cover?'cover':'miss')+' '+(i===3?'aipw':'')+'"><div class="name">'+r.name+'</div><div class="value">'+signedPct(r.est,2)+'<br>['+pct(r.ci[0],2)+', '+pct(r.ci[1],2)+']</div><span class="ci-badge">'+(cover?'target contained':'target missed')+'</span></div>'}).join('');
+  $('forestNote').innerHTML='<strong>Current inference:</strong> AIPW uses '+inf.aipw.method+'. IPW and outcome-regression comparators use the corresponding nuisance-aware sandwiches under the selected fitting strategy. AIPW has the union-model point-consistency property, subject to identification, positivity, and the truncation caveat; the two comparators do not.';
+}
+
+function coverageSummary(key){const rr=state.coverage.records.filter(r=>r.key===key);if(!rr.length)return null;const bias=mean(rr.map(r=>r.est-r.truth)),coverage=mean(rr.map(r=>r.cover?1:0)),rmse=Math.sqrt(mean(rr.map(r=>(r.est-r.truth)**2))),width=mean(rr.map(r=>r.upper-r.lower)),fallbacks=rr.filter(r=>r.fallback).length;return{n:rr.length,bias,coverage,rmse,width,fallbacks}}
+function renderCoverage(){
+  const C=state.coverage,p=C.total?100*C.done/C.total:0;$('coverageProgressFill').style.width=p.toFixed(1)+'%';$('coverageProgressPct').textContent=Math.round(p)+'%';$('runCoverage').disabled=C.running;$('stopCoverage').disabled=!C.running;$('coverageProgressText').textContent=C.running?'Generating study '+C.done+' of '+C.total:C.records.length?'Experiment complete: '+C.done+' studies per cell':'No experiment run yet';
+  const keys=[['correct','correct'],['correct','miss'],['miss','correct'],['miss','miss']];$('coverageMatrix').innerHTML=keys.map(([ps,or])=>{const key=comboKey(ps,or),z=coverageSummary(key),sel=C.selectedKey===key;return'<button class="coverage-stat '+(sel?'selected':'')+'" data-key="'+key+'"><div class="name">PS '+(ps==='correct'?'correct':'wrong')+' · OR '+(or==='correct'?'correct':'wrong')+'</div><div class="number">'+(z?pct(z.coverage,1):'—')+'</div><div class="detail">'+(z?'bias '+signedPct(z.bias,2)+' · RMSE '+pct(z.rmse,2)+(z.fallbacks?' · fallback '+z.fallbacks:''):'coverage · bias · RMSE')+'</div></button>'}).join('');$('coverageMatrix').querySelectorAll('button').forEach(b=>b.onclick=()=>{C.selectedKey=b.dataset.key;renderCoverage()});
+  const rows=C.records.filter(r=>r.key===C.selectedKey);if(!rows.length){$('coverageSvg').innerHTML='<style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="800" height="430" fill="#fff"/>'+svgText(400,190,'Run repeated studies to populate this panel.','text-anchor="middle" font-size="17" font-weight="850" fill="'+COLORS.ink+'"')+svgText(400,220,'Each interval will be centered by the fixed reference-population target.','text-anchor="middle" font-size="11" fill="'+COLORS.muted+'"');$('coverageEmpty').style.display='block';return}$('coverageEmpty').style.display='none';
+  const visible=rows.slice(Math.max(0,rows.length-55)),vals=[0];visible.forEach(r=>vals.push(r.lower-r.truth,r.upper-r.truth,r.est-r.truth));let[lo,hi]=niceRange(vals,.08);const W=800,H=430,L=65,R=775,T=35,B=350;let s='<style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="800" height="430" fill="#fff"/>';
+  for(const t of axisTicks(lo,hi,5)){const y=sy(t,lo,hi,T,B);s+='<line x1="'+L+'" x2="'+R+'" y1="'+y+'" y2="'+y+'" stroke="'+COLORS.grid+'"/>'+svgText(L-8,y+4,signedPct(t,0),'text-anchor="end" font-size="9" fill="'+COLORS.muted+'"')}
+  const y0=sy(0,lo,hi,T,B);s+='<line x1="'+L+'" x2="'+R+'" y1="'+y0+'" y2="'+y0+'" stroke="#111827" stroke-width="2.3" stroke-dasharray="7 5"/>'+svgText(R-2,y0-7,'fixed target ATE','text-anchor="end" font-size="9" font-weight="850" fill="#111827"');
+  visible.forEach((r,i)=>{const x=L+(R-L)*(i+.5)/visible.length,yl=sy(clamp(r.lower-r.truth,lo,hi),lo,hi,T,B),yu=sy(clamp(r.upper-r.truth,lo,hi),lo,hi,T,B),ye=sy(clamp(r.est-r.truth,lo,hi),lo,hi,T,B),col=r.cover?COLORS.green:COLORS.danger;s+='<line x1="'+x+'" x2="'+x+'" y1="'+yu+'" y2="'+yl+'" stroke="'+col+'" stroke-width="2.2"/><line x1="'+(x-3)+'" x2="'+(x+3)+'" y1="'+yu+'" y2="'+yu+'" stroke="'+col+'"/><line x1="'+(x-3)+'" x2="'+(x+3)+'" y1="'+yl+'" y2="'+yl+'" stroke="'+col+'"/><circle cx="'+x+'" cy="'+ye+'" r="3.2" fill="'+col+'"/>'});
+  const label=C.selectedKey.split('|').map(x=>x==='correct'?'correct':'wrong');s+=svgText((L+R)/2,382,'Independent study (most recent '+visible.length+')','text-anchor="middle" font-size="11" font-weight="750" fill="'+COLORS.ink+'"')+'<g transform="translate(16 '+((T+B)/2)+') rotate(-90)">'+svgText(0,0,'AIPW estimate − target ATE','text-anchor="middle" font-size="11" font-weight="750" fill="'+COLORS.ink+'"')+'</g>'+svgText((L+R)/2,413,'Selected cell: PS '+label[0]+'; outcome regression '+label[1], 'text-anchor="middle" font-size="10" fill="'+COLORS.muted+'"');$('coverageSvg').innerHTML=s;
+}
+function runCoverage(){
+  if(state.coverage.running)return;const M=+$('coverageM').value,token=++state.coverage.token,settings=settingsSnapshot(),mode=state.fitMode,clip=state.clip,base=state.seed;state.coverage={running:true,token,done:0,total:M,records:[],selectedKey:comboKey(state.psSpec,state.orSpec)};renderCoverage();
+  function one(rep){const study=generateCohort(settings,(base+Math.imul(rep+1,2654435761))>>>0),nuis=fitAllNuisance(study.rows,mode,(base+rep*7919)>>>0);for(const ps of ['correct','miss'])for(const or of ['correct','miss']){const c=computeCombo(study.rows,nuis,ps,or,clip),inf=stackedInference('aipw',study.rows,nuis,c,ps,or,clip,mode),se=inf.se,lower=inf.ci[0],upper=inf.ci[1],truth=study.targetATE;state.coverage.records.push({key:comboKey(ps,or),est:c.aipwRD,se,lower,upper,truth,cover:lower<=truth&&truth<=upper,fallback:!!inf.fallback})}}
+  function step(){if(token!==state.coverage.token)return;const end=Math.min(M,state.coverage.done+1);for(;state.coverage.done<end;state.coverage.done++)one(state.coverage.done);renderCoverage();if(state.coverage.done<M)setTimeout(step,0);else{state.coverage.running=false;renderCoverage()}}setTimeout(step,0);
+}
+function stopCoverage(){state.coverage.token++;state.coverage.running=false;renderCoverage()}
+
+function renderTable(){
+  const rows=state.rows.map((r,i)=>({r,i,q:currentSubjectValues(i)})).sort((a,b)=>Math.abs(b.q.stackIF)-Math.abs(a.q.stackIF)).slice(0,60);$('subjectTable').innerHTML=rows.map(o=>{const r=o.r,q=o.q;return'<tr data-i="'+o.i+'" class="'+(o.i===state.selected?'selected':'')+'"><td>'+r.id+'</td><td>'+fmt(r.age,1)+'</td><td>'+fmt(r.bmi,1)+'</td><td>'+fmt(r.income,2)+'</td><td>'+r.T+'</td><td>'+r.Y+'</td><td>'+fmt(q.eRaw,3)+'</td><td>'+fmt(q.e,3)+'</td><td>'+fmt(q.m0,3)+'</td><td>'+fmt(q.m1,3)+'</td><td>'+signedPct(q.base,2)+'</td><td>'+signedPct(q.a1,2)+'</td><td>'+signedPct(q.a0,2)+'</td><td>'+signedPct(q.signal,2)+'</td><td>'+signedPct(q.centeredSignal,2)+'</td><td>'+signedPct(q.stackIF,2)+'</td></tr>'}).join('');$('subjectTable').querySelectorAll('tr').forEach(tr=>tr.onclick=()=>{state.selected=+tr.dataset.i;renderScatter();renderSubject();renderTable()});
+}
+function exportCSV(){
+  const h=['id','age','bmi','income_ratio','female','college','hypertension','smoker','cvd','true_propensity','fitted_propensity_raw','propensity_used_in_aipw','m0_hat','m1_hat','plugin_contrast','treated_augmentation','control_augmentation','aipw_signal_phi_delta','centered_aipw_signal_phi_delta_c','stacked_influence_value'],lines=[h.join(',')];state.rows.forEach((r,i)=>{const q=currentSubjectValues(i);lines.push([r.id,r.age.toFixed(5),r.bmi.toFixed(5),r.income.toFixed(5),r.female,r.college,r.htn,r.T,r.Y,r.trueE.toFixed(7),q.eRaw.toFixed(7),q.e.toFixed(7),q.m0.toFixed(7),q.m1.toFixed(7),q.base.toFixed(7),q.a1.toFixed(7),q.a0.toFixed(7),q.signal.toFixed(7),q.centeredSignal.toFixed(7),q.stackIF.toFixed(7)].join(','))});downloadBlob(lines.join('\n'),'text/csv;charset=utf-8','doubly_robust_aipw_eif_corrected_cohort.csv');
+}
+function renderAll(){renderMetrics();renderMath();renderScatter();renderSubject();renderPropensity();renderCalibration();renderDecomposition();renderPseudo();renderMatrix();renderForest();renderCoverage();renderTable()}
+
+function preset(name){
+  const p={bothCorrect:{conf:1.25,overlap:.72,nonlin:.75,hetero:.4,ps:'correct',or:'correct'},psCorrect:{conf:1.45,overlap:.62,nonlin:1.15,hetero:.65,ps:'correct',or:'miss'},orCorrect:{conf:1.45,overlap:.62,nonlin:1.15,hetero:.65,ps:'miss',or:'correct'},bothWrong:{conf:1.65,overlap:.55,nonlin:1.40,hetero:.80,ps:'miss',or:'miss'},poorOverlap:{conf:2.15,overlap:.22,nonlin:.85,hetero:.45,ps:'correct',or:'correct'},nonlinear:{conf:1.35,overlap:.68,nonlin:1.85,hetero:1.15,ps:'correct',or:'miss'}}[name];
+  $('confRange').value=p.conf;$('overlapRange').value=p.overlap;$('nonlinRange').value=p.nonlin;$('heteroRange').value=p.hetero;$('psModel').value=p.ps;$('orModel').value=p.or;rebuild();document.querySelectorAll('.preset').forEach(b=>b.classList.toggle('active',b.dataset.preset===name));
+}
+function reset(){
+  $('nRange').value=defaults.n;$('confRange').value=defaults.conf;$('overlapRange').value=defaults.overlap;$('nonlinRange').value=defaults.nonlin;$('heteroRange').value=defaults.hetero;$('effectRange').value=defaults.effect;$('seedInput').value=defaults.seed;$('psModel').value=defaults.psSpec;$('orModel').value=defaults.orSpec;$('fitMode').value=defaults.fitMode;$('clipRange').value=defaults.clip;$('xVar').value=defaults.x;$('yVar').value=defaults.y;$('sizeVar').value=defaults.size;state.selected=0;rebuild();
+}
+
+['nRange','confRange','overlapRange','nonlinRange','heteroRange','effectRange'].forEach(id=>{$(id).addEventListener('input',()=>{readControls();updateLabels();scheduleRebuild()})});
+$('seedInput').addEventListener('change',rebuild);$('fitMode').addEventListener('change',rebuild);
+$('psModel').addEventListener('change',()=>selectCombo($('psModel').value,state.orSpec));$('orModel').addEventListener('change',()=>selectCombo(state.psSpec,$('orModel').value));
+$('clipRange').addEventListener('input',()=>{readControls();state.truncationRate=populationTruncationRate(settingsSnapshot(),state.clip);updateLabels();state.combos={};for(const ps of ['correct','miss'])for(const or of ['correct','miss'])state.combos[comboKey(ps,or)]=computeCombo(state.rows,state.nuisance,ps,or,state.clip);computeCurrentInference();renderAll()});
+['xVar','yVar','sizeVar'].forEach(id=>$(id).addEventListener('change',()=>{readControls();renderScatter()}));
+$('newCohort').onclick=()=>{$('seedInput').value=((+$('seedInput').value+104729)%99999999)||1;rebuild()};$('resetControls').onclick=reset;document.querySelectorAll('.preset').forEach(b=>b.onclick=()=>preset(b.dataset.preset));
+$('runCoverage').onclick=runCoverage;$('stopCoverage').onclick=stopCoverage;$('exportCsv').onclick=exportCSV;document.querySelectorAll('[data-svg]').forEach(b=>b.onclick=()=>saveSvg(b.dataset.svg));window.addEventListener('resize',hideTip);
+initMathTabs();reset();
+})();
+</script>
+</body>
+</html>
