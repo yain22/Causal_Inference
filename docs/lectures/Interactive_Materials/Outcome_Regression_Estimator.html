@@ -1,0 +1,1062 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Outcome Regression Estimator — Se Yoon Lee, Ph.D.</title>
+<style>
+  :root{
+    color-scheme:light;
+    --ink:#162033; --muted:#667085; --line:#D7DEE8; --panel:#FFFFFF;
+    --bg:#F4F7FB; --smoke:#E56B2F; --control:#2F6EA5; --accent:#087E8B;
+    --green:#208A62; --amber:#B66A00; --danger:#C23B3B; --soft-orange:#FFF1E8;
+    --soft-blue:#EAF3FB; --soft-purple:#EAF8F8; --soft-green:#EAF8F2;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif}
+  body{min-width:320px}
+  button,select,input{font:inherit}
+  button{cursor:pointer}
+  .hero{padding:28px clamp(18px,4vw,58px) 22px;background:linear-gradient(135deg,#FFFFFF 0%,#F6F3FF 55%,#EDF6FC 100%);border-bottom:1px solid var(--line)}
+  .hero-inner{max-width:1760px;margin:0 auto;display:flex;gap:24px;align-items:flex-start;justify-content:space-between}
+  .hero h1{margin:0 0 7px;font-size:clamp(29px,3.1vw,49px);line-height:1.05;letter-spacing:-.7px}
+  .hero p{margin:0;max-width:1000px;color:var(--muted);font-size:clamp(15px,1.4vw,19px);line-height:1.55}
+
+  .hero .title-author{font-weight:600;white-space:nowrap}
+  @media(max-width:900px){.hero .title-author{display:block;margin-top:7px;font-size:.58em;letter-spacing:-.15px;white-space:normal}}
+  .clarifier{margin-top:13px;display:inline-flex;gap:9px;align-items:center;padding:9px 13px;border:1px solid #BFC9D8;border-radius:12px;background:rgba(255,255,255,.82);font-size:14px;font-weight:650}
+  .clarifier b{color:var(--accent)}
+  .hero-badge{flex:0 0 auto;padding:11px 15px;border-radius:999px;border:1px solid #A9DADD;background:#FFF;color:#086874;font-weight:800;font-size:13px;letter-spacing:.35px;white-space:nowrap}
+  .app{max-width:1760px;margin:0 auto;padding:18px;display:grid;grid-template-columns:330px minmax(0,1fr);gap:18px;align-items:start}
+  .controls{position:sticky;top:12px;background:var(--panel);border:1px solid var(--line);border-radius:20px;box-shadow:0 10px 28px rgba(20,32,55,.08);overflow:hidden}
+  .controls-head{padding:18px 18px 14px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#fff,#FAFBFD)}
+  .controls-head h2{margin:0 0 5px;font-size:19px}
+  .controls-head p{margin:0;color:var(--muted);font-size:13px;line-height:1.45}
+  .control-section{padding:15px 18px;border-bottom:1px solid #E7EBF1}
+  .control-section:last-child{border-bottom:0}
+  .section-label{font-size:11px;letter-spacing:.8px;text-transform:uppercase;color:#7B8495;font-weight:850;margin-bottom:10px}
+  .preset-row{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+  .preset{border:1px solid var(--line);background:#fff;border-radius:11px;padding:8px 9px;font-size:12px;font-weight:750;color:#344054}
+  .preset:hover{border-color:var(--accent);color:#086874;background:#FAF8FF}
+  .control{margin:0 0 14px}
+  .control:last-child{margin-bottom:0}
+  .control-top{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:6px}
+  .control label{font-size:13px;font-weight:720}
+  .value{font-size:12px;color:#086874;font-weight:850;font-variant-numeric:tabular-nums}
+  input[type="range"]{width:100%;accent-color:var(--accent)}
+  .range-ends{display:flex;justify-content:space-between;color:#98A2B3;font-size:10px;margin-top:2px}
+  select{width:100%;border:1px solid var(--line);border-radius:10px;background:#fff;padding:9px 10px;color:var(--ink)}
+  .checkrow{display:flex;gap:9px;align-items:flex-start;font-size:12px;color:#475467;line-height:1.35}
+  .checkrow input{margin-top:2px;accent-color:var(--accent)}
+  .primary-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .primary,.secondary{border-radius:11px;padding:9px 10px;font-weight:780;font-size:12px}
+  .primary{border:1px solid var(--accent);background:var(--accent);color:#fff}
+  .secondary{border:1px solid var(--line);background:#fff;color:#344054}
+  .primary:hover{filter:brightness(.96)}
+  .secondary:hover{border-color:var(--accent);color:#086874}
+  .teaching-note{font-size:11px;line-height:1.5;color:#667085;background:#F7F8FB;border-radius:10px;padding:9px 10px;margin-top:10px}
+  .workspace{min-width:0}
+  .metrics{display:grid;grid-template-columns:repeat(6,minmax(110px,1fr));gap:10px;margin-bottom:12px}
+  .metric{background:#fff;border:1px solid var(--line);border-radius:15px;padding:11px 13px;min-width:0;box-shadow:0 3px 12px rgba(20,32,55,.04)}
+  .metric .k{font-size:10px;color:#7B8495;text-transform:uppercase;font-weight:850;letter-spacing:.55px;white-space:nowrap}
+  .metric .v{margin-top:4px;font-size:19px;font-weight:850;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .grid-top{display:grid;grid-template-columns:minmax(0,1.75fr) minmax(280px,.75fr);gap:12px;margin-bottom:12px}
+  .grid-two{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+  .card{background:#fff;border:1px solid var(--line);border-radius:18px;box-shadow:0 6px 20px rgba(20,32,55,.055);min-width:0;overflow:hidden}
+  .card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:15px 16px 10px}
+  .card-head h3{margin:0 0 4px;font-size:17px;line-height:1.25}
+  .card-head p{margin:0;color:var(--muted);font-size:12px;line-height:1.45}
+  .mini-controls{display:flex;gap:7px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+  .mini-controls label{font-size:11px;font-weight:750;color:#667085}
+  .mini-controls select{width:auto;min-width:105px;padding:6px 8px;font-size:12px}
+  .legend{display:flex;flex-wrap:wrap;gap:12px;padding:0 16px 8px;color:#667085;font-size:11px}
+  .legend span{display:inline-flex;align-items:center;gap:5px}
+  .dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+  .ring{width:11px;height:11px;border-radius:50%;display:inline-block;border:2px solid #111;background:#fff}
+  svg.chart{display:block;width:100%;height:auto;overflow:visible;touch-action:none}
+  .chart-wrap{position:relative;padding:0 8px 10px}
+  .tooltip{position:fixed;z-index:40;pointer-events:none;background:#111827;color:white;border-radius:10px;padding:9px 10px;box-shadow:0 8px 24px rgba(0,0,0,.24);font-size:11px;line-height:1.45;opacity:0;transform:translate(10px,10px);transition:opacity .08s;max-width:230px}
+  .subject-body{padding:2px 16px 16px}
+  .subject-id{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+  .subject-id strong{font-size:24px}
+  .status-pill{padding:5px 8px;border-radius:999px;font-size:11px;font-weight:850}
+  .status-smoke{background:var(--soft-orange);color:#A94317}
+  .status-control{background:var(--soft-blue);color:#245C88}
+  .kv{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:10px}
+  .kv div{border:1px solid #E4E8EF;border-radius:10px;padding:8px 9px;background:#FCFCFD}
+  .kv .label{font-size:10px;text-transform:uppercase;letter-spacing:.45px;color:#7B8495;font-weight:820}
+  .kv .num{font-size:14px;font-weight:780;margin-top:2px;font-variant-numeric:tabular-nums}
+  .formula-box{border:1px solid #BCE1E4;background:#F1FAFA;border-radius:13px;padding:11px 12px;margin-top:10px}
+  .formula-box .small{font-size:11px;color:#0A6974;margin-bottom:5px;font-weight:750}
+  .formula-box .formula{font-size:18px;font-weight:850;letter-spacing:.1px;word-break:break-word}
+  .formula-box .meaning{margin-top:6px;font-size:11px;color:#667085;line-height:1.45}
+  .subject-nav{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:10px}
+  .subject-nav button{border:1px solid var(--line);background:#fff;border-radius:10px;padding:7px;font-size:12px;font-weight:750}
+  .subject-nav button:hover{border-color:var(--accent);color:#086874}
+  .chart-note{padding:0 16px 13px;color:#667085;font-size:11px;line-height:1.45}
+  .estimate-body{padding:0 16px 15px}
+  .estimate-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:10px}
+  .est{border:1px solid #E1E6ED;border-radius:12px;padding:9px;background:#FCFCFD;min-width:0}
+  .est.current{border-color:#A9DADD;background:#F1FAFA}
+  .est.truth{border-color:#B8E5D2;background:#F2FBF7}
+  .est .name{font-size:10px;color:#667085;text-transform:uppercase;font-weight:850;letter-spacing:.45px;white-space:nowrap}
+  .est .rd{font-size:18px;font-weight:880;margin:4px 0 2px;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .est .sub{font-size:10px;color:#7B8495;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .risk-formula{border-radius:12px;background:#F7F8FB;padding:10px 11px;font-size:12px;line-height:1.55;color:#475467}
+  .risk-formula strong{color:var(--ink)}
+  .formula-line{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11px;overflow-wrap:anywhere}
+  .table-card{margin-bottom:18px}
+  details summary{cursor:pointer;padding:14px 16px;font-weight:800;list-style:none;display:flex;align-items:center;justify-content:space-between}
+  details summary::-webkit-details-marker{display:none}
+  details summary::after{content:"＋";color:var(--accent);font-size:20px}
+  details[open] summary::after{content:"−"}
+  .table-tools{display:flex;gap:8px;padding:0 16px 10px}
+  .table-tools button{border:1px solid var(--line);background:#fff;border-radius:9px;padding:7px 9px;font-size:11px;font-weight:750}
+  .table-wrap{overflow:auto;border-top:1px solid #E6EAF0;max-height:440px}
+  table{border-collapse:collapse;width:100%;font-size:11px;white-space:nowrap}
+  th,td{padding:8px 9px;border-bottom:1px solid #EDF0F4;text-align:right;font-variant-numeric:tabular-nums}
+  th:first-child,td:first-child{text-align:left}
+  th{position:sticky;top:0;background:#F8FAFC;color:#667085;text-transform:uppercase;font-size:9px;letter-spacing:.45px;z-index:1}
+  tbody tr{cursor:pointer}
+  tbody tr:hover{background:#EFF9FA}
+  tbody tr.selected{background:#E4F5F6}
+  .footer{max-width:1760px;margin:0 auto;padding:0 18px 28px;color:#667085;font-size:11px;line-height:1.5}
+  .kbd{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;border:1px solid #D0D5DD;border-bottom-width:2px;border-radius:5px;background:white;padding:1px 5px;color:#344054}
+
+  .mini-button{border:1px solid var(--accent);background:var(--accent);color:#fff;border-radius:9px;padding:7px 9px;font-size:11px;font-weight:800;white-space:nowrap}
+  .mini-button:hover{filter:brightness(.96)}
+  .mini-button:disabled{cursor:not-allowed;opacity:.55}
+  .ci-status-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:0 16px 15px}
+  .ci-status-item{border:1px solid #E1E6ED;border-radius:12px;padding:10px 11px;background:#FCFCFD;min-width:0}
+  .ci-status-item.cover{border-color:#A9DCC8;background:#F2FBF7}
+  .ci-status-item.miss{border-color:#F0BBBB;background:#FFF5F5}
+  .ci-status-name{font-size:10px;text-transform:uppercase;letter-spacing:.45px;color:#667085;font-weight:850}
+  .ci-status-value{font-size:12px;font-weight:780;margin:5px 0 7px;font-variant-numeric:tabular-nums;line-height:1.45}
+  .ci-badge{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:4px 7px;font-size:9px;font-weight:900;letter-spacing:.35px;text-transform:uppercase}
+  .ci-status-item.cover .ci-badge{background:#DDF4EA;color:#176A4C}
+  .ci-status-item.miss .ci-badge{background:#FBE1E1;color:#A52D2D}
+  .coverage-progress{margin:0 16px 10px;border:1px solid #E1E6ED;background:#F8FAFC;border-radius:11px;padding:9px 10px}
+  .coverage-progress-top{display:flex;justify-content:space-between;gap:10px;color:#667085;font-size:10px;font-weight:750;margin-bottom:6px}
+  .progress-track{height:7px;border-radius:999px;background:#E7EBF1;overflow:hidden}
+  .progress-fill{height:100%;width:0;background:var(--accent);transition:width .12s linear}
+  .coverage-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:0 16px 10px}
+  .coverage-stat{border:1px solid #E1E6ED;background:#FCFCFD;border-radius:12px;padding:9px 10px;cursor:pointer;text-align:left}
+  .coverage-stat:hover,.coverage-stat.selected{border-color:#83C6CC;background:#F1FAFA}
+  .coverage-stat .name{font-size:10px;color:#667085;text-transform:uppercase;font-weight:850;letter-spacing:.4px}
+  .coverage-stat .number{font-size:20px;font-weight:880;margin-top:3px;font-variant-numeric:tabular-nums}
+  .coverage-stat .detail{font-size:9px;color:#7B8495;margin-top:2px;line-height:1.35}
+  .coverage-empty{padding:22px 18px 28px;text-align:center;color:#667085;font-size:12px;line-height:1.55}
+  .coverage-empty strong{color:var(--ink)}
+  @media(max-width:650px){.ci-status-grid,.coverage-summary{grid-template-columns:1fr}}
+  @media(max-width:1180px){.app{grid-template-columns:1fr}.controls{position:relative;top:auto}.metrics{grid-template-columns:repeat(3,1fr)}.grid-top{grid-template-columns:1fr}.grid-two{grid-template-columns:1fr}}
+  @media(max-width:650px){.hero-inner{display:block}.hero-badge{display:inline-block;margin-top:14px}.app{padding:10px}.metrics{grid-template-columns:repeat(2,1fr)}.estimate-grid{grid-template-columns:1fr 1fr}.preset-row{grid-template-columns:1fr 1fr}.card-head{display:block}.mini-controls{justify-content:flex-start;margin-top:9px}.kv{grid-template-columns:1fr 1fr}}
+  @media print{.controls,.hero-badge,.table-card,.footer,.primary-row,.preset-row{display:none!important}.app{display:block;max-width:none}.card{break-inside:avoid;box-shadow:none}.hero{padding:12px}.metrics{grid-template-columns:repeat(6,1fr)}}
+
+  .hero .clarifier b{color:var(--accent)}
+  .model-note{margin-top:9px;border:1px solid #CFE2E5;background:#F5FBFC;border-radius:11px;padding:9px 10px;color:#536775;font-size:11px;line-height:1.5}
+  .model-note strong{color:#075E68}
+  .prediction-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+  .prediction-box{border:1px solid #E1E6ED;border-radius:12px;padding:10px;background:#FCFCFD;min-width:0}
+  .prediction-box.world0{border-color:#BED8EA;background:#F3F8FC}
+  .prediction-box.world1{border-color:#F2C8B3;background:#FFF7F2}
+  .prediction-box .world-label{font-size:10px;text-transform:uppercase;letter-spacing:.5px;font-weight:880;color:#667085}
+  .prediction-box .world-value{font-size:23px;font-weight:900;margin-top:4px;font-variant-numeric:tabular-nums}
+  .prediction-box .world-sub{font-size:10px;color:#667085;margin-top:3px;line-height:1.4}
+  .support-box{margin-top:10px;border:1px solid #E1E6ED;border-radius:12px;padding:9px 10px;background:#FCFCFD}
+  .support-top{display:flex;justify-content:space-between;gap:10px;font-size:10px;color:#667085;font-weight:800;margin-bottom:6px}
+  .support-track{height:7px;border-radius:999px;background:#E7EBF1;overflow:hidden}
+  .support-fill{height:100%;border-radius:999px}
+  .support-good{background:var(--green)}.support-mid{background:#D18B18}.support-poor{background:var(--danger)}
+  .formula-stack{display:grid;gap:7px;margin-top:10px}
+  .formula-mini{border:1px solid #DCE4EB;border-radius:10px;background:#F8FAFC;padding:8px 9px;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11px;line-height:1.5;color:#344054}
+  .world-summary{display:grid;grid-template-columns:1fr 1fr;gap:9px;padding:0 16px 15px}
+  .world-summary .box{border:1px solid #E1E6ED;border-radius:12px;padding:10px 11px;background:#FCFCFD}
+  .world-summary .box b{display:block;font-size:18px;margin-top:3px;font-variant-numeric:tabular-nums}
+  .world-summary .box span{font-size:10px;color:#667085;text-transform:uppercase;font-weight:850;letter-spacing:.4px}
+  .model-quality{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px}
+  .quality-pill{border-radius:999px;padding:5px 8px;font-size:10px;font-weight:850;border:1px solid #D6DEE7;background:#fff;color:#475467}
+  .quality-pill.good{border-color:#A9DCC8;background:#F2FBF7;color:#176A4C}
+  .quality-pill.warn{border-color:#EBCB91;background:#FFF9EB;color:#8A5A00}
+  .quality-pill.bad{border-color:#F0BBBB;background:#FFF5F5;color:#A52D2D}
+  .step-banner{margin:0 16px 12px;border:1px solid #CFE2E5;background:#F5FBFC;border-radius:12px;padding:10px 11px;color:#536775;font-size:11px;line-height:1.5}
+  .step-banner strong{color:#075E68}
+  .reference-note{font-size:10px;color:#667085;line-height:1.45;padding:0 16px 12px}
+  .ci-inline{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:4px 7px;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.35px}
+  .ci-inline.cover{background:#DDF4EA;color:#176A4C}.ci-inline.miss{background:#FBE1E1;color:#A52D2D}
+  .formula-emphasis{border:1px solid #BCE1E4;background:#F1FAFA;border-radius:12px;padding:10px 11px;font-size:12px;line-height:1.6;color:#475467;margin-top:9px}
+  .formula-emphasis strong{color:#075E68}
+  .curve-key{display:inline-block;width:18px;height:0;border-top:3px solid currentColor;vertical-align:middle}
+  .curve-key.dashed{border-top-style:dashed}
+  .counterfactual-controls{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+  .counterfactual-controls .value{min-width:42px;text-align:right}
+  @media(max-width:650px){.prediction-grid,.world-summary{grid-template-columns:1fr}}
+
+
+  /* Graduate-level mathematical formulation */
+  .math-card{margin:0 0 12px;overflow:hidden}
+  .math-card .card-head{padding-bottom:12px;background:linear-gradient(180deg,#FFFFFF 0%,#FBFDFE 100%)}
+  .graduate-tag{display:inline-flex;align-items:center;gap:6px;border:1px solid #A9DADD;background:#F1FAFA;color:#075E68;border-radius:999px;padding:5px 9px;font-size:10px;font-weight:900;letter-spacing:.55px;text-transform:uppercase;white-space:nowrap}
+  .math-tabs{display:flex;gap:7px;flex-wrap:wrap;padding:0 16px 12px;border-bottom:1px solid #E7EBF1}
+  .math-tab{border:1px solid var(--line);background:#fff;color:#475467;border-radius:10px;padding:8px 11px;font-size:11px;font-weight:820}
+  .math-tab:hover{border-color:#83C6CC;color:#075E68;background:#F7FCFC}
+  .math-tab[aria-selected="true"]{border-color:var(--accent);background:var(--accent);color:#fff}
+  .math-panel{display:none;padding:16px}
+  .math-panel.active{display:block}
+  .math-scroll{overflow-x:auto;overflow-y:hidden;padding:3px 2px 7px;-webkit-overflow-scrolling:touch}
+  math{font-family:"Cambria Math","STIX Two Math","Times New Roman",serif;color:var(--ink)}
+  math[display="block"]{display:block;width:max-content;min-width:min-content;max-width:none;margin:0 auto;font-size:clamp(18px,1.65vw,27px);line-height:1.35}
+  .math-chain{border:1px solid #BCE1E4;background:linear-gradient(135deg,#F1FAFA,#F8FBFF);border-radius:15px;padding:15px 12px;margin-bottom:13px}
+  .math-chain .chain-label{font-size:10px;color:#08717B;font-weight:900;letter-spacing:.65px;text-transform:uppercase;margin:0 0 8px 3px}
+  .math-chain math[display="block"]{font-size:clamp(17px,1.8vw,29px)}
+  .math-step-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .math-step{border:1px solid #DEE4EC;border-radius:13px;background:#FCFCFD;padding:11px 12px;min-width:0}
+  .math-step-top{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+  .math-step-number{display:grid;place-items:center;width:25px;height:25px;border-radius:50%;background:#E7F6F7;color:#075E68;font-size:11px;font-weight:900;flex:0 0 auto}
+  .math-step-title{font-size:12px;font-weight:850;color:#344054}
+  .math-step p{margin:7px 0 0;color:#667085;font-size:10px;line-height:1.5}
+  .math-step math[display="block"]{font-size:clamp(15px,1.25vw,20px);margin-left:0}
+  .math-current{margin-top:12px;border:1px solid #CFE2E5;background:#F5FBFC;border-radius:12px;padding:10px 12px;color:#536775;font-size:11px;line-height:1.55}
+  .math-current strong{color:#075E68}
+  .math-current .current-numbers{display:flex;gap:8px;flex-wrap:wrap;margin-top:7px}
+  .math-current .number-chip{border:1px solid #CFE2E5;background:#fff;border-radius:999px;padding:5px 8px;font-variant-numeric:tabular-nums;font-weight:800;color:#344054}
+  .assumption-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:13px}
+  .assumption{border:1px solid #DEE4EC;border-radius:13px;background:#FCFCFD;padding:11px 12px;min-width:0}
+  .assumption h4{margin:0 0 6px;font-size:12px;color:#344054}
+  .assumption p{margin:7px 0 0;color:#667085;font-size:10px;line-height:1.5}
+  .assumption math[display="block"]{font-size:clamp(15px,1.15vw,19px);margin-left:0}
+  .identification-box{border:1px solid #B8E5D2;background:#F2FBF7;border-radius:14px;padding:13px}
+  .identification-box .box-title{font-size:10px;color:#176A4C;font-weight:900;letter-spacing:.6px;text-transform:uppercase;margin-bottom:8px}
+  .identification-box math[display="block"]{font-size:clamp(17px,1.5vw,24px)}
+  .model-grid{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(260px,.75fr);gap:12px}
+  .model-equation-box,.model-interpretation{border:1px solid #DEE4EC;border-radius:13px;background:#FCFCFD;padding:12px;min-width:0}
+  .model-equation-box h4,.model-interpretation h4{margin:0 0 7px;font-size:12px}
+  .model-equation-box p,.model-interpretation p{margin:7px 0 0;color:#667085;font-size:10px;line-height:1.55}
+  .selected-model-line{margin-top:10px;border:1px solid #CFE2E5;background:#F5FBFC;border-radius:11px;padding:10px 11px}
+  .selected-model-line .label{font-size:9px;text-transform:uppercase;letter-spacing:.6px;color:#08717B;font-weight:900;margin-bottom:6px}
+  .math-plain{font-family:"Cambria Math","STIX Two Math","Times New Roman",serif;font-size:clamp(15px,1.25vw,20px);line-height:1.75;color:#162033;overflow-wrap:anywhere}
+  .math-plain i{font-family:"Cambria Math","STIX Two Math","Times New Roman",serif}
+  .notation-row{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-top:12px}
+  .notation-item{border:1px solid #E1E6ED;border-radius:10px;padding:8px 9px;background:#fff;min-width:0}
+  .notation-item b{display:block;font-family:"Cambria Math","STIX Two Math","Times New Roman",serif;font-size:15px;margin-bottom:2px}
+  .notation-item span{display:block;color:#667085;font-size:9px;line-height:1.35}
+  .inference-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .inference-box{border:1px solid #DEE4EC;border-radius:13px;background:#FCFCFD;padding:12px;min-width:0}
+  .inference-box h4{margin:0 0 7px;font-size:12px}
+  .inference-box p{margin:7px 0 0;color:#667085;font-size:10px;line-height:1.5}
+  .inference-box math[display="block"]{font-size:clamp(15px,1.2vw,20px);margin-left:0}
+  .warning-math{margin-top:11px;border-left:4px solid #D18B18;background:#FFF9EB;border-radius:9px;padding:9px 11px;color:#6F4B08;font-size:10px;line-height:1.5}
+  .math-compact .math-scroll{padding-top:8px}
+  .math-compact math[display="block"]{font-size:clamp(16px,1.3vw,21px)}
+  @media(max-width:980px){.math-step-grid,.assumption-grid{grid-template-columns:1fr}.model-grid,.inference-grid{grid-template-columns:1fr}.notation-row{grid-template-columns:repeat(3,1fr)}}
+  @media(max-width:650px){.math-tabs{display:grid;grid-template-columns:1fr 1fr}.math-tab{width:100%}.notation-row{grid-template-columns:1fr 1fr}.math-panel{padding:12px}.math-chain{padding:12px 7px}math[display="block"]{font-size:17px}.math-chain math[display="block"]{font-size:17px}}
+
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-inner">
+    <div>
+      <h1>Outcome Regression Estimator <span class="title-author">— Se Yoon Lee, Ph.D.</span></h1>
+      <p>Explore outcome regression standardization in a realistic observational smoking study. Fit a model for CVD risk, predict every subject under both smoking choices, average the two counterfactual prediction sets, and examine uncertainty, model misspecification, extrapolation, and repeated-sampling coverage.</p>
+      <div class="clarifier"><b>Core operation:</b> each subject keeps the same baseline covariates <i>X</i>. Only smoking status is changed from <i>T</i>=0 to <i>T</i>=1 inside the fitted outcome model.</div>
+    </div>
+    <div class="hero-badge">SELF-CONTAINED • INLINE SVG • NO INTERNET</div>
+  </div>
+</header>
+
+<main class="app">
+<aside class="controls" aria-label="Simulation and outcome-regression controls">
+  <div class="controls-head">
+    <h2>Build the observational study</h2>
+    <p>Change the data-generating mechanism, then choose what the analyst puts into the outcome model.</p>
+  </div>
+
+  <div class="control-section">
+    <div class="section-label">Scenario presets</div>
+    <div class="preset-row">
+      <button class="preset" data-preset="well">Well-specified OR</button>
+      <button class="preset" data-preset="nonlinear">Nonlinear misspecification</button>
+      <button class="preset" data-preset="omit">Omitted confounders</button>
+      <button class="preset" data-preset="poor">Poor overlap</button>
+    </div>
+  </div>
+
+  <div class="control-section">
+    <div class="section-label">Data-generating process</div>
+    <div class="control">
+      <div class="control-top"><label for="nRange">Number of subjects</label><span class="value" id="nValue"></span></div>
+      <input id="nRange" type="range" min="160" max="600" step="20" value="300">
+      <div class="range-ends"><span>160</span><span>600</span></div>
+    </div>
+    <div class="control">
+      <div class="control-top"><label for="confRange">Strength of confounding</label><span class="value" id="confValue"></span></div>
+      <input id="confRange" type="range" min="0" max="2.5" step="0.05" value="1.25">
+      <div class="range-ends"><span>treatment ≈ random</span><span>strong selection by X</span></div>
+    </div>
+    <div class="control">
+      <div class="control-top"><label for="overlapRange">Treatment overlap</label><span class="value" id="overlapValue"></span></div>
+      <input id="overlapRange" type="range" min="0.15" max="1" step="0.01" value="0.68">
+      <div class="range-ends"><span>poor support</span><span>good overlap</span></div>
+    </div>
+    <div class="control">
+      <div class="control-top"><label for="effectRange">Baseline smoking effect (odds ratio)</label><span class="value" id="effectValue"></span></div>
+      <input id="effectRange" type="range" min="1" max="3" step="0.05" value="1.80">
+      <div class="range-ends"><span>OR 1.0</span><span>OR 3.0</span></div>
+    </div>
+    <div class="control">
+      <div class="control-top"><label for="nonlinRange">Outcome nonlinearity</label><span class="value" id="nonlinValue"></span></div>
+      <input id="nonlinRange" type="range" min="0" max="2" step="0.05" value="0.80">
+      <div class="range-ends"><span>main effects</span><span>strong curvature</span></div>
+    </div>
+    <div class="control">
+      <div class="control-top"><label for="heteroRange">Treatment-effect heterogeneity</label><span class="value" id="heteroValue"></span></div>
+      <input id="heteroRange" type="range" min="0" max="1.5" step="0.05" value="0.55">
+      <div class="range-ends"><span>constant log-OR</span><span>varies with X</span></div>
+    </div>
+    <div class="control">
+      <div class="control-top"><label for="seedInput">Cohort seed</label><span class="value" id="seedValue"></span></div>
+      <input id="seedInput" type="number" min="1" max="99999999" value="20260710" style="width:100%;border:1px solid var(--line);border-radius:10px;padding:8px 9px">
+    </div>
+    <div class="primary-row">
+      <button class="primary" id="newCohort">New cohort</button>
+      <button class="secondary" id="resetControls">Reset</button>
+    </div>
+  </div>
+
+  <div class="control-section">
+    <div class="section-label">Analyst's outcome model</div>
+    <div class="control">
+      <label for="outcomeModel" style="display:block;margin-bottom:6px">Terms included in logistic regression</label>
+      <select id="outcomeModel">
+        <option value="full">Full specification: main + nonlinear + interactions</option>
+        <option value="main">Main effects only</option>
+        <option value="sparse">Sparse: smoking + age + BMI</option>
+      </select>
+    </div>
+    <div class="model-note" id="modelNote"></div>
+    <div class="checkrow" style="margin-top:10px"><input id="truthToggle" type="checkbox" checked><label for="truthToggle">Show simulation truth on plots. This information is unavailable in a real observational study.</label></div>
+  </div>
+
+  <div class="control-section">
+    <div class="section-label">Reveal the two treatment worlds</div>
+    <div class="control">
+      <div class="control-top"><label for="revealRange">Counterfactual reveal</label><span class="value" id="revealValue"></span></div>
+      <input id="revealRange" type="range" min="0" max="100" step="1" value="100">
+      <div class="range-ends"><span>observed world only</span><span>both predictions</span></div>
+    </div>
+    <div class="primary-row">
+      <button class="primary" id="animateReveal">Animate 0 → 100%</button>
+      <button class="secondary" id="stopAnimation">Stop</button>
+    </div>
+    <div class="teaching-note">This slider changes only the visualization. The formal outcome-regression estimate always averages both complete prediction sets.</div>
+  </div>
+</aside>
+
+<section class="workspace">
+  <div class="metrics" id="metricStrip" aria-live="polite"></div>
+
+
+  <article class="card math-card" aria-labelledby="mathFrameworkTitle">
+    <div class="card-head">
+      <div>
+        <h3 id="mathFrameworkTitle">Mathematical formulation</h3>
+        <p>Outcome regression is a plug-in g-computation estimator: estimate the conditional outcome surface, evaluate that surface twice for every subject, and integrate over the empirical target-population distribution of <i>X</i>.</p>
+      </div>
+      <span class="graduate-tag">Graduate-level notation</span>
+    </div>
+
+    <div class="math-tabs" role="tablist" aria-label="Mathematical formulation sections">
+      <button class="math-tab" id="mathTabEstimator" role="tab" aria-selected="true" aria-controls="mathPanelEstimator" data-math-tab="estimator">Estimator</button>
+      <button class="math-tab" id="mathTabIdentification" role="tab" aria-selected="false" aria-controls="mathPanelIdentification" data-math-tab="identification">Identification</button>
+      <button class="math-tab" id="mathTabModel" role="tab" aria-selected="false" aria-controls="mathPanelModel" data-math-tab="model">Outcome model</button>
+      <button class="math-tab" id="mathTabInference" role="tab" aria-selected="false" aria-controls="mathPanelInference" data-math-tab="inference">Influence-function inference</button>
+    </div>
+
+    <section class="math-panel active" id="mathPanelEstimator" role="tabpanel" aria-labelledby="mathTabEstimator">
+      <div class="math-chain">
+        <div class="chain-label">Outcome-regression estimation map</div>
+        <div class="math-scroll">
+          <math display="block" aria-label="Fit the outcome regression, predict each subject under treatment and control, then average the individual predicted contrasts">
+            <mstyle displaystyle="true">
+              <mrow>
+                <mtext>Fit&nbsp;</mtext>
+                <mover accent="true"><mi>m</mi><mo>ˆ</mo></mover><mo>(</mo><mi>t</mi><mo>,</mo><mi>x</mi><mo>)</mo>
+                <mspace width="0.7em"/><mo>⟶</mo><mspace width="0.7em"/>
+                <mrow>
+                  <mo>{</mo><mo>(</mo><mover accent="true"><mi>m</mi><mo>ˆ</mo></mover><mo>(</mo><mn>1</mn><mo>,</mo><msub><mi>X</mi><mi>i</mi></msub><mo>)</mo><mo>,</mo>
+                  <mover accent="true"><mi>m</mi><mo>ˆ</mo></mover><mo>(</mo><mn>0</mn><mo>,</mo><msub><mi>X</mi><mi>i</mi></msub><mo>)</mo><mo>)</mo>
+                  <mo>:</mo><mi>i</mi><mo>=</mo><mn>1</mn><mo>,</mo><mo>…</mo><mo>,</mo><mi>n</mi><mo>}</mo>
+                </mrow>
+                <mspace width="0.7em"/><mo>⟶</mo><mspace width="0.7em"/>
+                <msup><mover accent="true"><mi mathvariant="normal">RD</mi><mo>ˆ</mo></mover><mi mathvariant="normal">OR</mi></msup>
+                <mo>=</mo>
+                <mfrac><mn>1</mn><mi>n</mi></mfrac>
+                <munderover><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></munderover>
+                <mrow><mo>{</mo>
+                  <mover accent="true"><mi>m</mi><mo>ˆ</mo></mover><mo>(</mo><mn>1</mn><mo>,</mo><msub><mi>X</mi><mi>i</mi></msub><mo>)</mo>
+                  <mo>−</mo>
+                  <mover accent="true"><mi>m</mi><mo>ˆ</mo></mover><mo>(</mo><mn>0</mn><mo>,</mo><msub><mi>X</mi><mi>i</mi></msub><mo>)</mo>
+                <mo>}</mo></mrow>
+              </mrow>
+            </mstyle>
+          </math>
+        </div>
+      </div>
+
+      <div class="math-step-grid">
+        <div class="math-step">
+          <div class="math-step-top"><span class="math-step-number">1</span><span class="math-step-title">Fit the conditional mean</span></div>
+          <div class="math-scroll">
+            <math display="block" aria-label="m sub t of x is the conditional expectation of Y given T equals t and X equals x">
+              <mrow><msub><mi>m</mi><mi>t</mi></msub><mo>(</mo><mi>x</mi><mo>)</mo><mo>≡</mo><mi mathvariant="normal">E</mi><mo>(</mo><mi>Y</mi><mo>|</mo><mi>T</mi><mo>=</mo><mi>t</mi><mo>,</mo><mi>X</mi><mo>=</mo><mi>x</mi><mo>)</mo></mrow>
+            </math>
+          </div>
+          <p>Estimate this regression from the observed outcomes and treatment assignments.</p>
+        </div>
+        <div class="math-step">
+          <div class="math-step-top"><span class="math-step-number">2</span><span class="math-step-title">Predict both treatment worlds</span></div>
+          <div class="math-scroll">
+            <math display="block" aria-label="m hat one i equals m hat of one and X i; m hat zero i equals m hat of zero and X i">
+              <mrow>
+                <msub><mover accent="true"><mi>m</mi><mo>ˆ</mo></mover><mrow><mn>1</mn><mi>i</mi></mrow></msub><mo>=</mo><mover accent="true"><mi>m</mi><mo>ˆ</mo></mover><mo>(</mo><mn>1</mn><mo>,</mo><msub><mi>X</mi><mi>i</mi></msub><mo>)</mo><mo>,</mo>
+                <mspace width="0.5em"/>
+                <msub><mover accent="true"><mi>m</mi><mo>ˆ</mo></mover><mrow><mn>0</mn><mi>i</mi></mrow></msub><mo>=</mo><mover accent="true"><mi>m</mi><mo>ˆ</mo></mover><mo>(</mo><mn>0</mn><mo>,</mo><msub><mi>X</mi><mi>i</mi></msub><mo>)</mo>
+              </mrow>
+            </math>
+          </div>
+          <p>The same subject-specific covariate vector <i>X</i><sub>i</sub> appears in both predictions.</p>
+        </div>
+        <div class="math-step">
+          <div class="math-step-top"><span class="math-step-number">3</span><span class="math-step-title">Standardize and contrast</span></div>
+          <div class="math-scroll">
+            <math display="block" aria-label="psi hat t outcome regression equals one over n times the sum of m hat of t and X i">
+              <mrow>
+                <msubsup><mover accent="true"><mi>ψ</mi><mo>ˆ</mo></mover><mi>t</mi><mi mathvariant="normal">OR</mi></msubsup>
+                <mo>=</mo><mfrac><mn>1</mn><mi>n</mi></mfrac>
+                <munderover><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></munderover>
+                <mover accent="true"><mi>m</mi><mo>ˆ</mo></mover><mo>(</mo><mi>t</mi><mo>,</mo><msub><mi>X</mi><mi>i</mi></msub><mo>)</mo>
+              </mrow>
+            </math>
+          </div>
+          <p>For the ATE risk difference, subtract the standardized mean under <i>t</i>=0 from that under <i>t</i>=1.</p>
+        </div>
+      </div>
+      <div class="math-current" id="mathCurrentEstimate" aria-live="polite"></div>
+    </section>
+
+    <section class="math-panel" id="mathPanelIdentification" role="tabpanel" aria-labelledby="mathTabIdentification" hidden>
+      <div class="assumption-grid">
+        <div class="assumption">
+          <h4>Consistency</h4>
+          <div class="math-scroll"><math display="block" aria-label="Y equals Y of T"><mrow><mi>Y</mi><mo>=</mo><mi>Y</mi><mo>(</mo><mi>T</mi><mo>)</mo><mo>=</mo><mi>T</mi><mi>Y</mi><mo>(</mo><mn>1</mn><mo>)</mo><mo>+</mo><mo>(</mo><mn>1</mn><mo>−</mo><mi>T</mi><mo>)</mo><mi>Y</mi><mo>(</mo><mn>0</mn><mo>)</mo></mrow></math></div>
+          <p>The observed outcome equals the potential outcome under the treatment actually received.</p>
+        </div>
+        <div class="assumption">
+          <h4>Conditional exchangeability</h4>
+          <div class="math-scroll"><math display="block" aria-label="Potential outcomes are conditionally independent of treatment given X"><mrow><mo>{</mo><mi>Y</mi><mo>(</mo><mn>0</mn><mo>)</mo><mo>,</mo><mi>Y</mi><mo>(</mo><mn>1</mn><mo>)</mo><mo>}</mo><mo>⟂</mo><mi>T</mi><mo>|</mo><mi>X</mi></mrow></math></div>
+          <p>All common causes of smoking and CVD required for adjustment are measured in <i>X</i>.</p>
+        </div>
+        <div class="assumption">
+          <h4>Positivity</h4>
+          <div class="math-scroll"><math display="block" aria-label="The propensity score is strictly between zero and one"><mrow><mn>0</mn><mo>&lt;</mo><mi mathvariant="normal">P</mi><mo>(</mo><mi>T</mi><mo>=</mo><mn>1</mn><mo>|</mo><mi>X</mi><mo>=</mo><mi>x</mi><mo>)</mo><mo>&lt;</mo><mn>1</mn></mrow></math></div>
+          <p>Each relevant covariate pattern has support in both treatment groups.</p>
+        </div>
+      </div>
+      <div class="identification-box">
+        <div class="box-title">Identification by the g-formula</div>
+        <div class="math-scroll">
+          <math display="block" aria-label="The mean potential outcome equals the expectation of the outcome regression">
+            <mstyle displaystyle="true"><mrow>
+              <msub><mi>ψ</mi><mi>t</mi></msub><mo>≡</mo><mi mathvariant="normal">E</mi><mo>{</mo><mi>Y</mi><mo>(</mo><mi>t</mi><mo>)</mo><mo>}</mo>
+              <mo>=</mo><mi mathvariant="normal">E</mi><mo>[</mo><mi mathvariant="normal">E</mi><mo>{</mo><mi>Y</mi><mo>(</mo><mi>t</mi><mo>)</mo><mo>|</mo><mi>X</mi><mo>}</mo><mo>]</mo>
+              <mo>=</mo><mi mathvariant="normal">E</mi><mo>[</mo><mi mathvariant="normal">E</mi><mo>{</mo><mi>Y</mi><mo>|</mo><mi>T</mi><mo>=</mo><mi>t</mi><mo>,</mo><mi>X</mi><mo>}</mo><mo>]</mo>
+              <mo>=</mo><mi mathvariant="normal">E</mi><mo>{</mo><msub><mi>m</mi><mi>t</mi></msub><mo>(</mo><mi>X</mi><mo>)</mo><mo>}</mo>
+            </mrow></mstyle>
+          </math>
+        </div>
+      </div>
+      <div class="warning-math"><strong>Important:</strong> the regression function is identified from observed data, but its interpretation as a causal potential-outcome mean requires all three assumptions above. Good predictive performance alone does not establish exchangeability.</div>
+    </section>
+
+    <section class="math-panel" id="mathPanelModel" role="tabpanel" aria-labelledby="mathTabModel" hidden>
+      <div class="model-grid">
+        <div class="model-equation-box">
+          <h4>Binary-outcome working model</h4>
+          <div class="math-scroll">
+            <math display="block" aria-label="The logit of the conditional mean equals an outcome regression linear predictor">
+              <mrow>
+                <mi mathvariant="normal">logit</mi><mo>{</mo><msub><mi>m</mi><mi>β</mi></msub><mo>(</mo><mi>t</mi><mo>,</mo><mi>x</mi><mo>)</mo><mo>}</mo>
+                <mo>=</mo><msub><mi>η</mi><mi>β</mi></msub><mo>(</mo><mi>t</mi><mo>,</mo><mi>x</mi><mo>)</mo>
+              </mrow>
+            </math>
+          </div>
+          <div class="math-scroll">
+            <math display="block" aria-label="m beta equals expit of eta beta">
+              <mrow><msub><mi>m</mi><mi>β</mi></msub><mo>(</mo><mi>t</mi><mo>,</mo><mi>x</mi><mo>)</mo><mo>=</mo><mi mathvariant="normal">expit</mi><mo>{</mo><msub><mi>η</mi><mi>β</mi></msub><mo>(</mo><mi>t</mi><mo>,</mo><mi>x</mi><mo>)</mo><mo>}</mo></mrow>
+            </math>
+          </div>
+          <div class="selected-model-line">
+            <div class="label">Currently selected specification: <span id="mathSelectedModelName"></span></div>
+            <div class="math-plain" id="mathSelectedModelEquation"></div>
+          </div>
+          <p>The model is fitted only once to observed <i>Y</i>. Counterfactual predictions are then generated by substituting <i>t</i>=1 and <i>t</i>=0 while keeping <i>x</i> fixed.</p>
+        </div>
+        <div class="model-interpretation">
+          <h4>Why the treatment coefficient is not the ATE</h4>
+          <div class="math-scroll">
+            <math display="block" aria-label="Beta T is not generally equal to the average treatment effect">
+              <mrow><msub><mi>β</mi><mi>T</mi></msub><mo>≠</mo><mi mathvariant="normal">E</mi><mo>{</mo><mi>Y</mi><mo>(</mo><mn>1</mn><mo>)</mo><mo>−</mo><mi>Y</mi><mo>(</mo><mn>0</mn><mo>)</mo><mo>}</mo></mrow>
+            </math>
+          </div>
+          <p>In logistic regression, β<sub>T</sub> is a conditional log-odds contrast. Non-collapsibility and treatment interactions prevent it from being interpreted as the marginal causal risk difference.</p>
+          <div class="warning-math"><strong>Model misspecification:</strong> if <span class="math-plain">m̂(t,x)</span> converges to an incorrect working surface <span class="math-plain">m*(t,x)</span>, the plug-in estimator converges to <span class="math-plain">E[m*(1,X) − m*(0,X)]</span>, which need not equal the causal ATE.</div>
+        </div>
+      </div>
+      <div class="notation-row" aria-label="Notation glossary">
+        <div class="notation-item"><b>O<sub>i</sub></b><span>Observed unit: (Y<sub>i</sub>,T<sub>i</sub>,X<sub>i</sub>)</span></div>
+        <div class="notation-item"><b>Y(t)</b><span>Potential outcome under treatment t</span></div>
+        <div class="notation-item"><b>m<sub>t</sub>(x)</b><span>Conditional outcome regression</span></div>
+        <div class="notation-item"><b>ψ<sub>t</sub></b><span>Marginal mean potential outcome</span></div>
+        <div class="notation-item"><b>P<sub>n</sub>f</b><span>Empirical mean n<sup>−1</sup>Σf(O<sub>i</sub>)</span></div>
+        <div class="notation-item"><b>RD</b><span>ψ<sub>1</sub> − ψ<sub>0</sub></span></div>
+      </div>
+    </section>
+
+    <section class="math-panel" id="mathPanelInference" role="tabpanel" aria-labelledby="mathTabInference" hidden>
+      <div class="inference-grid">
+        <div class="inference-box">
+          <h4>Outcome-model score and derivative</h4>
+          <div class="math-scroll">
+            <math display="block" aria-label="The logistic score equals Z i times Y i minus p i">
+              <mrow><msub><mi>S</mi><mi>i</mi></msub><mo>(</mo><mi>β</mi><mo>)</mo><mo>=</mo><msub><mi>Z</mi><mi>i</mi></msub><mo>{</mo><msub><mi>Y</mi><mi>i</mi></msub><mo>−</mo><msub><mi>m</mi><mi>β</mi></msub><mo>(</mo><msub><mi>T</mi><mi>i</mi></msub><mo>,</mo><msub><mi>X</mi><mi>i</mi></msub><mo>)</mo><mo>}</mo></mrow>
+            </math>
+          </div>
+          <div class="math-scroll">
+            <math display="block" aria-label="d t is the empirical mean derivative of m beta t X with respect to beta">
+              <mrow><msub><mover accent="true"><mi>d</mi><mo>ˆ</mo></mover><mi>t</mi></msub><mo>=</mo><mfrac><mn>1</mn><mi>n</mi></mfrac><munderover><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></munderover><mfrac><mrow><mo>∂</mo><msub><mi>m</mi><mi>β</mi></msub><mo>(</mo><mi>t</mi><mo>,</mo><msub><mi>X</mi><mi>i</mi></msub><mo>)</mo></mrow><mrow><mo>∂</mo><mi>β</mi></mrow></mfrac><msub><mo>|</mo><mrow><mi>β</mi><mo>=</mo><mover accent="true"><mi>β</mi><mo>ˆ</mo></mover></mrow></msub></mrow>
+            </math>
+          </div>
+          <p><i>Z</i><sub>i</sub> is the design vector used by the selected logistic outcome model.</p>
+        </div>
+        <div class="inference-box">
+          <h4>Influence function of the standardized mean</h4>
+          <div class="math-scroll">
+            <math display="block" aria-label="Estimated influence function for psi t">
+              <mstyle displaystyle="true"><mrow>
+                <msub><mover accent="true"><mi mathvariant="normal">IF</mi><mo>ˆ</mo></mover><mrow><mi>i</mi><mo>,</mo><mi>t</mi></mrow></msub>
+                <mo>=</mo>
+                <mover accent="true"><mi>m</mi><mo>ˆ</mo></mover><mo>(</mo><mi>t</mi><mo>,</mo><msub><mi>X</mi><mi>i</mi></msub><mo>)</mo><mo>−</mo><msubsup><mover accent="true"><mi>ψ</mi><mo>ˆ</mo></mover><mi>t</mi><mi mathvariant="normal">OR</mi></msubsup>
+                <mo>+</mo><msubsup><mover accent="true"><mi>d</mi><mo>ˆ</mo></mover><mi>t</mi><mi mathvariant="normal">T</mi></msubsup><msup><mover accent="true"><mi>M</mi><mo>ˆ</mo></mover><mrow><mo>−</mo><mn>1</mn></mrow></msup><msub><mi>S</mi><mi>i</mi></msub><mo>(</mo><mover accent="true"><mi>β</mi><mo>ˆ</mo></mover><mo>)</mo>
+              </mrow></mstyle>
+            </math>
+          </div>
+          <div class="math-scroll">
+            <math display="block" aria-label="The influence function for the risk difference equals the treatment influence function minus the control influence function">
+              <mrow><msub><mover accent="true"><mi mathvariant="normal">IF</mi><mo>ˆ</mo></mover><mrow><mi>i</mi><mo>,</mo><mi mathvariant="normal">RD</mi></mrow></msub><mo>=</mo><msub><mover accent="true"><mi mathvariant="normal">IF</mi><mo>ˆ</mo></mover><mrow><mi>i</mi><mo>,</mo><mn>1</mn></mrow></msub><mo>−</mo><msub><mover accent="true"><mi mathvariant="normal">IF</mi><mo>ˆ</mo></mover><mrow><mi>i</mi><mo>,</mo><mn>0</mn></mrow></msub></mrow>
+            </math>
+          </div>
+          <p>The first term captures variation in the empirical covariate distribution; the second propagates uncertainty from fitting β.</p>
+        </div>
+      </div>
+      <div class="identification-box" style="margin-top:11px">
+        <div class="box-title">Wald standard error and 95% confidence interval</div>
+        <div class="math-scroll">
+          <math display="block" aria-label="The standard error is the square root of the sample variance of the influence function divided by n, and the confidence interval is estimate plus or minus 1.96 standard errors">
+            <mstyle displaystyle="true"><mrow>
+              <mover accent="true"><mi mathvariant="normal">SE</mi><mo>ˆ</mo></mover><mo>(</mo><msup><mover accent="true"><mi mathvariant="normal">RD</mi><mo>ˆ</mo></mover><mi mathvariant="normal">OR</mi></msup><mo>)</mo>
+              <mo>=</mo><msqrt><mfrac><mrow><mi mathvariant="normal">Var</mi><mo>(</mo><msub><mover accent="true"><mi mathvariant="normal">IF</mi><mo>ˆ</mo></mover><mrow><mi>i</mi><mo>,</mo><mi mathvariant="normal">RD</mi></mrow></msub><mo>)</mo></mrow><mi>n</mi></mfrac></msqrt>
+              <mspace width="1em"/><mo>,</mo><mspace width="1em"/>
+              <msub><mi mathvariant="normal">CI</mi><mrow><mn>95</mn><mo>%</mo></mrow></msub><mo>=</mo><msup><mover accent="true"><mi mathvariant="normal">RD</mi><mo>ˆ</mo></mover><mi mathvariant="normal">OR</mi></msup><mo>±</mo><mn>1.96</mn><mover accent="true"><mi mathvariant="normal">SE</mi><mo>ˆ</mo></mover>
+            </mrow></mstyle>
+          </math>
+        </div>
+      </div>
+      <div class="warning-math"><strong>Interpretation:</strong> this interval quantifies sampling uncertainty around the fitted plug-in estimator. It does not protect against unmeasured confounding or systematic outcome-model misspecification.</div>
+    </section>
+  </article>
+
+
+  <div class="grid-top">
+    <article class="card">
+      <div class="card-head">
+        <div><h3>1. Subjects in the observational cohort</h3><p>Color shows observed smoking status; point size shows fitted CVD risk under the treatment actually observed.</p></div>
+        <div class="mini-controls">
+          <label for="xVar">x</label><select id="xVar"><option value="age">Age</option><option value="bmi">BMI</option><option value="income">Income ratio</option></select>
+          <label for="yVar">y</label><select id="yVar"><option value="bmi">BMI</option><option value="age">Age</option><option value="income">Income ratio</option></select>
+        </div>
+      </div>
+      <div class="legend"><span><i class="dot" style="background:var(--smoke)"></i>Smoker (T=1)</span><span><i class="dot" style="background:var(--control)"></i>Non-smoker (T=0)</span><span><i class="ring"></i>Had CVD (Y=1)</span><span>larger point = higher fitted observed risk</span></div>
+      <div class="chart-wrap"><svg id="scatterSvg" class="chart" viewBox="0 0 840 470" role="img" aria-label="Subject-level covariate scatter plot"></svg></div>
+      <div class="chart-note">Click any subject. Outcome regression will use that subject's same <i>X</i> twice—once with smoking set to 0 and once with smoking set to 1.</div>
+    </article>
+
+    <article class="card">
+      <div class="card-head"><div><h3>Selected subject</h3><p>Observed data provide one treatment state; the fitted model supplies both conditional risk predictions.</p></div></div>
+      <div class="subject-body" id="subjectPanel"></div>
+    </article>
+  </div>
+
+  <div class="grid-two">
+    <article class="card">
+      <div class="card-head">
+        <div><h3>2. Fitted outcome-risk curves with 95% bands</h3><p>Solid curves are fitted logistic-regression predictions for a reference subject. Points summarize observed CVD risk in covariate bins.</p></div>
+        <div class="mini-controls"><label for="curveVar">Horizontal axis</label><select id="curveVar"><option value="age">Age</option><option value="bmi">BMI</option><option value="income">Income ratio</option></select></div>
+      </div>
+      <div class="legend"><span style="color:var(--control)"><i class="curve-key"></i> Fitted T=0</span><span style="color:var(--smoke)"><i class="curve-key"></i> Fitted T=1</span><span style="color:var(--green)"><i class="curve-key dashed"></i> True curves</span><span>shading = pointwise 95% model band</span></div>
+      <div class="chart-wrap"><svg id="curveSvg" class="chart" viewBox="0 0 780 390" role="img" aria-label="Fitted outcome regression curves with confidence bands"></svg></div>
+      <div class="reference-note" id="curveReference"></div>
+    </article>
+
+    <article class="card">
+      <div class="card-head">
+        <div><h3>3. Target covariate distribution</h3><p>Outcome regression does not rebalance the observed arms. It carries the full cohort's covariate distribution into both prediction worlds.</p></div>
+        <div class="mini-controls"><label for="distVar">Covariate</label><select id="distVar"><option value="age">Age</option><option value="bmi">BMI</option><option value="income">Income ratio</option><option value="female">Female</option><option value="college">College education</option><option value="htn">Baseline hypertension</option></select></div>
+      </div>
+      <div class="legend"><span><i class="dot" style="background:#667085"></i>Full target cohort</span><span><i class="dot" style="background:var(--smoke)"></i>Observed smokers</span><span><i class="dot" style="background:var(--control)"></i>Observed non-smokers</span></div>
+      <div class="chart-wrap"><svg id="distSvg" class="chart" viewBox="0 0 780 350" role="img" aria-label="Target and observed-arm covariate distributions"></svg></div>
+      <div class="chart-note">The gray distribution—not either observed treatment arm—is the standardization target for both m̂(0,X) and m̂(1,X).</div>
+    </article>
+  </div>
+
+  <div class="grid-two">
+    <article class="card">
+      <div class="card-head"><div><h3>4. Two predictions for the same subjects</h3><p>Each row is one actual subject. The filled point is the fitted risk in the observed treatment state; the open point is the model-based counterfactual prediction.</p></div></div>
+      <div class="step-banner"><strong>Move the reveal slider:</strong> at 0%, each subject appears only in the observed world. At 100%, every subject has both m̂<sub>0</sub>(X<sub>i</sub>) and m̂<sub>1</sub>(X<sub>i</sub>).</div>
+      <div class="legend"><span><i class="dot" style="background:var(--control)"></i>Prediction under T=0</span><span><i class="dot" style="background:var(--smoke)"></i>Prediction under T=1</span><span>filled = observed state; open = counterfactual state</span></div>
+      <div class="chart-wrap"><svg id="counterfactualSvg" class="chart" viewBox="0 0 780 540" role="img" aria-label="Paired counterfactual risk predictions for individual subjects"></svg></div>
+      <div class="chart-note">These are conditional risk predictions, not observed potential outcomes. Their causal interpretation requires measured confounding control, overlap, and a reasonable outcome model.</div>
+    </article>
+
+    <article class="card">
+      <div class="card-head"><div><h3>5. Standardize over the full cohort</h3><p>Average all predicted risks in each treatment world.</p></div></div>
+      <div class="chart-wrap"><svg id="standardizeSvg" class="chart" viewBox="0 0 780 430" role="img" aria-label="Distributions of standardized counterfactual outcome predictions"></svg></div>
+      <div class="world-summary" id="worldSummary"></div>
+      <div class="formula-emphasis math-compact">
+        <strong>Outcome-regression standardization:</strong>
+        <div class="math-scroll">
+          <math display="block" aria-label="The outcome regression estimator averages predictions under each treatment and subtracts the two standardized means">
+            <mstyle displaystyle="true"><mrow>
+              <msubsup><mover accent="true"><mi>ψ</mi><mo>ˆ</mo></mover><mi>t</mi><mi mathvariant="normal">OR</mi></msubsup>
+              <mo>=</mo><mfrac><mn>1</mn><mi>n</mi></mfrac><munderover><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></munderover>
+              <mover accent="true"><mi>m</mi><mo>ˆ</mo></mover><mo>(</mo><mi>t</mi><mo>,</mo><msub><mi>X</mi><mi>i</mi></msub><mo>)</mo>
+              <mspace width="1em"/><mo>,</mo><mspace width="1em"/>
+              <msup><mover accent="true"><mi mathvariant="normal">RD</mi><mo>ˆ</mo></mover><mi mathvariant="normal">OR</mi></msup>
+              <mo>=</mo><msubsup><mover accent="true"><mi>ψ</mi><mo>ˆ</mo></mover><mn>1</mn><mi mathvariant="normal">OR</mi></msubsup>
+              <mo>−</mo><msubsup><mover accent="true"><mi>ψ</mi><mo>ˆ</mo></mover><mn>0</mn><mi mathvariant="normal">OR</mi></msubsup>
+            </mrow></mstyle>
+          </math>
+        </div>
+      </div>
+    </article>
+  </div>
+
+  <div class="grid-two">
+    <article class="card">
+      <div class="card-head"><div><h3>6. Crude versus standardized estimates</h3><p>The regression coefficient is conditional; the causal comparison shown here comes from marginalizing predicted risks over the target cohort.</p></div></div>
+      <div class="estimate-body" id="estimatePanel"></div>
+    </article>
+
+    <article class="card">
+      <div class="card-head"><div><h3>7. Current cohort: 95% confidence intervals</h3><p>Compare the crude estimate, the selected outcome model, and an alternative model specification as a sensitivity analysis.</p></div></div>
+      <div class="legend"><span><i class="dot" style="background:var(--accent)"></i>Point estimate</span><span><i class="dot" style="background:var(--green)"></i>Known true ATE</span><span>gray dashed line = no effect</span></div>
+      <div class="chart-wrap"><svg id="ciSvg" class="chart" viewBox="0 0 780 340" role="img" aria-label="Outcome-regression risk-difference estimates with 95 percent confidence intervals"></svg></div>
+      <div class="ci-status-grid" id="ciStatusPanel"></div>
+      <div class="chart-note">Intervals use a robust influence-function/delta-method variance that incorporates fitting the logistic outcome model and averaging over the empirical covariate distribution. A misspecified model can yield a narrow CI around the wrong target.</div>
+    </article>
+  </div>
+
+  <article class="card" style="margin-bottom:12px">
+    <div class="card-head">
+      <div><h3>8. Repeated-sampling coverage experiment</h3><p>Hold the baseline covariates fixed, regenerate smoking and CVD, refit the outcome model, and check whether each 95% CI contains the known conditional ATE.</p></div>
+      <div class="mini-controls">
+        <label for="coverageEstimator">Show</label>
+        <select id="coverageEstimator"><option value="selected">Selected OR</option><option value="full">Alternative outcome model</option><option value="crude">Crude</option></select>
+        <label for="coverageM">Samples</label>
+        <select id="coverageM"><option value="40">40</option><option value="80" selected>80</option><option value="120">120</option><option value="200">200</option></select>
+        <button class="mini-button" id="runCoverage">Run experiment</button>
+      </div>
+    </div>
+    <div class="coverage-progress" id="coverageProgress">
+      <div class="coverage-progress-top"><span id="coverageProgressText">No experiment run yet</span><span id="coverageProgressPct">0%</span></div>
+      <div class="progress-track"><div class="progress-fill" id="coverageProgressFill"></div></div>
+    </div>
+    <div class="coverage-summary" id="coverageSummary"></div>
+    <div class="chart-wrap"><svg id="coverageSvg" class="chart" viewBox="0 0 1180 470" role="img" aria-label="Repeated outcome-regression confidence intervals and empirical coverage"></svg></div>
+    <div class="coverage-empty" id="coverageEmpty"><strong>Run the experiment</strong> to see long-run confidence-interval coverage under the selected outcome model.</div>
+    <div class="chart-note">Green intervals contain the truth; red intervals miss it. Correct specification can give approximately nominal coverage as sample size grows. Systematic model bias is not repaired by increasing the number of repetitions.</div>
+  </article>
+
+  <article class="card table-card">
+    <details>
+      <summary>Inspect subject-level counterfactual predictions</summary>
+      <div class="table-tools"><button id="exportCsv">Export cohort CSV</button><button data-svg="scatterSvg">Save subject plot as SVG</button><button data-svg="curveSvg">Save curve plot as SVG</button><button data-svg="counterfactualSvg">Save paired-prediction plot as SVG</button><button data-svg="ciSvg">Save CI plot as SVG</button><button data-svg="coverageSvg">Save coverage plot as SVG</button><button onclick="window.print()">Print dashboard</button></div>
+      <div class="table-wrap"><table><thead><tr><th>Subject</th><th>Age</th><th>BMI</th><th>Income</th><th>Female</th><th>College</th><th>HTN</th><th>Smoker</th><th>CVD</th><th>m̂0(X)</th><th>m̂1(X)</th><th>Individual RD</th><th>Observed fitted risk</th><th>Residual</th><th>Opposite-arm distance</th></tr></thead><tbody id="subjectTable"></tbody></table></div>
+    </details>
+  </article>
+</section>
+</main>
+
+<div class="tooltip" id="tooltip"></div>
+<footer class="footer">Synthetic data are generated entirely in the browser for teaching. Because the outcome mechanism is known, the dashboard can display true counterfactual risks and evaluate confidence-interval containment—information that is not available in an actual observational study. Use <span class="kbd">Tab</span> to reach controls and chart selectors; click a plotted subject to pin its details.</footer>
+
+<script>
+(function(){
+"use strict";
+
+const COLORS={smoke:"#E56B2F",control:"#2F6EA5",accent:"#087E8B",gray:"#98A2B3",darkgray:"#667085",ink:"#162033",muted:"#667085",green:"#208A62",danger:"#C23B3B",amber:"#C17A0B",grid:"#E4E8EF"};
+const defaults={n:300,conf:1.25,overlap:.68,effect:1.80,nonlin:.80,hetero:.55,seed:20260710,model:"full",reveal:1,x:"age",y:"bmi",curve:"age",dist:"age",showTruth:true};
+const modelMeta={
+  full:{label:"Full specification",short:"Full OR",detail:"Includes all measured main effects, age curvature, an age×BMI term, and smoking interactions with age and hypertension. In this simulation it matches the functional form used to generate CVD."},
+  main:{label:"Main-effects logistic model",short:"Main-effects OR",detail:"Includes smoking and all measured covariates, but omits nonlinear outcome terms and treatment-effect interactions."},
+  sparse:{label:"Sparse outcome model",short:"Sparse OR",detail:"Includes smoking, age, and BMI only. Income, education, and baseline hypertension are deliberately omitted."}
+};
+const state={data:[],selected:0,fitSelected:null,fitFull:null,altModel:"main",inf:null,stats:null,animation:null,coverageResults:null,coverageRunning:false,coverageDone:0,coverageTotal:0,coverageToken:0,coverageTruth:NaN,...defaults};
+const $=id=>document.getElementById(id);
+const fmt=(x,d=2)=>Number.isFinite(x)?x.toFixed(d):"—";
+const pct=(x,d=1)=>Number.isFinite(x)?(100*x).toFixed(d)+"%":"—";
+const signedPct=(x,d=1)=>Number.isFinite(x)?(x>=0?"+":"")+pct(x,d):"—";
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+const logistic=x=>1/(1+Math.exp(-clamp(x,-35,35)));
+const logit=p=>Math.log(p/(1-p));
+const esc=s=>String(s).replace(/[&<>\"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
+const z975=1.959963984540054;
+
+function mulberry32(seed){let a=seed>>>0;return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function randn(rng){let u=0,v=0;while(u===0)u=rng();while(v===0)v=rng();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)}
+function mean(a){return a.length?a.reduce((s,x)=>s+x,0)/a.length:NaN}
+function variance(a){if(a.length<2)return 0;const m=mean(a);return a.reduce((s,x)=>s+(x-m)*(x-m),0)/(a.length-1)}
+function sd(a){return Math.sqrt(variance(a))||1}
+function quantile(a,q){if(!a.length)return NaN;const b=a.slice().sort((x,y)=>x-y),h=(b.length-1)*q,i=Math.floor(h),f=h-i;return b[i]+(b[Math.min(i+1,b.length-1)]-b[i])*f}
+function median(a){return quantile(a,.5)}
+function dot(a,b){let s=0;for(let i=0;i<a.length;i++)s+=a[i]*b[i];return s}
+function matVec(A,x){return A.map(r=>dot(r,x))}
+function outerAdd(A,x,y,scale=1){for(let j=0;j<x.length;j++)for(let k=0;k<y.length;k++)A[j][k]+=scale*x[j]*y[k]}
+function zeros(n,m=n){return Array.from({length:n},()=>Array(m).fill(0))}
+function transpose(A){return A[0].map((_,j)=>A.map(r=>r[j]))}
+function matMul(A,B){const nr=A.length,nc=B[0].length,nk=B.length,C=zeros(nr,nc);for(let i=0;i<nr;i++)for(let k=0;k<nk;k++){const v=A[i][k];if(v!==0)for(let j=0;j<nc;j++)C[i][j]+=v*B[k][j]}return C}
+function solve(A,b){
+  const n=b.length,M=A.map((row,i)=>row.slice().concat(b[i]));
+  for(let i=0;i<n;i++){
+    let piv=i;for(let k=i+1;k<n;k++)if(Math.abs(M[k][i])>Math.abs(M[piv][i]))piv=k;
+    if(piv!==i){const tmp=M[i];M[i]=M[piv];M[piv]=tmp}
+    let d=M[i][i];if(Math.abs(d)<1e-10)d=M[i][i]=d>=0?1e-10:-1e-10;
+    for(let j=i;j<=n;j++)M[i][j]/=d;
+    for(let k=0;k<n;k++)if(k!==i){const f=M[k][i];if(f!==0)for(let j=i;j<=n;j++)M[k][j]-=f*M[i][j]}
+  }
+  return M.map(r=>r[n]);
+}
+function matrixInverse(A){const n=A.length,inv=zeros(n);for(let j=0;j<n;j++){const e=Array(n).fill(0);e[j]=1;const col=solve(A,e);for(let i=0;i<n;i++)inv[i][j]=col[i]}return inv}
+function quadratic(x,A){return dot(x,matVec(A,x))}
+
+function fitLogistic(X,y){
+  const p=X[0].length,beta=Array(p).fill(0);beta[0]=logit(clamp(mean(y),.02,.98));let converged=false,iterations=0;
+  for(let iter=0;iter<35;iter++){
+    iterations=iter+1;const g=Array(p).fill(0),H=zeros(p);
+    for(let i=0;i<X.length;i++){
+      const pr=clamp(logistic(dot(X[i],beta)),1e-6,1-1e-6),v=Math.max(1e-5,pr*(1-pr)),err=y[i]-pr;
+      for(let j=0;j<p;j++){g[j]+=X[i][j]*err;for(let k=0;k<p;k++)H[j][k]+=X[i][j]*X[i][k]*v}
+    }
+    for(let j=1;j<p;j++)H[j][j]+=1e-4;
+    let step;try{step=solve(H,g)}catch(err){break}
+    let mx=Math.max(...step.map(Math.abs));if(mx>2.5){const sc=2.5/mx;step=step.map(v=>v*sc);mx=2.5}
+    for(let j=0;j<p;j++)beta[j]+=step[j];
+    if(mx<1e-7){converged=true;break}
+  }
+  const probs=X.map(row=>clamp(logistic(dot(row,beta)),1e-6,1-1e-6));
+  return{beta,probs,converged,iterations};
+}
+
+function designRow(r,T,model=state.model){
+  const base=[1,T,r.zAge,r.zBmi,r.zInc,r.female,r.college,r.htn];
+  if(model==="full")return base.concat([r.age2,r.ageBmi,T*r.zAge,T*r.htn]);
+  if(model==="main")return base;
+  return[1,T,r.zAge,r.zBmi];
+}
+function outcomeTruth(r,nonlin=state.nonlin,hetero=state.hetero,effect=state.effect){
+  const lp0=logit(.085)+.58*r.zAge+.33*r.zBmi-.25*r.zInc-.16*r.female-.22*r.college+.70*r.htn+
+    nonlin*(.24*r.age2+.17*r.ageBmi);
+  const delta=Math.log(effect)+hetero*(.20*r.zAge+.26*r.htn);
+  return{q0:logistic(lp0),q1:logistic(lp0+delta),lp0,delta};
+}
+function fitOutcome(rows,model){
+  const Xobs=rows.map(r=>designRow(r,r.T,model)),fit=fitLogistic(Xobs,rows.map(r=>r.Y));
+  const pred0=rows.map(r=>clamp(logistic(dot(designRow(r,0,model),fit.beta)),1e-6,1-1e-6));
+  const pred1=rows.map(r=>clamp(logistic(dot(designRow(r,1,model),fit.beta)),1e-6,1-1e-6));
+  return{...fit,model,Xobs,predObs:fit.probs,pred0,pred1};
+}
+function aucScore(y,p){
+  const pairs=y.map((v,i)=>({y:v,p:p[i]})).sort((a,b)=>a.p-b.p),n1=y.reduce((s,v)=>s+v,0),n0=y.length-n1;if(!n1||!n0)return NaN;
+  let rankSum=0,i=0;while(i<pairs.length){let j=i+1;while(j<pairs.length&&pairs[j].p===pairs[i].p)j++;const avgRank=(i+1+j)/2;for(let k=i;k<j;k++)if(pairs[k].y)rankSum+=avgRank;i=j}
+  return(rankSum-n1*(n1+1)/2)/(n1*n0);
+}
+function orInference(rows,fit){
+  const n=rows.length,p=fit.beta.length,mu0=mean(fit.pred0),mu1=mean(fit.pred1),rd=mu1-mu0,rr=mu0>0?mu1/mu0:NaN;
+  const M=zeros(p),B=zeros(p),scores=[],d0=Array(p).fill(0),d1=Array(p).fill(0);
+  for(let i=0;i<n;i++){
+    const x=fit.Xobs[i],pr=fit.predObs[i],score=x.map(v=>v*(rows[i].Y-pr));scores.push(score);outerAdd(M,x,x,pr*(1-pr));outerAdd(B,score,score,1);
+    const x0=designRow(rows[i],0,fit.model),x1=designRow(rows[i],1,fit.model),p0=fit.pred0[i],p1=fit.pred1[i];
+    for(let j=0;j<p;j++){d0[j]+=p0*(1-p0)*x0[j];d1[j]+=p1*(1-p1)*x1[j]}
+  }
+  for(let j=0;j<p;j++){d0[j]/=n;d1[j]/=n;for(let k=0;k<p;k++){M[j][k]/=n;B[j][k]/=n}}
+  let invM,Vbeta;try{invM=matrixInverse(M);Vbeta=matMul(matMul(invM,B),transpose(invM));for(let j=0;j<p;j++)for(let k=0;k<p;k++)Vbeta[j][k]/=n}catch(err){return{valid:false}}
+  const if0=[],if1=[],ifrd=[],ifrr=[];
+  for(let i=0;i<n;i++){
+    const betaIF=matVec(invM,scores[i]),v0=(fit.pred0[i]-mu0)+dot(d0,betaIF),v1=(fit.pred1[i]-mu1)+dot(d1,betaIF),vr=v1-v0;
+    if0.push(v0);if1.push(v1);ifrd.push(vr);ifrr.push(mu0>0?v1/mu0-mu1*v0/(mu0*mu0):NaN);
+  }
+  const se0=Math.sqrt(variance(if0)/n),se1=Math.sqrt(variance(if1)/n),se=Math.sqrt(variance(ifrd)/n),seRR=Math.sqrt(variance(ifrr)/n);
+  const brier=mean(rows.map((r,i)=>(r.Y-fit.predObs[i])**2)),auc=aucScore(rows.map(r=>r.Y),fit.predObs);
+  return{valid:[mu0,mu1,rd,se].every(Number.isFinite),r0:mu0,r1:mu1,rd,rr,se,se0,se1,seRR,Vbeta,if0,if1,ifrd,brier,auc,
+    ci:{r0:[mu0-z975*se0,mu0+z975*se0],r1:[mu1-z975*se1,mu1+z975*se1],rd:[rd-z975*se,rd+z975*se],rr:[rr-z975*seRR,rr+z975*seRR]}};
+}
+function crudeInference(rows){
+  const n=rows.length,pA=mean(rows.map(r=>r.T)),a1=rows.filter(r=>r.T),a0=rows.filter(r=>!r.T);if(!a1.length||!a0.length)return{valid:false};
+  const mu1=mean(a1.map(r=>r.Y)),mu0=mean(a0.map(r=>r.Y)),rd=mu1-mu0,rr=mu0>0?mu1/mu0:NaN,if0=[],if1=[],ifrd=[];
+  for(const r of rows){const v1=r.T/pA*(r.Y-mu1),v0=(1-r.T)/(1-pA)*(r.Y-mu0);if1.push(v1);if0.push(v0);ifrd.push(v1-v0)}
+  const se0=Math.sqrt(variance(if0)/n),se1=Math.sqrt(variance(if1)/n),se=Math.sqrt(variance(ifrd)/n);
+  return{valid:true,r0:mu0,r1:mu1,rd,rr,se,se0,se1,ci:{r0:[mu0-z975*se0,mu0+z975*se0],r1:[mu1-z975*se1,mu1+z975*se1],rd:[rd-z975*se,rd+z975*se]}};
+}
+function computeSupport(rows){
+  const features=r=>[r.zAge,r.zBmi,r.zInc,.7*r.female,.7*r.college,.7*r.htn];
+  for(const r of rows){let best=Infinity;const x=features(r);for(const s of rows)if(s.T!==r.T){const y=features(s);let d=0;for(let j=0;j<x.length;j++)d+=(x[j]-y[j])**2;if(d<best)best=d}r.oppDist=Math.sqrt(best)}
+}
+function computeInference(){state.inf={crude:crudeInference(state.data),selected:orInference(state.data,state.fitSelected),full:orInference(state.data,state.fitFull)}}
+function invalidateCoverage(){state.coverageToken++;state.coverageRunning=false;state.coverageDone=0;state.coverageTotal=0;state.coverageResults=null;state.coverageTruth=NaN}
+
+function readControls(){
+  state.n=+$('nRange').value;state.conf=+$('confRange').value;state.overlap=+$('overlapRange').value;state.effect=+$('effectRange').value;
+  state.nonlin=+$('nonlinRange').value;state.hetero=+$('heteroRange').value;state.seed=clamp(+$('seedInput').value||1,1,99999999);state.model=$('outcomeModel').value;
+  state.reveal=+$('revealRange').value/100;state.x=$('xVar').value;state.y=$('yVar').value;state.curve=$('curveVar').value;state.dist=$('distVar').value;state.showTruth=$('truthToggle').checked;
+}
+function updateLabels(){
+  $('nValue').textContent=state.n;$('confValue').textContent=state.conf.toFixed(2);$('overlapValue').textContent=Math.round(state.overlap*100)+"%";$('effectValue').textContent="OR "+state.effect.toFixed(2);
+  $('nonlinValue').textContent=state.nonlin.toFixed(2);$('heteroValue').textContent=state.hetero.toFixed(2);$('seedValue').textContent=state.seed;$('revealValue').textContent=Math.round(state.reveal*100)+"%";
+  const mm=modelMeta[state.model];$('modelNote').innerHTML='<strong>'+mm.label+':</strong> '+mm.detail;
+}
+
+function buildCohort(){
+  readControls();updateLabels();const rng=mulberry32(state.seed),rows=[];
+  for(let i=0;i<state.n;i++){
+    const age=clamp(52+12*randn(rng),20,82),female=rng()<.52?1:0,ses=randn(rng),college=rng()<logistic(-.05+.85*ses+.012*(age-45))?1:0;
+    const income=clamp(Math.exp(.72+.46*ses+.14*college-.08*(1-female)+.22*randn(rng)),.25,5.5),bmi=clamp(27.2+1.15*female-.55*ses+.035*(age-50)+3.7*randn(rng),16,46);
+    const htn=rng()<logistic(-5.0+.047*age+.065*bmi+.20*(income<1.5))?1:0;
+    rows.push({id:"S"+String(i+1).padStart(3,"0"),age,bmi,income,female,college,htn,uT:rng(),uY:rng()});
+  }
+  const stats={};for(const k of ['age','bmi','income']){const vals=rows.map(r=>r[k]);stats[k]={m:mean(vals),s:sd(vals),med:median(vals)}}state.stats=stats;
+  for(const r of rows){r.zAge=(r.age-stats.age.m)/stats.age.s;r.zBmi=(r.bmi-stats.bmi.m)/stats.bmi.s;r.zInc=(r.income-stats.income.m)/stats.income.s;r.age2=r.zAge*r.zAge-1;r.ageBmi=r.zAge*r.zBmi}
+  const scores=rows.map(r=>.50*r.zAge+.30*r.zBmi-.48*r.zInc-.25*r.female-.34*r.college+.60*r.htn+.10*r.ageBmi),scoreMean=mean(scores),separation=state.conf*(1.60-.90*state.overlap);
+  for(let i=0;i<rows.length;i++){
+    const r=rows[i],trueE=clamp(logistic(logit(.32)+separation*(scores[i]-scoreMean)),.01,.99),T=r.uT<trueE?1:0,tr=outcomeTruth(r),q=T?tr.q1:tr.q0,Y=r.uY<q?1:0;
+    Object.assign(r,{trueE,T,Y,q0:tr.q0,q1:tr.q1,delta:tr.delta});
+  }
+  state.data=rows;computeSupport(rows);state.trueRisk0=mean(rows.map(r=>r.q0));state.trueRisk1=mean(rows.map(r=>r.q1));state.trueATE=state.trueRisk1-state.trueRisk0;
+  fitModels();state.selected=clamp(state.selected,0,rows.length-1);invalidateCoverage();renderAll();
+}
+function fitModels(){
+  state.fitSelected=fitOutcome(state.data,state.model);state.altModel=state.model==="full"?"main":"full";state.fitFull=fitOutcome(state.data,state.altModel);
+  state.data.forEach((r,i)=>{r.m0=state.fitSelected.pred0[i];r.m1=state.fitSelected.pred1[i];r.pObs=state.fitSelected.predObs[i];r.resid=r.Y-r.pObs;r.m0Full=state.fitFull.pred0[i];r.m1Full=state.fitFull.pred1[i]});
+  const altOpt=document.querySelector('#coverageEstimator option[value="full"]');if(altOpt)altOpt.textContent="Alternative: "+modelMeta[state.altModel].short;
+  computeInference();
+}
+function refitOnly(){readControls();updateLabels();fitModels();invalidateCoverage();renderAll()}
+
+const varMeta={
+  age:{label:"Age (years)",short:"Age",continuous:true,format:x=>fmt(x,1)},bmi:{label:"BMI (kg/m²)",short:"BMI",continuous:true,format:x=>fmt(x,1)},income:{label:"Income-to-poverty ratio",short:"Income ratio",continuous:true,format:x=>fmt(x,2)},
+  female:{label:"Female",short:"Female",continuous:false,format:x=>pct(x,1)},college:{label:"College education",short:"College",continuous:false,format:x=>pct(x,1)},htn:{label:"Baseline hypertension",short:"Hypertension",continuous:false,format:x=>pct(x,1)}
+};
+function armRows(t){return state.data.filter(r=>r.T===t)}
+function domainFor(key){const vals=state.data.map(r=>r[key]);let lo=Math.min(...vals),hi=Math.max(...vals);const pad=(hi-lo||1)*.06;return[lo-pad,hi+pad]}
+function sx(x,d0,d1,a,b){return a+(x-d0)/(d1-d0)*(b-a)}
+function sy(y,d0,d1,a,b){return b-(y-d0)/(d1-d0)*(b-a)}
+function axisTicks(lo,hi,n=5){const out=[];for(let i=0;i<=n;i++)out.push(lo+(hi-lo)*i/n);return out}
+function svgText(x,y,text,opts=""){return '<text x="'+x+'" y="'+y+'" '+opts+'>'+esc(text)+'</text>'}
+function linePath(points){return points.map((p,i)=>(i?'L':'M')+' '+p[0].toFixed(2)+' '+p[1].toFixed(2)).join(' ')}
+function areaBetween(upper,lower){let d='M '+upper[0][0].toFixed(2)+' '+upper[0][1].toFixed(2);for(let i=1;i<upper.length;i++)d+=' L '+upper[i][0].toFixed(2)+' '+upper[i][1].toFixed(2);for(let i=lower.length-1;i>=0;i--)d+=' L '+lower[i][0].toFixed(2)+' '+lower[i][1].toFixed(2);return d+' Z'}
+
+function renderMetrics(){
+  const inf=state.inf.selected,cards=[
+    ["Cohort",state.data.length+" subjects"],["Observed smokers",pct(mean(state.data.map(r=>r.T)),1)],["Observed CVD",pct(mean(state.data.map(r=>r.Y)),1)],
+    ["Outcome-model AUC",fmt(inf.auc,3)],["Standardized RD",signedPct(inf.rd,1)],["Known true RD",state.showTruth?signedPct(state.trueATE,1):"Hidden"]
+  ];
+  $('metricStrip').innerHTML=cards.map(x=>'<div class="metric"><div class="k">'+x[0]+'</div><div class="v">'+x[1]+'</div></div>').join('');
+}
+function renderScatter(){
+  const svg=$('scatterSvg'),xk=state.x,yk=state.y,xd=domainFor(xk),yd=domainFor(yk),L=58,R=815,T=22,B=420;let s='<style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="840" height="470" fill="#fff"/>';
+  for(const t of axisTicks(xd[0],xd[1],5)){const x=sx(t,xd[0],xd[1],L,R);s+='<line x1="'+x+'" x2="'+x+'" y1="'+T+'" y2="'+B+'" stroke="'+COLORS.grid+'"/>'+svgText(x,B+21,varMeta[xk].continuous?fmt(t,xk==='income'?1:0):fmt(t,0),'text-anchor="middle" font-size="11" fill="'+COLORS.muted+'"')}
+  for(const t of axisTicks(yd[0],yd[1],5)){const y=sy(t,yd[0],yd[1],T,B);s+='<line x1="'+L+'" x2="'+R+'" y1="'+y+'" y2="'+y+'" stroke="'+COLORS.grid+'"/>'+svgText(L-8,y+4,varMeta[yk].continuous?fmt(t,yk==='income'?1:0):fmt(t,0),'text-anchor="end" font-size="11" fill="'+COLORS.muted+'"')}
+  s+='<line x1="'+L+'" x2="'+R+'" y1="'+B+'" y2="'+B+'" stroke="#98A2B3"/><line x1="'+L+'" x2="'+L+'" y1="'+T+'" y2="'+B+'" stroke="#98A2B3"/>'+svgText((L+R)/2,458,varMeta[xk].label,'text-anchor="middle" font-size="12" font-weight="700" fill="'+COLORS.ink+'"')+'<g transform="translate(16,'+((T+B)/2)+') rotate(-90)">'+svgText(0,0,varMeta[yk].label,'text-anchor="middle" font-size="12" font-weight="700" fill="'+COLORS.ink+'"')+'</g>';
+  const order=state.data.map((r,i)=>({r,i})).sort((a,b)=>b.r.pObs-a.r.pObs);
+  for(const o of order){const r=o.r,x=sx(r[xk],xd[0],xd[1],L,R),y=sy(r[yk],yd[0],yd[1],T,B),rad=3.8+5.6*Math.sqrt(r.pObs),fill=r.T?COLORS.smoke:COLORS.control,selected=o.i===state.selected,stroke=r.Y?'#111827':selected?COLORS.accent:'#fff',sw=r.Y?2.2:selected?3.2:1;
+    s+='<circle class="subject-point" data-index="'+o.i+'" tabindex="0" cx="'+x.toFixed(2)+'" cy="'+y.toFixed(2)+'" r="'+rad.toFixed(2)+'" fill="'+fill+'" fill-opacity=".72" stroke="'+stroke+'" stroke-width="'+sw+'"><title>'+r.id+': fitted observed risk '+pct(r.pObs,1)+', m0 '+pct(r.m0,1)+', m1 '+pct(r.m1,1)+'</title></circle>';
+    if(selected)s+='<circle cx="'+x+'" cy="'+y+'" r="'+(rad+5)+'" fill="none" stroke="'+COLORS.accent+'" stroke-width="2" stroke-dasharray="4 3" pointer-events="none"/>';
+  }
+  svg.innerHTML=s;svg.querySelectorAll('.subject-point').forEach(el=>{el.addEventListener('pointermove',e=>showTip(e,+el.dataset.index));el.addEventListener('pointerleave',hideTip);el.addEventListener('click',()=>selectSubject(+el.dataset.index));el.addEventListener('focus',e=>showTip(e,+el.dataset.index));el.addEventListener('blur',hideTip);el.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();selectSubject(+el.dataset.index)}})});
+}
+function showTip(e,i){const r=state.data[i],tip=$('tooltip');tip.innerHTML='<b>'+r.id+'</b><br>'+varMeta[state.x].short+': '+varMeta[state.x].format(r[state.x])+'<br>'+varMeta[state.y].short+': '+varMeta[state.y].format(r[state.y])+'<br>'+(r.T?'Smoker':'Non-smoker')+' • '+(r.Y?'CVD':'No CVD')+'<br>m̂0 = '+pct(r.m0,1)+' • m̂1 = '+pct(r.m1,1);tip.style.left=(e.clientX||20)+'px';tip.style.top=(e.clientY||20)+'px';tip.style.opacity='1'}
+function hideTip(){$('tooltip').style.opacity='0'}
+function selectSubject(i){state.selected=clamp(i,0,state.data.length-1);renderScatter();renderSubject();renderCounterfactual();renderTable()}
+function supportInfo(d){if(d<.75)return{label:"Strong local support",cls:"support-good",score:clamp(1-d/1.5,0,1)};if(d<1.45)return{label:"Moderate local support",cls:"support-mid",score:clamp(1-d/2.2,0,1)};return{label:"Weak support / extrapolation",cls:"support-poor",score:clamp(1-d/3,0,1)}}
+function renderSubject(){
+  const r=state.data[state.selected]||state.data[0];if(!r)return;const sup=supportInfo(r.oppDist),obs=r.T?r.m1:r.m0,cf=r.T?r.m0:r.m1,individual=r.m1-r.m0;
+  $('subjectPanel').innerHTML='<div class="subject-id"><strong>'+r.id+'</strong><span class="status-pill '+(r.T?'status-smoke':'status-control')+'">'+(r.T?'T=1 smoker':'T=0 non-smoker')+'</span></div>'+ 
+    '<div class="kv"><div><div class="label">Age</div><div class="num">'+fmt(r.age,1)+' years</div></div><div><div class="label">BMI</div><div class="num">'+fmt(r.bmi,1)+'</div></div><div><div class="label">Income ratio</div><div class="num">'+fmt(r.income,2)+'</div></div><div><div class="label">Sex</div><div class="num">'+(r.female?'Female':'Male')+'</div></div><div><div class="label">College</div><div class="num">'+(r.college?'Yes':'No')+'</div></div><div><div class="label">Hypertension</div><div class="num">'+(r.htn?'Yes':'No')+'</div></div><div><div class="label">Observed outcome</div><div class="num">'+(r.Y?'CVD (Y=1)':'No CVD (Y=0)')+'</div></div><div><div class="label">Observed fitted risk</div><div class="num">'+pct(obs,1)+'</div></div></div>'+ 
+    '<div class="prediction-grid"><div class="prediction-box world0"><div class="world-label">Set this same subject to T=0</div><div class="world-value">'+pct(r.m0,1)+'</div><div class="world-sub">m̂(0, X<sub>'+r.id.slice(1)+'</sub>)</div></div><div class="prediction-box world1"><div class="world-label">Set this same subject to T=1</div><div class="world-value">'+pct(r.m1,1)+'</div><div class="world-sub">m̂(1, X<sub>'+r.id.slice(1)+'</sub>)</div></div></div>'+ 
+    '<div class="formula-box"><div class="small">Subject-level model contrast</div><div class="formula">m̂₁(Xᵢ) − m̂₀(Xᵢ) = '+signedPct(individual,1)+'</div><div class="meaning">Observed treatment prediction: <b>'+pct(obs,1)+'</b>. Counterfactual treatment prediction: <b>'+pct(cf,1)+'</b>. This subject contributes both values to the two population averages.</div></div>'+ 
+    '<div class="support-box"><div class="support-top"><span>'+sup.label+'</span><span>nearest opposite-arm distance '+fmt(r.oppDist,2)+'</span></div><div class="support-track"><div class="support-fill '+sup.cls+'" style="width:'+(100*sup.score).toFixed(0)+'%"></div></div></div>'+ 
+    (state.showTruth?'<div class="formula-stack"><div class="formula-mini">Simulation truth: q₀(Xᵢ) = '+pct(r.q0,1)+'; q₁(Xᵢ) = '+pct(r.q1,1)+'; true individual RD = '+signedPct(r.q1-r.q0,1)+'</div></div>':'')+
+    '<div class="subject-nav"><button id="prevSubject">← Previous subject</button><button id="nextSubject">Next subject →</button></div>';
+  $('prevSubject').onclick=()=>selectSubject((state.selected-1+state.data.length)%state.data.length);$('nextSubject').onclick=()=>selectSubject((state.selected+1)%state.data.length);
+}
+function referenceRow(key,value){
+  const r={age:state.stats.age.med,bmi:state.stats.bmi.med,income:state.stats.income.med,female:mean(state.data.map(x=>x.female))>=.5?1:0,college:mean(state.data.map(x=>x.college))>=.5?1:0,htn:0};r[key]=value;
+  r.zAge=(r.age-state.stats.age.m)/state.stats.age.s;r.zBmi=(r.bmi-state.stats.bmi.m)/state.stats.bmi.s;r.zInc=(r.income-state.stats.income.m)/state.stats.income.s;r.age2=r.zAge*r.zAge-1;r.ageBmi=r.zAge*r.zBmi;return r;
+}
+function binnedObserved(t,key,bins=7){const rows=armRows(t).slice().sort((a,b)=>a[key]-b[key]),out=[];for(let b=0;b<bins;b++){const lo=Math.floor(b*rows.length/bins),hi=Math.floor((b+1)*rows.length/bins),g=rows.slice(lo,hi);if(g.length<3)continue;const p=mean(g.map(r=>r.Y)),n=g.length,z=z975,den=1+z*z/n,center=(p+z*z/(2*n))/den,half=z*Math.sqrt(p*(1-p)/n+z*z/(4*n*n))/den;out.push({x:mean(g.map(r=>r[key])),p,lo:Math.max(0,center-half),hi:Math.min(1,center+half),n})}return out}
+function renderCurve(){
+  const key=state.curve,vals=state.data.map(r=>r[key]),lo=Math.min(...vals),hi=Math.max(...vals),N=90,L=58,R=752,T=24,B=328,fit=state.fitSelected,inf=state.inf.selected,series={0:[],1:[]},truth={0:[],1:[]};let ymax=.25;
+  for(let i=0;i<N;i++){const v=lo+(hi-lo)*i/(N-1),r=referenceRow(key,v);for(const trt of [0,1]){const x=designRow(r,trt,state.model),eta=dot(x,fit.beta),seEta=Math.sqrt(Math.max(0,quadratic(x,inf.Vbeta))),p=logistic(eta),lb=logistic(eta-z975*seEta),ub=logistic(eta+z975*seEta),q=outcomeTruth(r)[trt?'q1':'q0'];series[trt].push({v,p,lb,ub});truth[trt].push({v,q});ymax=Math.max(ymax,ub,q)}}
+  const bins0=binnedObserved(0,key),bins1=binnedObserved(1,key);for(const b of bins0.concat(bins1))ymax=Math.max(ymax,b.hi);ymax=Math.min(.85,Math.ceil(ymax*10+1)/10);
+  const X=v=>sx(v,lo,hi,L,R),Y=v=>sy(v,0,ymax,T,B);let s='<style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="780" height="390" fill="#fff"/>';
+  for(const t of axisTicks(lo,hi,5)){const x=X(t);s+='<line x1="'+x+'" x2="'+x+'" y1="'+T+'" y2="'+B+'" stroke="'+COLORS.grid+'"/>'+svgText(x,B+20,varMeta[key].format(t),'text-anchor="middle" font-size="10" fill="'+COLORS.muted+'"')}
+  for(const t of axisTicks(0,ymax,5)){const y=Y(t);s+='<line x1="'+L+'" x2="'+R+'" y1="'+y+'" y2="'+y+'" stroke="'+COLORS.grid+'"/>'+svgText(L-7,y+4,pct(t,0),'text-anchor="end" font-size="10" fill="'+COLORS.muted+'"')}
+  for(const trt of [0,1]){const c=trt?COLORS.smoke:COLORS.control,up=series[trt].map(o=>[X(o.v),Y(o.ub)]),low=series[trt].map(o=>[X(o.v),Y(o.lb)]),mid=series[trt].map(o=>[X(o.v),Y(o.p)]);s+='<path d="'+areaBetween(up,low)+'" fill="'+c+'" fill-opacity=".12"/><path d="'+linePath(mid)+'" fill="none" stroke="'+c+'" stroke-width="3"/>';if(state.showTruth)s+='<path d="'+linePath(truth[trt].map(o=>[X(o.v),Y(o.q)]))+'" fill="none" stroke="'+COLORS.green+'" stroke-width="2" stroke-dasharray="7 5" opacity="'+(trt?1:.72)+'"/>'}
+  for(const [arr,c] of [[bins0,COLORS.control],[bins1,COLORS.smoke]])for(const b of arr){const x=X(b.x),y=Y(b.p);s+='<line x1="'+x+'" x2="'+x+'" y1="'+Y(b.lo)+'" y2="'+Y(b.hi)+'" stroke="'+c+'" stroke-width="1.5"/><line x1="'+(x-4)+'" x2="'+(x+4)+'" y1="'+Y(b.lo)+'" y2="'+Y(b.lo)+'" stroke="'+c+'"/><line x1="'+(x-4)+'" x2="'+(x+4)+'" y1="'+Y(b.hi)+'" y2="'+Y(b.hi)+'" stroke="'+c+'"/><circle cx="'+x+'" cy="'+y+'" r="'+(3+Math.sqrt(b.n)/4)+'" fill="'+c+'" stroke="#fff" stroke-width="1.3"><title>Observed bin: n='+b.n+', risk '+pct(b.p,1)+'</title></circle>'}
+  s+='<line x1="'+L+'" x2="'+R+'" y1="'+B+'" y2="'+B+'" stroke="#98A2B3"/><line x1="'+L+'" x2="'+L+'" y1="'+T+'" y2="'+B+'" stroke="#98A2B3"/>'+svgText((L+R)/2,374,varMeta[key].label,'text-anchor="middle" font-size="12" font-weight="700" fill="'+COLORS.ink+'"')+'<g transform="translate(14,'+((T+B)/2)+') rotate(-90)">'+svgText(0,0,'Predicted CVD risk','text-anchor="middle" font-size="12" font-weight="700" fill="'+COLORS.ink+'"')+'</g>';
+  $('curveSvg').innerHTML=s;const ref=referenceRow(key,median(vals));$('curveReference').innerHTML='Reference profile fixes the other covariates at cohort medians/modes: age '+fmt(ref.age,1)+', BMI '+fmt(ref.bmi,1)+', income ratio '+fmt(ref.income,2)+', '+(ref.female?'female':'male')+', '+(ref.college?'college educated':'not college educated')+', and no baseline hypertension. Bands describe uncertainty in the fitted mean curve, not prediction intervals for individual binary outcomes.';
+}
+function hist(rows,key,bins,lo,hi){const h=Array(bins).fill(0);for(const r of rows){const j=clamp(Math.floor((r[key]-lo)/(hi-lo)*bins),0,bins-1);h[j]++}return h.map(x=>x/Math.max(1,rows.length))}
+function areaPath(h,x0,x1,y0,y1,maxY){const bw=(x1-x0)/h.length;let d='M '+x0+' '+y1;for(let i=0;i<h.length;i++){const x=x0+(i+.5)*bw,y=y1-(h[i]/maxY)*(y1-y0);d+=' L '+x.toFixed(2)+' '+y.toFixed(2)}return d+' L '+x1+' '+y1+' Z'}
+function lineHistPath(h,x0,x1,y0,y1,maxY){const bw=(x1-x0)/h.length;return h.map((v,i)=>(i?'L':'M')+' '+(x0+(i+.5)*bw).toFixed(2)+' '+(y1-(v/maxY)*(y1-y0)).toFixed(2)).join(' ')}
+function renderDistribution(){
+  const key=state.dist,m=varMeta[key],svg=$('distSvg');let s='<style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="780" height="350" fill="#fff"/>';
+  if(m.continuous){const vals=state.data.map(r=>r[key]),lo=Math.min(...vals),hi=Math.max(...vals),bins=16,hAll=hist(state.data,key,bins,lo,hi),h1=hist(armRows(1),key,bins,lo,hi),h0=hist(armRows(0),key,bins,lo,hi),mx=Math.max(...hAll,...h1,...h0)*1.15,L=55,R=750,T=42,B=292;
+    for(let k=0;k<=4;k++){const y=B-(B-T)*k/4;s+='<line x1="'+L+'" x2="'+R+'" y1="'+y+'" y2="'+y+'" stroke="'+COLORS.grid+'"/>'}
+    s+='<path d="'+areaPath(hAll,L,R,T,B,mx)+'" fill="#667085" fill-opacity=".14"/><path d="'+lineHistPath(hAll,L,R,T,B,mx)+'" fill="none" stroke="#667085" stroke-width="3"/>'+
+      '<path d="'+lineHistPath(h0,L,R,T,B,mx)+'" fill="none" stroke="'+COLORS.control+'" stroke-width="3"/><path d="'+lineHistPath(h1,L,R,T,B,mx)+'" fill="none" stroke="'+COLORS.smoke+'" stroke-width="3"/>';
+    for(const t of axisTicks(lo,hi,5)){const x=sx(t,lo,hi,L,R);s+='<line x1="'+x+'" x2="'+x+'" y1="'+B+'" y2="'+(B+5)+'" stroke="#98A2B3"/>'+svgText(x,B+21,m.format(t),'text-anchor="middle" font-size="10" fill="'+COLORS.muted+'"')}
+    s+=svgText((L+R)/2,337,m.label,'text-anchor="middle" font-size="12" font-weight="700" fill="'+COLORS.ink+'"')+svgText(L,25,'Target mean '+m.format(mean(vals))+' • smoker mean '+m.format(mean(armRows(1).map(r=>r[key])))+' • non-smoker mean '+m.format(mean(armRows(0).map(r=>r[key]))),'font-size="11" font-weight="750" fill="'+COLORS.ink+'"');
+  }else{const groups=[{name:'Full target cohort',rows:state.data,c:'#667085'},{name:'Observed smokers',rows:armRows(1),c:COLORS.smoke},{name:'Observed non-smokers',rows:armRows(0),c:COLORS.control}],L=220,R=730,T=60,row=78;
+    for(let k=0;k<=5;k++){const x=L+(R-L)*k/5;s+='<line x1="'+x+'" x2="'+x+'" y1="40" y2="285" stroke="'+COLORS.grid+'"/>'+svgText(x,310,(k*20)+'%','text-anchor="middle" font-size="10" fill="'+COLORS.muted+'"')}
+    groups.forEach((g,i)=>{const p=mean(g.rows.map(r=>r[key])),y=T+i*row;s+=svgText(L-12,y+5,g.name,'text-anchor="end" font-size="11" font-weight="750" fill="'+COLORS.ink+'"')+'<rect x="'+L+'" y="'+(y-13)+'" width="'+((R-L)*p)+'" height="26" rx="7" fill="'+g.c+'" fill-opacity=".82"/>'+svgText(Math.min(R-3,L+(R-L)*p+8),y+5,pct(p,1),'font-size="11" font-weight="850" fill="'+g.c+'"')});s+=svgText((L+R)/2,339,'Proportion with '+m.label.toLowerCase(),'text-anchor="middle" font-size="12" font-weight="700" fill="'+COLORS.ink+'"')
+  }
+  svg.innerHTML=s;
+}
+function representativeIndices(){
+  const sorted=state.data.map((r,i)=>({i,d:r.m1-r.m0})).sort((a,b)=>a.d-b.d),n=26,set=new Set();for(let k=0;k<n;k++)set.add(sorted[Math.round(k*(sorted.length-1)/(n-1))].i);set.add(state.selected);return Array.from(set).sort((a,b)=>(state.data[a].m1-state.data[a].m0)-(state.data[b].m1-state.data[b].m0)).slice(0,28)
+}
+function renderCounterfactual(){
+  const ids=representativeIndices(),vals=ids.flatMap(i=>[state.data[i].m0,state.data[i].m1]),max=Math.max(.25,...vals)*1.12,lo=0,hi=Math.min(.8,max),L=100,R=748,T=38,B=488,rowH=(B-T)/Math.max(1,ids.length-1),X=v=>sx(v,lo,hi,L,R);let s='<style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="780" height="540" fill="#fff"/>';
+  for(const t of axisTicks(lo,hi,5)){const x=X(t);s+='<line x1="'+x+'" x2="'+x+'" y1="'+T+'" y2="'+B+'" stroke="'+COLORS.grid+'"/>'+svgText(x,516,pct(t,0),'text-anchor="middle" font-size="10" fill="'+COLORS.muted+'"')}
+  ids.forEach((idx,j)=>{const r=state.data[idx],y=T+j*rowH,obs=r.T?r.m1:r.m0,alt=r.T?r.m0:r.m1,m0d=r.T?obs+state.reveal*(r.m0-obs):r.m0,m1d=r.T?r.m1:obs+state.reveal*(r.m1-obs),selected=idx===state.selected;
+    if(selected)s+='<rect x="8" y="'+(y-rowH*.43)+'" width="756" height="'+Math.max(14,rowH*.86)+'" rx="6" fill="#EAF8F8"/>';
+    s+=svgText(L-10,y+3,r.id,'text-anchor="end" font-size="9" font-weight="'+(selected?'850':'650')+'" fill="'+(selected?COLORS.accent:COLORS.muted)+'"')+'<line x1="'+X(m0d)+'" x2="'+X(m1d)+'" y1="'+y+'" y2="'+y+'" stroke="#A8B2C0" stroke-width="2" opacity="'+(.25+.75*state.reveal)+'"/>';
+    const observed0=r.T===0,observed1=r.T===1;s+='<circle class="cf-row" data-index="'+idx+'" cx="'+X(m0d)+'" cy="'+y+'" r="4.8" fill="'+(observed0?COLORS.control:'#fff')+'" stroke="'+COLORS.control+'" stroke-width="2" opacity="'+(observed0?1:.2+.8*state.reveal)+'"><title>'+r.id+' under T=0: '+pct(r.m0,1)+'</title></circle><circle class="cf-row" data-index="'+idx+'" cx="'+X(m1d)+'" cy="'+y+'" r="4.8" fill="'+(observed1?COLORS.smoke:'#fff')+'" stroke="'+COLORS.smoke+'" stroke-width="2" opacity="'+(observed1?1:.2+.8*state.reveal)+'"><title>'+r.id+' under T=1: '+pct(r.m1,1)+'</title></circle>';
+  });s+=svgText((L+R)/2,538,'Fitted CVD risk under each treatment choice','text-anchor="middle" font-size="11" font-weight="700" fill="'+COLORS.ink+'"')+svgText(R,22,'Counterfactual reveal '+Math.round(100*state.reveal)+'%','text-anchor="end" font-size="11" font-weight="850" fill="'+COLORS.accent+'"');
+  $('counterfactualSvg').innerHTML=s;$('counterfactualSvg').querySelectorAll('.cf-row').forEach(el=>el.addEventListener('click',()=>selectSubject(+el.dataset.index)));
+}
+function histValues(values,bins,lo,hi){const h=Array(bins).fill(0);for(const v of values){const j=clamp(Math.floor((v-lo)/(hi-lo)*bins),0,bins-1);h[j]++}return h.map(x=>x/values.length)}
+function renderStandardize(){
+  const inf=state.inf.selected,all=state.data.flatMap(r=>[r.m0,r.m1]),lo=0,hi=Math.min(.8,Math.max(.25,...all)*1.15),panels=[{t:0,x0:45,x1:375,c:COLORS.control,vals:state.data.map(r=>r.m0),mu:inf.r0,ci:inf.ci.r0,trueMu:state.trueRisk0},{t:1,x0:420,x1:750,c:COLORS.smoke,vals:state.data.map(r=>r.m1),mu:inf.r1,ci:inf.ci.r1,trueMu:state.trueRisk1}],T=72,B=330,bins=15;let s='<style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="780" height="430" fill="#fff"/>';
+  for(const p of panels){const h=histValues(p.vals,bins,lo,hi),mx=Math.max(...h)*1.12,X=v=>sx(v,lo,hi,p.x0,p.x1);s+=svgText((p.x0+p.x1)/2,28,'World T='+p.t+': predict all '+state.data.length+' subjects','text-anchor="middle" font-size="13" font-weight="850" fill="'+p.c+'"');for(let k=0;k<=4;k++){const y=B-(B-T)*k/4;s+='<line x1="'+p.x0+'" x2="'+p.x1+'" y1="'+y+'" y2="'+y+'" stroke="'+COLORS.grid+'"/>'}
+    s+='<path d="'+areaPath(h,p.x0,p.x1,T,B,mx)+'" fill="'+p.c+'" fill-opacity=".20"/><path d="'+lineHistPath(h,p.x0,p.x1,T,B,mx)+'" fill="none" stroke="'+p.c+'" stroke-width="3"/>';
+    const xlo=X(clamp(p.ci[0],lo,hi)),xhi=X(clamp(p.ci[1],lo,hi)),xm=X(p.mu);s+='<rect x="'+xlo+'" y="42" width="'+Math.max(1,xhi-xlo)+'" height="17" rx="8" fill="'+p.c+'" fill-opacity=".20"/><line x1="'+xm+'" x2="'+xm+'" y1="38" y2="'+B+'" stroke="'+p.c+'" stroke-width="3"/>'+svgText(xm,52,pct(p.mu,1),'text-anchor="middle" font-size="10" font-weight="900" fill="'+p.c+'"');if(state.showTruth){const xt=X(p.trueMu);s+='<line x1="'+xt+'" x2="'+xt+'" y1="62" y2="'+B+'" stroke="'+COLORS.green+'" stroke-width="2" stroke-dasharray="6 4"/>'}
+    for(const t of axisTicks(lo,hi,4)){const x=X(t);s+=svgText(x,B+19,pct(t,0),'text-anchor="middle" font-size="9" fill="'+COLORS.muted+'"')}s+=svgText((p.x0+p.x1)/2,375,'Distribution of m̂('+p.t+', Xᵢ)','text-anchor="middle" font-size="11" font-weight="700" fill="'+COLORS.ink+'"')
+  }
+  s+=svgText(390,414,'Solid vertical line = estimated average; top shaded segment = its 95% CI'+(state.showTruth?'; green dashed line = true average risk':''),'text-anchor="middle" font-size="10" fill="'+COLORS.muted+'"');$('standardizeSvg').innerHTML=s;
+  const c0=inf.ci.r0[0]<=state.trueRisk0&&state.trueRisk0<=inf.ci.r0[1],c1=inf.ci.r1[0]<=state.trueRisk1&&state.trueRisk1<=inf.ci.r1[1];$('worldSummary').innerHTML='<div class="box"><span>Average if everyone were non-smoker</span><b>'+pct(inf.r0,1)+'</b><small>95% CI ['+pct(inf.ci.r0[0],1)+', '+pct(inf.ci.r0[1],1)+'] '+(state.showTruth?'<i class="ci-inline '+(c0?'cover':'miss')+'">'+(c0?'truth contained':'truth missed')+'</i>':'')+'</small></div><div class="box"><span>Average if everyone were smoker</span><b>'+pct(inf.r1,1)+'</b><small>95% CI ['+pct(inf.ci.r1[0],1)+', '+pct(inf.ci.r1[1],1)+'] '+(state.showTruth?'<i class="ci-inline '+(c1?'cover':'miss')+'">'+(c1?'truth contained':'truth missed')+'</i>':'')+'</small></div>';
+}
+function renderEstimates(){
+  const crude=state.inf.crude,sel=state.inf.selected,full=state.inf.full,truth={r0:state.trueRisk0,r1:state.trueRisk1,rd:state.trueATE,rr:state.trueRisk0>0?state.trueRisk1/state.trueRisk0:NaN},hiddenTruth={r0:NaN,r1:NaN,rd:NaN,rr:NaN},methods=[['Crude',crude,'Observed arms'],[modelMeta[state.model].short,sel,'Selected model'],['Alternative: '+modelMeta[state.altModel].short,full,'Sensitivity model'],[state.showTruth?'Known truth':'Simulation truth',state.showTruth?truth:hiddenTruth,state.showTruth?'Generating mechanism':'Hidden by display setting']];
+  let html='<div class="estimate-grid">'+methods.map((m,i)=>'<div class="est '+(i===1?'current':i===3?'truth':'')+'"><div class="name">'+m[0]+'</div><div class="rd">'+signedPct(m[1].rd,1)+'</div><div class="sub">RD • RR '+fmt(m[1].rr,2)+'</div></div>').join('')+'</div>';
+  const all=[sel.r0,sel.r1,state.trueRisk0,state.trueRisk1,sel.ci.r0[1],sel.ci.r1[1]],max=Math.min(.8,Math.max(.25,...all)*1.18),W=720,H=255,L=78,R=680,T=28,B=192,Y=v=>sy(v,0,max,T,B),bars=[{name:'Everyone T=0',v:sel.r0,ci:sel.ci.r0,t:state.trueRisk0,c:COLORS.control},{name:'Everyone T=1',v:sel.r1,ci:sel.ci.r1,t:state.trueRisk1,c:COLORS.smoke}];let s='<svg class="chart" viewBox="0 0 '+W+' '+H+'"><style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="'+W+'" height="'+H+'" fill="#fff"/>';
+  for(const t of axisTicks(0,max,4)){const y=Y(t);s+='<line x1="'+L+'" x2="'+R+'" y1="'+y+'" y2="'+y+'" stroke="'+COLORS.grid+'"/>'+svgText(L-8,y+4,pct(t,0),'text-anchor="end" font-size="10" fill="'+COLORS.muted+'"')}
+  bars.forEach((b,i)=>{const x=240+i*260,w=105,y=Y(b.v);s+='<rect x="'+(x-w/2)+'" y="'+y+'" width="'+w+'" height="'+(B-y)+'" rx="8" fill="'+b.c+'" fill-opacity=".80"/><line x1="'+x+'" x2="'+x+'" y1="'+Y(b.ci[0])+'" y2="'+Y(b.ci[1])+'" stroke="#1F2937" stroke-width="2"/><line x1="'+(x-8)+'" x2="'+(x+8)+'" y1="'+Y(b.ci[0])+'" y2="'+Y(b.ci[0])+'" stroke="#1F2937" stroke-width="2"/><line x1="'+(x-8)+'" x2="'+(x+8)+'" y1="'+Y(b.ci[1])+'" y2="'+Y(b.ci[1])+'" stroke="#1F2937" stroke-width="2"/>'+svgText(x,y-9,pct(b.v,1),'text-anchor="middle" font-size="12" font-weight="900" fill="'+b.c+'"')+svgText(x,B+22,b.name,'text-anchor="middle" font-size="11" font-weight="750" fill="'+COLORS.ink+'"');if(state.showTruth)s+='<line x1="'+(x-w/2-8)+'" x2="'+(x+w/2+8)+'" y1="'+Y(b.t)+'" y2="'+Y(b.t)+'" stroke="'+COLORS.green+'" stroke-width="3" stroke-dasharray="5 4"/>'});s+=svgText(15,17,'Standardized risks with 95% CIs','font-size="11" font-weight="850" fill="'+COLORS.ink+'"')+'</svg>';
+  const complexity=state.fitSelected.beta.length,quality=Math.abs(sel.rd-state.trueATE),qcls=quality<.02?'good':quality<.05?'warn':'bad',qtext=quality<.02?'Close to truth in this cohort':quality<.05?'Noticeable model error':'Large model error';
+  html+=s+'<div class="model-quality"><span class="quality-pill">'+complexity+' fitted coefficients</span><span class="quality-pill">Brier '+fmt(sel.brier,3)+'</span><span class="quality-pill">AUC '+fmt(sel.auc,3)+'</span>'+(state.showTruth?'<span class="quality-pill '+qcls+'">'+qtext+'</span>':'')+'</div><div class="risk-formula"><strong>Do not stop at the smoking coefficient.</strong> A logistic-regression coefficient is conditional and, with interactions, may not even be a single common effect. The marginal estimand comes from predicting every subject twice and averaging:<div class="formula-line">RD̂ = mean{m̂(1,Xᵢ)} − mean{m̂(0,Xᵢ)} = '+pct(sel.r1,2)+' − '+pct(sel.r0,2)+' = '+signedPct(sel.rd,2)+'</div></div>';
+  $('estimatePanel').innerHTML=html;
+}
+function methodRows(){return[{key:'crude',name:'Crude observed comparison',inf:state.inf.crude},{key:'selected',name:modelMeta[state.model].label,inf:state.inf.selected},{key:'full',name:'Alternative: '+modelMeta[state.altModel].label,inf:state.inf.full}]}
+function renderCI(){
+  const rows=methodRows(),truth=state.trueATE,vals=rows.flatMap(o=>o.inf.valid?[o.inf.ci.rd[0],o.inf.ci.rd[1]]:[]).concat([0,truth]),mn=Math.min(...vals),mx=Math.max(...vals),span=Math.max(.12,mx-mn),lo=Math.max(-.55,mn-.14*span),hi=Math.min(.75,mx+.14*span),L=220,R=745,T=55,B=270,X=v=>sx(v,lo,hi,L,R);let s='<style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="780" height="340" fill="#fff"/>';
+  for(const t of axisTicks(lo,hi,5)){const x=X(t);s+='<line x1="'+x+'" x2="'+x+'" y1="'+T+'" y2="'+B+'" stroke="'+COLORS.grid+'"/>'+svgText(x,306,(t>=0?'+':'')+pct(t,0),'text-anchor="middle" font-size="9" fill="'+COLORS.muted+'"')}
+  if(lo<=0&&hi>=0){const x=X(0);s+='<line x1="'+x+'" x2="'+x+'" y1="'+(T-10)+'" y2="'+B+'" stroke="#98A2B3" stroke-width="1.5" stroke-dasharray="4 4"/>'+svgText(x,T-18,'No effect','text-anchor="middle" font-size="9" fill="'+COLORS.muted+'"')}
+  if(state.showTruth){const x=X(truth);s+='<line x1="'+x+'" x2="'+x+'" y1="'+(T-10)+'" y2="'+B+'" stroke="'+COLORS.green+'" stroke-width="3"/>'+svgText(x,T-18,'Truth '+signedPct(truth,1),'text-anchor="middle" font-size="10" font-weight="850" fill="'+COLORS.green+'"')}
+  rows.forEach((o,i)=>{const y=85+i*77,inf=o.inf,c=o.key==='selected'?COLORS.accent:o.key==='full'?COLORS.green:COLORS.gray;s+=svgText(L-12,y+4,o.name,'text-anchor="end" font-size="11" font-weight="750" fill="'+COLORS.ink+'"');if(inf.valid){s+='<line x1="'+X(inf.ci.rd[0])+'" x2="'+X(inf.ci.rd[1])+'" y1="'+y+'" y2="'+y+'" stroke="'+c+'" stroke-width="5" stroke-linecap="round"/><circle cx="'+X(inf.rd)+'" cy="'+y+'" r="7" fill="'+c+'" stroke="#fff" stroke-width="2"/><title>'+o.name+': RD '+signedPct(inf.rd,2)+'; 95% CI ['+signedPct(inf.ci.rd[0],2)+', '+signedPct(inf.ci.rd[1],2)+']</title>'}}
+  );s+=svgText((L+R)/2,332,'Risk difference: CVD risk if everyone smoked minus if no one smoked','text-anchor="middle" font-size="11" font-weight="700" fill="'+COLORS.ink+'"');$('ciSvg').innerHTML=s;
+  $('ciStatusPanel').innerHTML=rows.map(o=>{const inf=o.inf,cover=inf.valid&&inf.ci.rd[0]<=truth&&truth<=inf.ci.rd[1];return '<div class="ci-status-item '+(state.showTruth?(cover?'cover':'miss'):'')+'"><div class="ci-status-name">'+o.name+'</div><div class="ci-status-value">'+signedPct(inf.rd,1)+'<br>95% CI ['+signedPct(inf.ci.rd[0],1)+', '+signedPct(inf.ci.rd[1],1)+']</div>'+(state.showTruth?'<span class="ci-badge">'+(cover?'✓ Truth contained':'✕ Truth missed')+'</span>':'<span class="ci-badge">Truth hidden</span>')+'</div>'}).join('');
+}
+function coverageStats(results,key,truth){const vals=results.map(r=>r[key]).filter(x=>x&&x.valid&&Number.isFinite(x.rd)&&Number.isFinite(x.ci.rd[0])),covered=vals.filter(x=>x.ci.rd[0]<=truth&&truth<=x.ci.rd[1]).length;return{vals,valid:vals.length,covered,coverage:vals.length?covered/vals.length:NaN,bias:vals.length?mean(vals.map(x=>x.rd-truth)):NaN,width:vals.length?mean(vals.map(x=>x.ci.rd[1]-x.ci.rd[0])):NaN}}
+function renderCoverage(){
+  const run=$('runCoverage'),done=state.coverageTotal?state.coverageDone/state.coverageTotal:0;run.disabled=state.coverageRunning;run.textContent=state.coverageRunning?'Running…':(state.coverageResults?'Run again':'Run experiment');$('coverageProgressFill').style.width=(100*done).toFixed(1)+'%';$('coverageProgressPct').textContent=Math.round(100*done)+'%';$('coverageProgressText').textContent=state.coverageRunning?'Generating sample '+state.coverageDone+' of '+state.coverageTotal:(state.coverageResults?'Completed '+state.coverageResults.length+' repeated samples':'No experiment run yet');
+  if(!state.coverageResults){$('coverageSummary').innerHTML='';$('coverageSvg').innerHTML='';$('coverageEmpty').style.display='block';return}$('coverageEmpty').style.display='none';const truth=state.coverageTruth,selected=$('coverageEstimator').value,meta={crude:['Crude','No adjustment'],selected:[modelMeta[state.model].short,'Selected model'],full:['Alternative: '+modelMeta[state.altModel].short,'Sensitivity model']},stats={};for(const k of ['crude','selected','full'])stats[k]=coverageStats(state.coverageResults,k,truth);
+  $('coverageSummary').innerHTML=['crude','selected','full'].map(k=>{const q=stats[k];return '<button class="coverage-stat '+(k===selected?'selected':'')+'" data-method="'+k+'"><div class="name">'+meta[k][0]+'</div><div class="number">'+pct(q.coverage,1)+'</div><div class="detail">'+q.covered+' / '+q.valid+' CIs cover truth<br>Bias '+signedPct(q.bias,1)+' • mean width '+pct(q.width,1)+'</div></button>'}).join('');$('coverageSummary').querySelectorAll('[data-method]').forEach(b=>b.onclick=()=>{$('coverageEstimator').value=b.dataset.method;renderCoverage()});
+  const q=stats[selected],all=q.vals.map((r,i)=>({r,i,cover:r.ci.rd[0]<=truth&&truth<=r.ci.rd[1]}));if(!all.length){$('coverageSvg').innerHTML='';return}const maxShow=46,step=Math.max(1,Math.ceil(all.length/maxShow)),shown=all.filter((_,i)=>i%step===0).slice(0,maxShow).sort((a,b)=>a.r.rd-b.r.rd),vals=shown.flatMap(o=>o.r.ci.rd).concat([0,truth]),mn=Math.min(...vals),mx=Math.max(...vals),span=Math.max(.12,mx-mn),lo=Math.max(-.6,mn-.10*span),hi=Math.min(.8,mx+.10*span),L=115,R=1145,T=58,B=404,X=v=>sx(v,lo,hi,L,R),rowH=(B-T)/Math.max(1,shown.length-1);let g='<style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="1180" height="470" fill="#fff"/>';
+  for(const t of axisTicks(lo,hi,6)){const x=X(t);g+='<line x1="'+x+'" x2="'+x+'" y1="'+T+'" y2="'+B+'" stroke="'+COLORS.grid+'"/>'+svgText(x,438,(t>=0?'+':'')+pct(t,0),'text-anchor="middle" font-size="9" fill="'+COLORS.muted+'"')}
+  if(lo<=0&&hi>=0){const x=X(0);g+='<line x1="'+x+'" x2="'+x+'" y1="'+(T-10)+'" y2="'+B+'" stroke="#98A2B3" stroke-width="1.5" stroke-dasharray="4 4"/>'}const xt=X(truth);g+='<line x1="'+xt+'" x2="'+xt+'" y1="'+(T-10)+'" y2="'+B+'" stroke="'+COLORS.green+'" stroke-width="3"/>'+svgText(xt,T-20,'Truth '+signedPct(truth,1),'text-anchor="middle" font-size="10" font-weight="850" fill="'+COLORS.green+'"');shown.forEach((o,j)=>{const y=T+j*rowH,r=o.r,c=o.cover?COLORS.green:COLORS.danger;g+=svgText(L-9,y+3,'#'+String(o.i+1).padStart(2,'0'),'text-anchor="end" font-size="8" fill="'+COLORS.muted+'"')+'<line x1="'+X(clamp(r.ci.rd[0],lo,hi))+'" x2="'+X(clamp(r.ci.rd[1],lo,hi))+'" y1="'+y+'" y2="'+y+'" stroke="'+c+'" stroke-width="2.7" stroke-linecap="round"><title>Sample '+(o.i+1)+': '+signedPct(r.rd,2)+'; 95% CI ['+signedPct(r.ci.rd[0],2)+', '+signedPct(r.ci.rd[1],2)+']</title></line><circle cx="'+X(r.rd)+'" cy="'+y+'" r="3.5" fill="'+c+'" stroke="#fff" stroke-width="1"/>'});g+=svgText((L+R)/2,465,meta[selected][0]+' risk-difference estimates and 95% CIs','text-anchor="middle" font-size="11" font-weight="700" fill="'+COLORS.ink+'"')+svgText(R,25,'Empirical coverage '+pct(q.coverage,1)+' ('+q.covered+'/'+q.valid+')','text-anchor="end" font-size="12" font-weight="850" fill="'+(q.coverage>=.90?COLORS.green:COLORS.danger)+'"');$('coverageSvg').innerHTML=g;
+}
+function runCoverage(){
+  stop();readControls();const M=+$('coverageM').value,token=++state.coverageToken,truth=state.trueATE,model=state.model,altModel=state.altModel,base=state.data.map(r=>({id:r.id,age:r.age,bmi:r.bmi,income:r.income,female:r.female,college:r.college,htn:r.htn,zAge:r.zAge,zBmi:r.zBmi,zInc:r.zInc,age2:r.age2,ageBmi:r.ageBmi,trueE:r.trueE,q0:r.q0,q1:r.q1})),rng=mulberry32((state.seed^0x9E3779B9)>>>0);state.coverageRunning=true;state.coverageDone=0;state.coverageTotal=M;state.coverageResults=[];state.coverageTruth=truth;renderCoverage();
+  function one(){const rows=base.map(b=>{const T=rng()<b.trueE?1:0,Y=rng()<(T?b.q1:b.q0)?1:0;return{...b,T,Y}}),selFit=fitOutcome(rows,model),fullFit=fitOutcome(rows,altModel);return{crude:crudeInference(rows),selected:orInference(rows,selFit),full:orInference(rows,fullFit)}}
+  function step(){if(token!==state.coverageToken)return;const chunk=M>=120?1:2,end=Math.min(M,state.coverageDone+chunk);for(;state.coverageDone<end;state.coverageDone++)state.coverageResults.push(one());renderCoverage();if(state.coverageDone<M)setTimeout(step,0);else{state.coverageRunning=false;renderCoverage()}}setTimeout(step,0);
+}
+function renderTable(){
+  const rows=state.data.map((r,i)=>({r,i})).sort((a,b)=>Math.abs(b.r.m1-b.r.m0)-Math.abs(a.r.m1-a.r.m0)).slice(0,60);$('subjectTable').innerHTML=rows.map(o=>{const r=o.r;return '<tr data-index="'+o.i+'" class="'+(o.i===state.selected?'selected':'')+'"><td>'+r.id+'</td><td>'+fmt(r.age,1)+'</td><td>'+fmt(r.bmi,1)+'</td><td>'+fmt(r.income,2)+'</td><td>'+(r.female?'Yes':'No')+'</td><td>'+(r.college?'Yes':'No')+'</td><td>'+(r.htn?'Yes':'No')+'</td><td>'+r.T+'</td><td>'+r.Y+'</td><td>'+pct(r.m0,2)+'</td><td>'+pct(r.m1,2)+'</td><td>'+signedPct(r.m1-r.m0,2)+'</td><td>'+pct(r.pObs,2)+'</td><td>'+fmt(r.resid,3)+'</td><td>'+fmt(r.oppDist,2)+'</td></tr>'}).join('');$('subjectTable').querySelectorAll('tr').forEach(tr=>tr.onclick=()=>selectSubject(+tr.dataset.index));
+}
+
+function modelEquationHTML(model){
+  const common='<i>η</i><sub>β</sub>(t,x) = β<sub>0</sub> + β<sub>T</sub>t + β<sub>A</sub>z<sub>age</sub> + β<sub>B</sub>z<sub>BMI</sub>';
+  if(model==='sparse')return common;
+  const main=common+' + β<sub>I</sub>z<sub>income</sub> + β<sub>F</sub>female + β<sub>C</sub>college + β<sub>H</sub>HTN';
+  if(model==='main')return main;
+  return main+' + β<sub>A²</sub>(z<sub>age</sub><sup>2</sup>−1) + β<sub>AB</sub>z<sub>age</sub>z<sub>BMI</sub> + β<sub>TA</sub>t·z<sub>age</sub> + β<sub>TH</sub>t·HTN';
+}
+function renderMathFramework(){
+  if(!state.inf||!state.inf.selected)return;
+  const inf=state.inf.selected,cover=inf.valid&&inf.ci.rd[0]<=state.trueATE&&state.trueATE<=inf.ci.rd[1];
+  $('mathSelectedModelName').textContent=modelMeta[state.model].label;
+  $('mathSelectedModelEquation').innerHTML=modelEquationHTML(state.model);
+  let status='';
+  if(state.showTruth){
+    status='<span class="number-chip" style="border-color:'+(cover?'#A9DCC8':'#F0BBBB')+';background:'+(cover?'#F2FBF7':'#FFF5F5')+';color:'+(cover?'#176A4C':'#A52D2D')+'">'+(cover?'✓ 95% CI contains truth':'✕ 95% CI misses truth')+'</span>';
+  }
+  $('mathCurrentEstimate').innerHTML='<strong>Current plug-in calculation — '+modelMeta[state.model].label+'</strong>'+
+    '<div class="current-numbers"><span class="number-chip">ψ̂₀<sup>OR</sup> = '+pct(inf.r0,2)+'</span><span class="number-chip">ψ̂₁<sup>OR</sup> = '+pct(inf.r1,2)+'</span><span class="number-chip">RD̂<sup>OR</sup> = '+signedPct(inf.rd,2)+'</span><span class="number-chip">95% CI ['+signedPct(inf.ci.rd[0],2)+', '+signedPct(inf.ci.rd[1],2)+']</span>'+status+'</div>'+
+    '<div style="margin-top:7px">The displayed risk difference is obtained from all <b>'+state.data.length+'</b> paired predictions—not from the fitted smoking coefficient alone.</div>';
+}
+function activateMathTab(name,focus=true){
+  const tabs=[...document.querySelectorAll('[data-math-tab]')],panels=[...document.querySelectorAll('.math-panel')];
+  tabs.forEach(tab=>{const on=tab.dataset.mathTab===name;tab.setAttribute('aria-selected',on?'true':'false');tab.tabIndex=on?0:-1;if(on&&focus)tab.focus()});
+  panels.forEach(panel=>{const on=panel.id==='mathPanel'+name.charAt(0).toUpperCase()+name.slice(1);panel.classList.toggle('active',on);panel.hidden=!on});
+}
+function initMathTabs(){
+  const tabs=[...document.querySelectorAll('[data-math-tab]')];
+  tabs.forEach((tab,index)=>{
+    tab.tabIndex=index===0?0:-1;
+    tab.addEventListener('click',()=>activateMathTab(tab.dataset.mathTab,false));
+    tab.addEventListener('keydown',e=>{
+      if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;e.preventDefault();
+      let j=index;if(e.key==='ArrowRight')j=(index+1)%tabs.length;if(e.key==='ArrowLeft')j=(index-1+tabs.length)%tabs.length;if(e.key==='Home')j=0;if(e.key==='End')j=tabs.length-1;
+      activateMathTab(tabs[j].dataset.mathTab,true);
+    });
+  });
+}
+
+function renderAll(){renderMetrics();renderMathFramework();renderScatter();renderSubject();renderCurve();renderDistribution();renderCounterfactual();renderStandardize();renderEstimates();renderCI();renderCoverage();renderTable()}
+function preset(name){const p={well:{conf:1.25,overlap:.68,effect:1.8,nonlin:.8,hetero:.55,model:'full'},nonlinear:{conf:1.35,overlap:.62,effect:1.8,nonlin:1.8,hetero:1.1,model:'main'},omit:{conf:1.65,overlap:.55,effect:1.8,nonlin:.8,hetero:.55,model:'sparse'},poor:{conf:2.25,overlap:.20,effect:1.8,nonlin:.8,hetero:.55,model:'full'}}[name];$('confRange').value=p.conf;$('overlapRange').value=p.overlap;$('effectRange').value=p.effect;$('nonlinRange').value=p.nonlin;$('heteroRange').value=p.hetero;$('outcomeModel').value=p.model;$('revealRange').value=100;state.selected=0;buildCohort()}
+function reset(){for(const [id,v] of [['nRange',defaults.n],['confRange',defaults.conf],['overlapRange',defaults.overlap],['effectRange',defaults.effect],['nonlinRange',defaults.nonlin],['heteroRange',defaults.hetero],['seedInput',defaults.seed],['outcomeModel',defaults.model],['revealRange',100],['xVar',defaults.x],['yVar',defaults.y],['curveVar',defaults.curve],['distVar',defaults.dist]])$(id).value=v;$('truthToggle').checked=true;state.selected=0;buildCohort()}
+function animate(){if(state.animation)clearInterval(state.animation);$('revealRange').value=0;readControls();updateLabels();renderCounterfactual();let v=0;state.animation=setInterval(()=>{v+=2;$('revealRange').value=Math.min(100,v);readControls();updateLabels();renderCounterfactual();if(v>=100){clearInterval(state.animation);state.animation=null}},55)}
+function stop(){if(state.animation){clearInterval(state.animation);state.animation=null}}
+function exportCSV(){const head=['id','age','bmi','income_ratio','female','college','hypertension','smoker_T','cvd_Y','true_propensity','fitted_risk_observed','predicted_risk_T0','predicted_risk_T1','individual_predicted_RD','true_risk_T0','true_risk_T1','opposite_arm_distance'];const lines=[head.join(',')].concat(state.data.map(r=>[r.id,fmt(r.age,4),fmt(r.bmi,4),fmt(r.income,4),r.female,r.college,r.htn,r.T,r.Y,fmt(r.trueE,6),fmt(r.pObs,6),fmt(r.m0,6),fmt(r.m1,6),fmt(r.m1-r.m0,6),fmt(r.q0,6),fmt(r.q1,6),fmt(r.oppDist,6)].join(',')));downloadBlob(lines.join('\n'),'outcome_regression_teaching_cohort.csv','text/csv')}
+function downloadBlob(text,name,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},100)}
+function saveSvg(id){const src=$(id),clone=src.cloneNode(true);clone.setAttribute('xmlns','http://www.w3.org/2000/svg');const xml='<?xml version="1.0" encoding="UTF-8"?>\n'+new XMLSerializer().serializeToString(clone);downloadBlob(xml,id.replace('Svg','')+'.svg','image/svg+xml')}
+
+['nRange','confRange','overlapRange','effectRange','nonlinRange','heteroRange'].forEach(id=>$(id).addEventListener('input',()=>{stop();buildCohort()}));$('seedInput').addEventListener('change',()=>{stop();buildCohort()});$('outcomeModel').addEventListener('change',()=>{stop();refitOnly()});
+$('truthToggle').addEventListener('input',()=>{readControls();updateLabels();renderMetrics();renderMathFramework();renderSubject();renderCurve();renderStandardize();renderEstimates();renderCI()});$('revealRange').addEventListener('input',()=>{stop();readControls();updateLabels();renderCounterfactual()});
+$('xVar').addEventListener('change',()=>{readControls();renderScatter()});$('yVar').addEventListener('change',()=>{readControls();renderScatter()});$('curveVar').addEventListener('change',()=>{readControls();renderCurve()});$('distVar').addEventListener('change',()=>{readControls();renderDistribution()});
+$('newCohort').onclick=()=>{$('seedInput').value=((+$('seedInput').value+Math.floor(1000+Math.random()*900000))%99999999)||1;state.selected=0;buildCohort()};$('resetControls').onclick=reset;$('animateReveal').onclick=animate;$('stopAnimation').onclick=stop;$('exportCsv').onclick=exportCSV;$('runCoverage').onclick=runCoverage;$('coverageEstimator').addEventListener('change',renderCoverage);
+document.querySelectorAll('.preset').forEach(b=>b.onclick=()=>preset(b.dataset.preset));document.querySelectorAll('[data-svg]').forEach(b=>b.onclick=()=>saveSvg(b.dataset.svg));initMathTabs();window.addEventListener('resize',hideTip);reset();
+})();
+</script>
+</body>
+</html>
