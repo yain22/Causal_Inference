@@ -1,0 +1,803 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Inverse Probability Weighted Estimator</title>
+<style>
+  :root{
+    color-scheme:light;
+    --ink:#162033; --muted:#667085; --line:#D7DEE8; --panel:#FFFFFF;
+    --bg:#F4F7FB; --smoke:#E56B2F; --control:#2F6EA5; --accent:#7A5AF8;
+    --green:#208A62; --amber:#B66A00; --danger:#C23B3B; --soft-orange:#FFF1E8;
+    --soft-blue:#EAF3FB; --soft-purple:#F2EEFF; --soft-green:#EAF8F2;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif}
+  body{min-width:320px}
+  button,select,input{font:inherit}
+  button{cursor:pointer}
+  .hero{padding:28px clamp(18px,4vw,58px) 22px;background:linear-gradient(135deg,#FFFFFF 0%,#F6F3FF 55%,#EDF6FC 100%);border-bottom:1px solid var(--line)}
+  .hero-inner{max-width:1760px;margin:0 auto;display:flex;gap:24px;align-items:flex-start;justify-content:space-between}
+  .hero h1{margin:0 0 7px;font-size:clamp(29px,3.1vw,49px);line-height:1.05;letter-spacing:-.7px}
+  .hero p{margin:0;max-width:1000px;color:var(--muted);font-size:clamp(15px,1.4vw,19px);line-height:1.55}
+  .clarifier{margin-top:13px;display:inline-flex;gap:9px;align-items:center;padding:9px 13px;border:1px solid #BFC9D8;border-radius:12px;background:rgba(255,255,255,.82);font-size:14px;font-weight:650}
+  .clarifier b{color:var(--accent)}
+  .hero-badge{flex:0 0 auto;padding:11px 15px;border-radius:999px;border:1px solid #CFC5FF;background:#FFF;color:#5B45C8;font-weight:800;font-size:13px;letter-spacing:.35px;white-space:nowrap}
+  .app{max-width:1760px;margin:0 auto;padding:18px;display:grid;grid-template-columns:330px minmax(0,1fr);gap:18px;align-items:start}
+  .controls{position:sticky;top:12px;background:var(--panel);border:1px solid var(--line);border-radius:20px;box-shadow:0 10px 28px rgba(20,32,55,.08);overflow:hidden}
+  .controls-head{padding:18px 18px 14px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#fff,#FAFBFD)}
+  .controls-head h2{margin:0 0 5px;font-size:19px}
+  .controls-head p{margin:0;color:var(--muted);font-size:13px;line-height:1.45}
+  .control-section{padding:15px 18px;border-bottom:1px solid #E7EBF1}
+  .control-section:last-child{border-bottom:0}
+  .section-label{font-size:11px;letter-spacing:.8px;text-transform:uppercase;color:#7B8495;font-weight:850;margin-bottom:10px}
+  .preset-row{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+  .preset{border:1px solid var(--line);background:#fff;border-radius:11px;padding:8px 9px;font-size:12px;font-weight:750;color:#344054}
+  .preset:hover{border-color:var(--accent);color:#5B45C8;background:#FAF8FF}
+  .control{margin:0 0 14px}
+  .control:last-child{margin-bottom:0}
+  .control-top{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:6px}
+  .control label{font-size:13px;font-weight:720}
+  .value{font-size:12px;color:#5B45C8;font-weight:850;font-variant-numeric:tabular-nums}
+  input[type="range"]{width:100%;accent-color:var(--accent)}
+  .range-ends{display:flex;justify-content:space-between;color:#98A2B3;font-size:10px;margin-top:2px}
+  select{width:100%;border:1px solid var(--line);border-radius:10px;background:#fff;padding:9px 10px;color:var(--ink)}
+  .checkrow{display:flex;gap:9px;align-items:flex-start;font-size:12px;color:#475467;line-height:1.35}
+  .checkrow input{margin-top:2px;accent-color:var(--accent)}
+  .primary-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .primary,.secondary{border-radius:11px;padding:9px 10px;font-weight:780;font-size:12px}
+  .primary{border:1px solid var(--accent);background:var(--accent);color:#fff}
+  .secondary{border:1px solid var(--line);background:#fff;color:#344054}
+  .primary:hover{filter:brightness(.96)}
+  .secondary:hover{border-color:var(--accent);color:#5B45C8}
+  .teaching-note{font-size:11px;line-height:1.5;color:#667085;background:#F7F8FB;border-radius:10px;padding:9px 10px;margin-top:10px}
+  .workspace{min-width:0}
+  .metrics{display:grid;grid-template-columns:repeat(6,minmax(110px,1fr));gap:10px;margin-bottom:12px}
+  .metric{background:#fff;border:1px solid var(--line);border-radius:15px;padding:11px 13px;min-width:0;box-shadow:0 3px 12px rgba(20,32,55,.04)}
+  .metric .k{font-size:10px;color:#7B8495;text-transform:uppercase;font-weight:850;letter-spacing:.55px;white-space:nowrap}
+  .metric .v{margin-top:4px;font-size:19px;font-weight:850;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .grid-top{display:grid;grid-template-columns:minmax(0,1.75fr) minmax(280px,.75fr);gap:12px;margin-bottom:12px}
+  .grid-two{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+  .card{background:#fff;border:1px solid var(--line);border-radius:18px;box-shadow:0 6px 20px rgba(20,32,55,.055);min-width:0;overflow:hidden}
+  .card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:15px 16px 10px}
+  .card-head h3{margin:0 0 4px;font-size:17px;line-height:1.25}
+  .card-head p{margin:0;color:var(--muted);font-size:12px;line-height:1.45}
+  .mini-controls{display:flex;gap:7px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+  .mini-controls label{font-size:11px;font-weight:750;color:#667085}
+  .mini-controls select{width:auto;min-width:105px;padding:6px 8px;font-size:12px}
+  .legend{display:flex;flex-wrap:wrap;gap:12px;padding:0 16px 8px;color:#667085;font-size:11px}
+  .legend span{display:inline-flex;align-items:center;gap:5px}
+  .dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+  .ring{width:11px;height:11px;border-radius:50%;display:inline-block;border:2px solid #111;background:#fff}
+  svg.chart{display:block;width:100%;height:auto;overflow:visible;touch-action:none}
+  .chart-wrap{position:relative;padding:0 8px 10px}
+  .tooltip{position:fixed;z-index:40;pointer-events:none;background:#111827;color:white;border-radius:10px;padding:9px 10px;box-shadow:0 8px 24px rgba(0,0,0,.24);font-size:11px;line-height:1.45;opacity:0;transform:translate(10px,10px);transition:opacity .08s;max-width:230px}
+  .subject-body{padding:2px 16px 16px}
+  .subject-id{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+  .subject-id strong{font-size:24px}
+  .status-pill{padding:5px 8px;border-radius:999px;font-size:11px;font-weight:850}
+  .status-smoke{background:var(--soft-orange);color:#A94317}
+  .status-control{background:var(--soft-blue);color:#245C88}
+  .kv{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:10px}
+  .kv div{border:1px solid #E4E8EF;border-radius:10px;padding:8px 9px;background:#FCFCFD}
+  .kv .label{font-size:10px;text-transform:uppercase;letter-spacing:.45px;color:#7B8495;font-weight:820}
+  .kv .num{font-size:14px;font-weight:780;margin-top:2px;font-variant-numeric:tabular-nums}
+  .formula-box{border:1px solid #D9D2FF;background:#F8F6FF;border-radius:13px;padding:11px 12px;margin-top:10px}
+  .formula-box .small{font-size:11px;color:#6655B8;margin-bottom:5px;font-weight:750}
+  .formula-box .formula{font-size:18px;font-weight:850;letter-spacing:.1px;word-break:break-word}
+  .formula-box .meaning{margin-top:6px;font-size:11px;color:#667085;line-height:1.45}
+  .subject-nav{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:10px}
+  .subject-nav button{border:1px solid var(--line);background:#fff;border-radius:10px;padding:7px;font-size:12px;font-weight:750}
+  .subject-nav button:hover{border-color:var(--accent);color:#5B45C8}
+  .chart-note{padding:0 16px 13px;color:#667085;font-size:11px;line-height:1.45}
+  .estimate-body{padding:0 16px 15px}
+  .estimate-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:10px}
+  .est{border:1px solid #E1E6ED;border-radius:12px;padding:9px;background:#FCFCFD;min-width:0}
+  .est.current{border-color:#CFC5FF;background:#F8F6FF}
+  .est.truth{border-color:#B8E5D2;background:#F2FBF7}
+  .est .name{font-size:10px;color:#667085;text-transform:uppercase;font-weight:850;letter-spacing:.45px;white-space:nowrap}
+  .est .rd{font-size:18px;font-weight:880;margin:4px 0 2px;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .est .sub{font-size:10px;color:#7B8495;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .risk-formula{border-radius:12px;background:#F7F8FB;padding:10px 11px;font-size:12px;line-height:1.55;color:#475467}
+  .risk-formula strong{color:var(--ink)}
+  .formula-line{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11px;overflow-wrap:anywhere}
+  .table-card{margin-bottom:18px}
+  details summary{cursor:pointer;padding:14px 16px;font-weight:800;list-style:none;display:flex;align-items:center;justify-content:space-between}
+  details summary::-webkit-details-marker{display:none}
+  details summary::after{content:"＋";color:var(--accent);font-size:20px}
+  details[open] summary::after{content:"−"}
+  .table-tools{display:flex;gap:8px;padding:0 16px 10px}
+  .table-tools button{border:1px solid var(--line);background:#fff;border-radius:9px;padding:7px 9px;font-size:11px;font-weight:750}
+  .table-wrap{overflow:auto;border-top:1px solid #E6EAF0;max-height:440px}
+  table{border-collapse:collapse;width:100%;font-size:11px;white-space:nowrap}
+  th,td{padding:8px 9px;border-bottom:1px solid #EDF0F4;text-align:right;font-variant-numeric:tabular-nums}
+  th:first-child,td:first-child{text-align:left}
+  th{position:sticky;top:0;background:#F8FAFC;color:#667085;text-transform:uppercase;font-size:9px;letter-spacing:.45px;z-index:1}
+  tbody tr{cursor:pointer}
+  tbody tr:hover{background:#F7F5FF}
+  tbody tr.selected{background:#EEE9FF}
+  .footer{max-width:1760px;margin:0 auto;padding:0 18px 28px;color:#667085;font-size:11px;line-height:1.5}
+  .kbd{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;border:1px solid #D0D5DD;border-bottom-width:2px;border-radius:5px;background:white;padding:1px 5px;color:#344054}
+
+  .mini-button{border:1px solid var(--accent);background:var(--accent);color:#fff;border-radius:9px;padding:7px 9px;font-size:11px;font-weight:800;white-space:nowrap}
+  .mini-button:hover{filter:brightness(.96)}
+  .mini-button:disabled{cursor:not-allowed;opacity:.55}
+  .ci-status-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:0 16px 15px}
+  .ci-status-item{border:1px solid #E1E6ED;border-radius:12px;padding:10px 11px;background:#FCFCFD;min-width:0}
+  .ci-status-item.cover{border-color:#A9DCC8;background:#F2FBF7}
+  .ci-status-item.miss{border-color:#F0BBBB;background:#FFF5F5}
+  .ci-status-name{font-size:10px;text-transform:uppercase;letter-spacing:.45px;color:#667085;font-weight:850}
+  .ci-status-value{font-size:12px;font-weight:780;margin:5px 0 7px;font-variant-numeric:tabular-nums;line-height:1.45}
+  .ci-badge{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:4px 7px;font-size:9px;font-weight:900;letter-spacing:.35px;text-transform:uppercase}
+  .ci-status-item.cover .ci-badge{background:#DDF4EA;color:#176A4C}
+  .ci-status-item.miss .ci-badge{background:#FBE1E1;color:#A52D2D}
+  .coverage-progress{margin:0 16px 10px;border:1px solid #E1E6ED;background:#F8FAFC;border-radius:11px;padding:9px 10px}
+  .coverage-progress-top{display:flex;justify-content:space-between;gap:10px;color:#667085;font-size:10px;font-weight:750;margin-bottom:6px}
+  .progress-track{height:7px;border-radius:999px;background:#E7EBF1;overflow:hidden}
+  .progress-fill{height:100%;width:0;background:var(--accent);transition:width .12s linear}
+  .coverage-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:0 16px 10px}
+  .coverage-stat{border:1px solid #E1E6ED;background:#FCFCFD;border-radius:12px;padding:9px 10px;cursor:pointer;text-align:left}
+  .coverage-stat:hover,.coverage-stat.selected{border-color:#B7A9FF;background:#F8F6FF}
+  .coverage-stat .name{font-size:10px;color:#667085;text-transform:uppercase;font-weight:850;letter-spacing:.4px}
+  .coverage-stat .number{font-size:20px;font-weight:880;margin-top:3px;font-variant-numeric:tabular-nums}
+  .coverage-stat .detail{font-size:9px;color:#7B8495;margin-top:2px;line-height:1.35}
+  .coverage-empty{padding:22px 18px 28px;text-align:center;color:#667085;font-size:12px;line-height:1.55}
+  .coverage-empty strong{color:var(--ink)}
+  @media(max-width:650px){.ci-status-grid,.coverage-summary{grid-template-columns:1fr}}
+  @media(max-width:1180px){.app{grid-template-columns:1fr}.controls{position:relative;top:auto}.metrics{grid-template-columns:repeat(3,1fr)}.grid-top{grid-template-columns:1fr}.grid-two{grid-template-columns:1fr}}
+  @media(max-width:650px){.hero-inner{display:block}.hero-badge{display:inline-block;margin-top:14px}.app{padding:10px}.metrics{grid-template-columns:repeat(2,1fr)}.estimate-grid{grid-template-columns:1fr 1fr}.preset-row{grid-template-columns:1fr 1fr}.card-head{display:block}.mini-controls{justify-content:flex-start;margin-top:9px}.kv{grid-template-columns:1fr 1fr}}
+  @media print{.controls,.hero-badge,.table-card,.footer,.primary-row,.preset-row{display:none!important}.app{display:block;max-width:none}.card{break-inside:avoid;box-shadow:none}.hero{padding:12px}.metrics{grid-template-columns:repeat(6,1fr)}}
+</style>
+</head>
+<body>
+<header class="hero">
+  <div class="hero-inner">
+    <div>
+      <h1>Inverse Probability Weighted Estimator</h1>
+      <p>Explore how inverse probability weighting turns a confounded observational smoking study into a weighted pseudo-population. Move the controls, inspect individual subjects, and watch covariate distributions, balance, weights, and the estimated risk difference update together.</p>
+      <div class="clarifier"><b>Clear terminology:</b> every plotted dot is one subject (S001, S002, …). There is no “Profile A.” A subject’s <i>X</i> is the full vector of baseline covariates.</div>
+    </div>
+    <div class="hero-badge">SELF-CONTAINED • INLINE SVG • NO INTERNET</div>
+  </div>
+</header>
+
+<main class="app">
+<aside class="controls" aria-label="Simulation and weighting controls">
+  <div class="controls-head">
+    <h2>Build the observational study</h2>
+    <p>Controls update the synthetic cohort and fitted propensity model immediately.</p>
+  </div>
+
+  <div class="control-section">
+    <div class="section-label">Scenario presets</div>
+    <div class="preset-row">
+      <button class="preset" data-preset="random">Nearly randomized</button>
+      <button class="preset" data-preset="typical">Typical confounding</button>
+      <button class="preset" data-preset="poor">Poor overlap</button>
+      <button class="preset" data-preset="misspec">Misspecified PS</button>
+    </div>
+  </div>
+
+  <div class="control-section">
+    <div class="section-label">Data-generating process</div>
+    <div class="control">
+      <div class="control-top"><label for="nRange">Number of subjects</label><span class="value" id="nValue"></span></div>
+      <input id="nRange" type="range" min="80" max="500" step="20" value="240">
+      <div class="range-ends"><span>80</span><span>500</span></div>
+    </div>
+    <div class="control">
+      <div class="control-top"><label for="confRange">Strength of confounding</label><span class="value" id="confValue"></span></div>
+      <input id="confRange" type="range" min="0" max="2.5" step="0.05" value="1.25">
+      <div class="range-ends"><span>treatment ≈ random</span><span>strong selection by X</span></div>
+    </div>
+    <div class="control">
+      <div class="control-top"><label for="overlapRange">Overlap quality</label><span class="value" id="overlapValue"></span></div>
+      <input id="overlapRange" type="range" min="0.15" max="1" step="0.01" value="0.68">
+      <div class="range-ends"><span>poor positivity</span><span>good overlap</span></div>
+    </div>
+    <div class="control">
+      <div class="control-top"><label for="effectRange">True smoking effect (odds ratio)</label><span class="value" id="effectValue"></span></div>
+      <input id="effectRange" type="range" min="1" max="3" step="0.05" value="1.80">
+      <div class="range-ends"><span>OR 1.0</span><span>OR 3.0</span></div>
+    </div>
+    <div class="control">
+      <div class="control-top"><label for="seedInput">Cohort seed</label><span class="value" id="seedValue"></span></div>
+      <input id="seedInput" type="number" min="1" max="99999999" value="20260710" style="width:100%;border:1px solid var(--line);border-radius:10px;padding:8px 9px">
+    </div>
+    <div class="primary-row">
+      <button class="primary" id="newCohort">New cohort</button>
+      <button class="secondary" id="resetControls">Reset</button>
+    </div>
+  </div>
+
+  <div class="control-section">
+    <div class="section-label">Propensity model</div>
+    <div class="control">
+      <label for="psModel" style="display:block;margin-bottom:6px">Variables included in logistic regression</label>
+      <select id="psModel">
+        <option value="correct">All measured covariates</option>
+        <option value="omit">Misspecified: age + BMI + sex only</option>
+      </select>
+    </div>
+    <div class="checkrow"><input id="capToggle" type="checkbox" checked><label for="capToggle">Cap very large weights for visualization and estimation.</label></div>
+    <div class="control" id="capControl" style="margin-top:11px">
+      <div class="control-top"><label for="capRange">Weight cap</label><span class="value" id="capValue"></span></div>
+      <input id="capRange" type="range" min="3" max="30" step="1" value="15">
+      <div class="range-ends"><span>more trimming</span><span>almost uncapped</span></div>
+    </div>
+  </div>
+
+  <div class="control-section">
+    <div class="section-label">Apply the weights</div>
+    <div class="control">
+      <div class="control-top"><label for="weightRange">Weighting transition</label><span class="value" id="weightValue"></span></div>
+      <input id="weightRange" type="range" min="0" max="100" step="1" value="100">
+      <div class="range-ends"><span>0% crude</span><span>100% IPW</span></div>
+    </div>
+    <div class="primary-row">
+      <button class="primary" id="animateWeights">Animate 0 → 100%</button>
+      <button class="secondary" id="stopAnimation">Stop</button>
+    </div>
+    <div class="teaching-note">The intermediate 1%–99% settings are a visual teaching transition. The formal normalized IPW estimator is shown at 100%.</div>
+  </div>
+</aside>
+
+<section class="workspace">
+  <div class="metrics" id="metricStrip" aria-live="polite"></div>
+
+  <div class="grid-top">
+    <article class="card">
+      <div class="card-head">
+        <div><h3>1. Individual subjects in the observational cohort</h3><p>Point size represents the current subject weight. Hover or click a subject for the exact calculation.</p></div>
+        <div class="mini-controls">
+          <label for="xVar">x</label><select id="xVar"><option value="age">Age</option><option value="bmi">BMI</option><option value="income">Income ratio</option></select>
+          <label for="yVar">y</label><select id="yVar"><option value="bmi">BMI</option><option value="age">Age</option><option value="income">Income ratio</option></select>
+        </div>
+      </div>
+      <div class="legend"><span><i class="dot" style="background:var(--smoke)"></i>Smoker (T=1)</span><span><i class="dot" style="background:var(--control)"></i>Non-smoker (T=0)</span><span><i class="ring"></i>Had CVD (Y=1)</span><span>larger point = larger current weight</span></div>
+      <div class="chart-wrap"><svg id="scatterSvg" class="chart" viewBox="0 0 840 470" role="img" aria-label="Subject-level covariate scatter plot"></svg></div>
+      <div class="chart-note">Drag the <b>Weighting transition</b> slider: rare observed treatment assignments expand because those subjects represent more people in the weighted pseudo-population.</div>
+    </article>
+
+    <article class="card">
+      <div class="card-head"><div><h3>Selected subject</h3><p>IPW is calculated subject by subject, not by naming a profile.</p></div></div>
+      <div class="subject-body" id="subjectPanel"></div>
+    </article>
+  </div>
+
+  <div class="grid-two">
+    <article class="card">
+      <div class="card-head">
+        <div><h3>2. Covariate distributions</h3><p>Compare the observed arms with the weighted pseudo-population.</p></div>
+        <div class="mini-controls"><label for="distVar">Covariate</label><select id="distVar"><option value="age">Age</option><option value="bmi">BMI</option><option value="income">Income ratio</option><option value="female">Female</option><option value="college">College education</option><option value="htn">Baseline hypertension</option></select></div>
+      </div>
+      <div class="legend"><span><i class="dot" style="background:var(--smoke)"></i>Smokers</span><span><i class="dot" style="background:var(--control)"></i>Non-smokers</span></div>
+      <div class="chart-wrap"><svg id="distSvg" class="chart" viewBox="0 0 780 330" role="img" aria-label="Covariate distributions before and after weighting"></svg></div>
+      <div class="chart-note">Each arm is normalized to a distribution. Weighting should make the orange and blue shapes more similar when the propensity model is adequate and overlap is sufficient.</div>
+    </article>
+
+    <article class="card">
+      <div class="card-head"><div><h3>3. Covariate balance</h3><p>Absolute standardized mean differences (SMDs), before versus current weighting.</p></div></div>
+      <div class="legend"><span><i class="dot" style="background:#98A2B3"></i>Observed</span><span><i class="dot" style="background:var(--accent)"></i>Current weighting</span><span>vertical line = 0.10 guideline</span></div>
+      <div class="chart-wrap"><svg id="balanceSvg" class="chart" viewBox="0 0 780 330" role="img" aria-label="Covariate balance standardized mean differences"></svg></div>
+      <div class="chart-note">A smaller SMD is better. IPW cannot repair omitted confounders, severe positivity violations, or an incorrect propensity model.</div>
+    </article>
+  </div>
+
+  <div class="grid-two">
+    <article class="card">
+      <div class="card-head"><div><h3>4. Propensity overlap and inverse weights</h3><p>The fitted propensity score is P(smoker | measured baseline covariates).</p></div></div>
+      <div class="legend"><span><i class="dot" style="background:var(--smoke)"></i>Smoker propensity distribution</span><span><i class="dot" style="background:var(--control)"></i>Non-smoker propensity distribution</span></div>
+      <div class="chart-wrap"><svg id="propensitySvg" class="chart" viewBox="0 0 780 330" role="img" aria-label="Propensity score overlap and weight curves"></svg></div>
+      <div class="chart-note">A smoker with a very small fitted propensity receives 1/ê; a non-smoker with a very large fitted propensity receives 1/(1−ê). Both situations create large weights.</div>
+    </article>
+
+    <article class="card">
+      <div class="card-head"><div><h3>5. Crude versus IPW causal estimate</h3><p>Normalized weighted CVD risks and the risk difference.</p></div></div>
+      <div class="estimate-body" id="estimatePanel"></div>
+    </article>
+  </div>
+
+
+
+  <div class="grid-two">
+    <article class="card">
+      <div class="card-head">
+        <div><h3>6. The current cohort: 95% confidence intervals</h3><p>Point estimates, 95% Wald intervals, and an explicit check of whether each interval contains the known causal truth.</p></div>
+      </div>
+      <div class="legend"><span><i class="dot" style="background:var(--accent)"></i>Point estimate</span><span><i class="dot" style="background:var(--green)"></i>Known true ATE</span><span>gray dashed line = no effect</span></div>
+      <div class="chart-wrap"><svg id="ciSvg" class="chart" viewBox="0 0 780 330" role="img" aria-label="Risk-difference estimates with 95 percent confidence intervals and known truth"></svg></div>
+      <div class="ci-status-grid" id="ciStatusPanel"></div>
+      <div class="chart-note">The instant intervals use a stacked M-estimation sandwich for the fitted logistic propensity model and the two normalized weighted risks. Capped weights are linearized piecewise. A 95% CI is not guaranteed to contain the truth in one dataset; 95% refers to long-run repeated-sampling coverage.</div>
+    </article>
+
+    <article class="card">
+      <div class="card-head">
+        <div><h3>7. Repeated-sampling coverage experiment</h3><p>Regenerate smoking and CVD outcomes for the same baseline covariates, refit the propensity model, and examine many 95% CIs.</p></div>
+        <div class="mini-controls">
+          <label for="coverageEstimator">Show</label>
+          <select id="coverageEstimator"><option value="full">Full IPW</option><option value="current">Current slider</option><option value="crude">Crude</option></select>
+          <label for="coverageM">Samples</label>
+          <select id="coverageM"><option value="40">40</option><option value="80" selected>80</option><option value="120">120</option><option value="200">200</option></select>
+          <button class="mini-button" id="runCoverage">Run experiment</button>
+        </div>
+      </div>
+      <div class="coverage-progress" id="coverageProgress">
+        <div class="coverage-progress-top"><span id="coverageProgressText">No experiment run yet</span><span id="coverageProgressPct">0%</span></div>
+        <div class="progress-track"><div class="progress-fill" id="coverageProgressFill"></div></div>
+      </div>
+      <div class="coverage-summary" id="coverageSummary"></div>
+      <div class="chart-wrap"><svg id="coverageSvg" class="chart" viewBox="0 0 780 430" role="img" aria-label="Repeated confidence intervals showing coverage of the known truth"></svg></div>
+      <div class="coverage-empty" id="coverageEmpty"><strong>Run the experiment</strong> to see which individual intervals contain the truth and what fraction cover it overall.</div>
+      <div class="chart-note">Green intervals contain the known conditional ATE; red intervals miss it. The experiment keeps the observed baseline covariates fixed, then repeatedly generates treatment and outcome, refits the propensity score, and recomputes sandwich CIs. This makes the true conditional ATE common to every repetition.</div>
+    </article>
+  </div>
+
+  <article class="card table-card">
+    <details>
+      <summary>Inspect the subjects with the largest weights</summary>
+      <div class="table-tools"><button id="exportCsv">Export cohort CSV</button><button data-svg="scatterSvg">Save subject plot as SVG</button><button data-svg="balanceSvg">Save balance plot as SVG</button><button data-svg="ciSvg">Save CI plot as SVG</button><button data-svg="coverageSvg">Save coverage plot as SVG</button><button onclick="window.print()">Print dashboard</button></div>
+      <div class="table-wrap"><table><thead><tr><th>Subject</th><th>Age</th><th>BMI</th><th>Income ratio</th><th>Female</th><th>College</th><th>Hypertension</th><th>Smoker</th><th>CVD</th><th>ê</th><th>Raw IPW</th><th>Current w</th></tr></thead><tbody id="subjectTable"></tbody></table></div>
+    </details>
+  </article>
+</section>
+</main>
+
+<div class="tooltip" id="tooltip"></div>
+<footer class="footer">Synthetic data are generated entirely in the browser for teaching. The true causal effect is therefore known from the data-generating mechanism, allowing direct CI-containment and repeated-sampling coverage checks. Use <span class="kbd">Tab</span> to reach controls and chart selectors; click a plotted subject to pin its details.</footer>
+
+<script>
+(function(){
+"use strict";
+
+const COLORS={smoke:"#E56B2F",control:"#2F6EA5",accent:"#7A5AF8",gray:"#98A2B3",ink:"#162033",muted:"#667085",green:"#208A62",danger:"#C23B3B",grid:"#E4E8EF"};
+const defaults={n:240,conf:1.25,overlap:.68,effect:1.80,seed:20260710,model:"correct",capOn:true,cap:15,intensity:1,x:"age",y:"bmi",dist:"age"};
+const state={data:[],selected:0,trueATE:0,trueRisk1:0,trueRisk0:0,animation:null,inference:null,psBeta:null,
+  coverageResults:null,coverageRunning:false,coverageDone:0,coverageTotal:0,coverageToken:0,coverageTruth:NaN,...defaults};
+const $=id=>document.getElementById(id);
+const fmt=(x,d=2)=>Number.isFinite(x)?x.toFixed(d):"—";
+const pct=(x,d=1)=>Number.isFinite(x)?(100*x).toFixed(d)+"%":"—";
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+const logistic=x=>1/(1+Math.exp(-clamp(x,-30,30)));
+const logit=p=>Math.log(p/(1-p));
+const esc=s=>String(s).replace(/[&<>\"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
+
+function mulberry32(seed){let a=seed>>>0;return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function randn(rng){let u=0,v=0;while(u===0)u=rng();while(v===0)v=rng();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)}
+function mean(a){return a.reduce((s,x)=>s+x,0)/Math.max(1,a.length)}
+function sd(a){const m=mean(a);return Math.sqrt(a.reduce((s,x)=>s+(x-m)*(x-m),0)/Math.max(1,a.length-1))||1}
+function weightedMean(rows,key,wkey="currentW"){let sw=0,s=0;for(const r of rows){const w=r[wkey];sw+=w;s+=w*r[key]}return sw? s/sw:NaN}
+function weightedVar(rows,key,wkey="currentW"){const m=weightedMean(rows,key,wkey);let sw=0,s=0;for(const r of rows){const w=r[wkey];sw+=w;s+=w*(r[key]-m)*(r[key]-m)}return sw?s/sw:NaN}
+function ess(rows,wkey="currentW"){let s=0,s2=0;for(const r of rows){const w=r[wkey];s+=w;s2+=w*w}return s2?s*s/s2:0}
+
+function solve(A,b){
+  const n=b.length,M=A.map((row,i)=>row.slice().concat(b[i]));
+  for(let i=0;i<n;i++){
+    let piv=i;for(let k=i+1;k<n;k++)if(Math.abs(M[k][i])>Math.abs(M[piv][i]))piv=k;
+    if(piv!==i){const tmp=M[i];M[i]=M[piv];M[piv]=tmp}
+    let d=M[i][i];if(Math.abs(d)<1e-10)d=M[i][i]=d>=0?1e-10:-1e-10;
+    for(let j=i;j<=n;j++)M[i][j]/=d;
+    for(let k=0;k<n;k++)if(k!==i){const f=M[k][i];if(f!==0)for(let j=i;j<=n;j++)M[k][j]-=f*M[i][j]}
+  }
+  return M.map(r=>r[n]);
+}
+function fitLogistic(X,y){
+  const p=X[0].length,beta=Array(p).fill(0);
+  for(let iter=0;iter<45;iter++){
+    const g=Array(p).fill(0),H=Array.from({length:p},()=>Array(p).fill(0));
+    for(let i=0;i<X.length;i++){
+      let eta=0;for(let j=0;j<p;j++)eta+=X[i][j]*beta[j];
+      const pr=logistic(eta),v=Math.max(1e-5,pr*(1-pr)),err=y[i]-pr;
+      for(let j=0;j<p;j++){
+        g[j]+=X[i][j]*err;
+        for(let k=0;k<p;k++)H[j][k]+=X[i][j]*X[i][k]*v;
+      }
+    }
+    for(let j=0;j<p;j++)H[j][j]+=0.001;
+    const step=solve(H,g);let mx=0;
+    for(let j=0;j<p;j++){beta[j]+=step[j];mx=Math.max(mx,Math.abs(step[j]))}
+    if(mx<1e-7)break;
+  }
+  return {beta,p:X.map(row=>clamp(logistic(row.reduce((s,x,j)=>s+x*beta[j],0)),.005,.995))};
+}
+
+function designRow(r,model=state.model){
+  return model==="correct"?[1,r.zAge,r.zBmi,r.zInc,r.female,r.college,r.htn]:[1,r.zAge,r.zBmi,r.female];
+}
+function matrixInverse(A){
+  const n=A.length,inv=Array.from({length:n},()=>Array(n).fill(0));
+  for(let j=0;j<n;j++){
+    const e=Array(n).fill(0);e[j]=1;const col=solve(A,e);
+    for(let i=0;i<n;i++)inv[i][j]=col[i];
+  }
+  return inv;
+}
+function transpose(A){return A[0].map((_,j)=>A.map(r=>r[j]))}
+function matMul(A,B){
+  const nr=A.length,nc=B[0].length,nk=B.length,C=Array.from({length:nr},()=>Array(nc).fill(0));
+  for(let i=0;i<nr;i++)for(let k=0;k<nk;k++){const aik=A[i][k];if(aik!==0)for(let j=0;j<nc;j++)C[i][j]+=aik*B[k][j]}
+  return C;
+}
+function sandwichFor(rows,alpha,opts={}){
+  const model=opts.model||state.model,capOn=opts.capOn===undefined?state.capOn:opts.capOn,cap=opts.cap===undefined?state.cap:opts.cap;
+  if(!rows.length)return{valid:false};
+  const X=rows.map(r=>designRow(r,model)),p=X[0].length,n=rows.length,d=p+2;
+  let sw1=0,sw0=0,sy1=0,sy0=0;
+  const info=rows.map((r,i)=>{
+    const e=clamp(r.ehat,.005,.995),raw=r.T?1/e:1/(1-e),base=capOn?Math.min(raw,cap):raw,w=1+alpha*(base-1);
+    if(r.T){sw1+=w;sy1+=w*r.Y}else{sw0+=w;sy0+=w*r.Y}
+    return{e,raw,w,capped:capOn&&raw>=cap,x:X[i]};
+  });
+  if(sw1<=0||sw0<=0)return{valid:false};
+  const mu1=sy1/sw1,mu0=sy0/sw0,rd=mu1-mu0,rr=mu0>0?mu1/mu0:NaN;
+  const A=Array.from({length:d},()=>Array(d).fill(0)),B=Array.from({length:d},()=>Array(d).fill(0));
+  for(let i=0;i<n;i++){
+    const r=rows[i],q=info[i],x=q.x,e=q.e,psi=Array(d).fill(0);
+    for(let j=0;j<p;j++)psi[j]=x[j]*(r.T-e);
+    psi[p]=r.T?q.w*(r.Y-mu1):0;
+    psi[p+1]=r.T?0:q.w*(r.Y-mu0);
+    for(let j=0;j<p;j++)for(let k=0;k<p;k++)A[j][k]+=-e*(1-e)*x[j]*x[k];
+    if(r.T){
+      if(!q.capped)for(let j=0;j<p;j++)A[p][j]+=alpha*(-(1-e)/e)*x[j]*(r.Y-mu1);
+      A[p][p]+=-q.w;
+    }else{
+      if(!q.capped)for(let j=0;j<p;j++)A[p+1][j]+=alpha*(e/(1-e))*x[j]*(r.Y-mu0);
+      A[p+1][p+1]+=-q.w;
+    }
+    for(let j=0;j<d;j++)for(let k=0;k<d;k++)B[j][k]+=psi[j]*psi[k];
+  }
+  for(let j=0;j<d;j++)for(let k=0;k<d;k++){A[j][k]/=n;B[j][k]/=n}
+  let invA,V;
+  try{invA=matrixInverse(A);V=matMul(matMul(invA,B),transpose(invA));for(let j=0;j<d;j++)for(let k=0;k<d;k++)V[j][k]/=n}catch(err){return{valid:false}}
+  const v1=Math.max(0,V[p][p]),v0=Math.max(0,V[p+1][p+1]),vrd=Math.max(0,v1+v0-2*V[p][p+1]);
+  const se1=Math.sqrt(v1),se0=Math.sqrt(v0),se=Math.sqrt(vrd),z=1.959963984540054;
+  return{valid:[mu1,mu0,rd,se].every(Number.isFinite),r1:mu1,r0:mu0,rd,rr,se,se1,se0,
+    ci:{rd:[rd-z*se,rd+z*se],r1:[mu1-z*se1,mu1+z*se1],r0:[mu0-z*se0,mu0+z*se0]}};
+}
+function computeInference(){
+  state.inference={crude:sandwichFor(state.data,0),current:sandwichFor(state.data,state.intensity),full:sandwichFor(state.data,1)};
+}
+function invalidateCoverage(){
+  state.coverageToken++;state.coverageRunning=false;state.coverageDone=0;state.coverageTotal=0;state.coverageResults=null;state.coverageTruth=NaN;
+}
+
+function readControls(){
+  state.n=+$('nRange').value;state.conf=+$('confRange').value;state.overlap=+$('overlapRange').value;
+  state.effect=+$('effectRange').value;state.seed=clamp(+$('seedInput').value||1,1,99999999);
+  state.model=$('psModel').value;state.capOn=$('capToggle').checked;state.cap=+$('capRange').value;
+  state.intensity=+$('weightRange').value/100;state.x=$('xVar').value;state.y=$('yVar').value;state.dist=$('distVar').value;
+}
+function updateLabels(){
+  $('nValue').textContent=state.n;
+  $('confValue').textContent=state.conf.toFixed(2);
+  $('overlapValue').textContent=Math.round(state.overlap*100)+"%";
+  $('effectValue').textContent="OR "+state.effect.toFixed(2);
+  $('seedValue').textContent=state.seed;
+  $('capValue').textContent=state.capOn?state.cap.toFixed(0):"off";
+  $('weightValue').textContent=Math.round(state.intensity*100)+"%";
+  $('capControl').style.opacity=state.capOn?"1":".45";
+  $('capRange').disabled=!state.capOn;
+}
+
+function buildCohort(){
+  readControls();updateLabels();
+  const rng=mulberry32(state.seed),rows=[];
+  for(let i=0;i<state.n;i++){
+    const age=clamp(52+12*randn(rng),20,82);
+    const female=rng()<.52?1:0;
+    const ses=randn(rng);
+    const college=rng()<logistic(-.05+.85*ses+.012*(age-45))?1:0;
+    const income=clamp(Math.exp(.72+.46*ses+.14*college-.08*(1-female)+.22*randn(rng)),.25,5.5);
+    const bmi=clamp(27.2+1.15*female-.55*ses+.035*(age-50)+3.7*randn(rng),16,46);
+    const htn=rng()<logistic(-5.0+.047*age+.065*bmi+.20*(income<1.5))?1:0;
+    rows.push({id:"S"+String(i+1).padStart(3,"0"),age,bmi,income,female,college,htn,uT:rng(),uY:rng()});
+  }
+  const keys=["age","bmi","income"],stats={};
+  for(const k of keys){const vals=rows.map(r=>r[k]);stats[k]={m:mean(vals),s:sd(vals)}}
+  const scores=rows.map(r=>.48*((r.age-stats.age.m)/stats.age.s)+.28*((r.bmi-stats.bmi.m)/stats.bmi.s)-.48*((r.income-stats.income.m)/stats.income.s)-.28*r.female-.34*r.college+.56*r.htn);
+  const scoreMean=mean(scores);
+  const separation=state.conf*(1.58-.88*state.overlap);
+  let tCount=0,true0=0,true1=0;
+  for(let i=0;i<rows.length;i++){
+    const r=rows[i],zAge=(r.age-stats.age.m)/stats.age.s,zBmi=(r.bmi-stats.bmi.m)/stats.bmi.s,zInc=(r.income-stats.income.m)/stats.income.s;
+    const trueE=clamp(logistic(logit(.32)+separation*(scores[i]-scoreMean)),.01,.99);
+    const T=r.uT<trueE?1:0;tCount+=T;
+    const lp0=logit(.105)+.52*zAge+.35*zBmi-.26*zInc-.18*r.female-.20*r.college+.62*r.htn;
+    const q0=logistic(lp0),q1=logistic(lp0+Math.log(state.effect));
+    const q=T?q1:q0,Y=r.uY<q?1:0;
+    Object.assign(r,{zAge,zBmi,zInc,trueE,T,Y,q0,q1});
+    true0+=q0;true1+=q1;
+  }
+  state.trueRisk0=true0/rows.length;state.trueRisk1=true1/rows.length;state.trueATE=state.trueRisk1-state.trueRisk0;
+  const X=rows.map(r=>designRow(r));
+  const fit=fitLogistic(X,rows.map(r=>r.T));
+  state.psBeta=fit.beta.slice();
+  rows.forEach((r,i)=>r.ehat=fit.p[i]);
+  state.data=rows;
+  state.selected=clamp(state.selected,0,rows.length-1);
+  invalidateCoverage();
+  updateWeights();
+}
+
+function updateWeights(){
+  readControls();updateLabels();
+  for(const r of state.data){
+    r.rawW=r.T?1/r.ehat:1/(1-r.ehat);
+    r.ipwW=state.capOn?Math.min(r.rawW,state.cap):r.rawW;
+    r.currentW=1+state.intensity*(r.ipwW-1);
+    r.capped=state.capOn&&r.rawW>state.cap;
+  }
+  renderAll();
+}
+
+function armRows(t){return state.data.filter(r=>r.T===t)}
+function risk(t,wkey){const rows=armRows(t);let sw=0,sy=0;for(const r of rows){const w=r[wkey];sw+=w;sy+=w*r.Y}return sw?sy/sw:NaN}
+function estimate(wkey){const r1=risk(1,wkey),r0=risk(0,wkey);return{r1,r0,rd:r1-r0,rr:r0>0?r1/r0:NaN}}
+function sumArm(t,wkey){return armRows(t).reduce((s,r)=>s+r[wkey],0)}
+
+function renderMetrics(){
+  const smokers=armRows(1),controls=armRows(0),maxW=Math.max(...state.data.map(r=>r.rawW)),capped=state.data.filter(r=>r.capped).length;
+  const cards=[
+    ["Cohort",state.data.length+" subjects"],
+    ["Observed smokers",pct(smokers.length/state.data.length,1)],
+    ["Observed CVD",pct(mean(state.data.map(r=>r.Y)),1)],
+    ["Largest raw weight",fmt(maxW,2)],
+    ["Weights capped",capped+" / "+state.data.length],
+    ["Weighted ESS",Math.round(ess(smokers))+" + "+Math.round(ess(controls))]
+  ];
+  $('metricStrip').innerHTML=cards.map(x=>'<div class="metric"><div class="k">'+x[0]+'</div><div class="v">'+x[1]+'</div></div>').join('');
+}
+
+const varMeta={
+  age:{label:"Age (years)",short:"Age",continuous:true,format:x=>fmt(x,1)},
+  bmi:{label:"BMI (kg/m²)",short:"BMI",continuous:true,format:x=>fmt(x,1)},
+  income:{label:"Income-to-poverty ratio",short:"Income ratio",continuous:true,format:x=>fmt(x,2)},
+  female:{label:"Female",short:"Female",continuous:false,format:x=>pct(x,1)},
+  college:{label:"College education",short:"College",continuous:false,format:x=>pct(x,1)},
+  htn:{label:"Baseline hypertension",short:"Hypertension",continuous:false,format:x=>pct(x,1)}
+};
+function domainFor(key){const vals=state.data.map(r=>r[key]);let lo=Math.min(...vals),hi=Math.max(...vals);const pad=(hi-lo||1)*.06;return[lo-pad,hi+pad]}
+function sx(x,d0,d1,a,b){return a+(x-d0)/(d1-d0)*(b-a)}
+function sy(y,d0,d1,a,b){return b-(y-d0)/(d1-d0)*(b-a)}
+function axisTicks(lo,hi,n=5){const out=[];for(let i=0;i<=n;i++)out.push(lo+(hi-lo)*i/n);return out}
+function svgText(x,y,text,opts=""){return '<text x="'+x+'" y="'+y+'" '+opts+'>'+esc(text)+'</text>'}
+
+function renderScatter(){
+  const svg=$('scatterSvg'),xk=state.x,yk=state.y,xd=domainFor(xk),yd=domainFor(yk),L=58,R=815,T=22,B=420;
+  let s='<style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect x="0" y="0" width="840" height="470" fill="#fff"/>';
+  for(const t of axisTicks(xd[0],xd[1],5)){const x=sx(t,xd[0],xd[1],L,R);s+='<line x1="'+x+'" x2="'+x+'" y1="'+T+'" y2="'+B+'" stroke="'+COLORS.grid+'" stroke-width="1"/>'+svgText(x,B+21,varMeta[xk].continuous?fmt(t,xk==='income'?1:0):fmt(t,0),'text-anchor="middle" font-size="11" fill="'+COLORS.muted+'"');}
+  for(const t of axisTicks(yd[0],yd[1],5)){const y=sy(t,yd[0],yd[1],T,B);s+='<line x1="'+L+'" x2="'+R+'" y1="'+y+'" y2="'+y+'" stroke="'+COLORS.grid+'" stroke-width="1"/>'+svgText(L-8,y+4,varMeta[yk].continuous?fmt(t,yk==='income'?1:0):fmt(t,0),'text-anchor="end" font-size="11" fill="'+COLORS.muted+'"');}
+  s+='<line x1="'+L+'" x2="'+R+'" y1="'+B+'" y2="'+B+'" stroke="#98A2B3"/><line x1="'+L+'" x2="'+L+'" y1="'+T+'" y2="'+B+'" stroke="#98A2B3"/>';
+  s+=svgText((L+R)/2,458,varMeta[xk].label,'text-anchor="middle" font-size="12" font-weight="700" fill="'+COLORS.ink+'"');
+  s+='<g transform="translate(16,'+((T+B)/2)+') rotate(-90)">'+svgText(0,0,varMeta[yk].label,'text-anchor="middle" font-size="12" font-weight="700" fill="'+COLORS.ink+'"')+'</g>';
+  const order=state.data.map((r,i)=>({r,i})).sort((a,b)=>b.r.currentW-a.r.currentW);
+  for(const o of order){const r=o.r,x=sx(r[xk],xd[0],xd[1],L,R),y=sy(r[yk],yd[0],yd[1],T,B),rad=3.2+1.9*Math.sqrt(Math.min(r.currentW,20));const fill=r.T?COLORS.smoke:COLORS.control;const selected=o.i===state.selected;const stroke=r.Y?'#111827':selected?COLORS.accent:'#fff';const sw=r.Y?2.2:selected?3.2:1.0;
+    s+='<circle class="subject-point" data-index="'+o.i+'" tabindex="0" cx="'+x.toFixed(2)+'" cy="'+y.toFixed(2)+'" r="'+rad.toFixed(2)+'" fill="'+fill+'" fill-opacity=".72" stroke="'+stroke+'" stroke-width="'+sw+'"><title>'+r.id+': '+(r.T?'smoker':'non-smoker')+', e-hat '+fmt(r.ehat,3)+', weight '+fmt(r.currentW,2)+'</title></circle>';
+    if(selected)s+='<circle cx="'+x+'" cy="'+y+'" r="'+(rad+5)+'" fill="none" stroke="'+COLORS.accent+'" stroke-width="2" stroke-dasharray="4 3" pointer-events="none"/>';
+  }
+  svg.innerHTML=s;
+  svg.querySelectorAll('.subject-point').forEach(el=>{
+    el.addEventListener('pointermove',e=>showTip(e,+el.dataset.index));el.addEventListener('pointerleave',hideTip);
+    el.addEventListener('click',()=>selectSubject(+el.dataset.index));el.addEventListener('focus',e=>showTip(e,+el.dataset.index));el.addEventListener('blur',hideTip);
+    el.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();selectSubject(+el.dataset.index)}});
+  });
+}
+function showTip(e,i){const r=state.data[i],tip=$('tooltip');tip.innerHTML='<b>'+r.id+'</b><br>'+varMeta[state.x].short+': '+varMeta[state.x].format(r[state.x])+'<br>'+varMeta[state.y].short+': '+varMeta[state.y].format(r[state.y])+'<br>'+(r.T?'Smoker':'Non-smoker')+' • '+(r.Y?'CVD':'No CVD')+'<br>ê = '+fmt(r.ehat,3)+' • current w = '+fmt(r.currentW,2);tip.style.left=(e.clientX||20)+'px';tip.style.top=(e.clientY||20)+'px';tip.style.opacity='1'}
+function hideTip(){$('tooltip').style.opacity='0'}
+function selectSubject(i){state.selected=clamp(i,0,state.data.length-1);renderScatter();renderSubject();renderPropensity();renderTable()}
+
+function renderSubject(){
+  const r=state.data[state.selected]||state.data[0];if(!r)return;
+  const obsProb=r.T?r.ehat:1-r.ehat,formula=r.T?'1 / ê':'1 / (1 − ê)',calc=r.T?'1 / '+fmt(r.ehat,3):'1 / (1 − '+fmt(r.ehat,3)+')';
+  let rarity=obsProb<.20?'Rare observed status → large weight':obsProb<.45?'Somewhat uncommon observed status':'Common observed status → modest weight';
+  $('subjectPanel').innerHTML='<div class="subject-id"><strong>'+r.id+'</strong><span class="status-pill '+(r.T?'status-smoke':'status-control')+'">'+(r.T?'T=1 smoker':'T=0 non-smoker')+'</span></div>'+
+  '<div class="kv">'+
+  '<div><div class="label">Age</div><div class="num">'+fmt(r.age,1)+' years</div></div><div><div class="label">BMI</div><div class="num">'+fmt(r.bmi,1)+'</div></div>'+
+  '<div><div class="label">Income ratio</div><div class="num">'+fmt(r.income,2)+'</div></div><div><div class="label">Sex</div><div class="num">'+(r.female?'Female':'Male')+'</div></div>'+
+  '<div><div class="label">College</div><div class="num">'+(r.college?'Yes':'No')+'</div></div><div><div class="label">Hypertension</div><div class="num">'+(r.htn?'Yes':'No')+'</div></div>'+
+  '<div><div class="label">Outcome</div><div class="num">'+(r.Y?'CVD (Y=1)':'No CVD (Y=0)')+'</div></div><div><div class="label">Fitted ê</div><div class="num">'+fmt(r.ehat,3)+'</div></div></div>'+
+  '<div class="formula-box"><div class="small">Observed-treatment probability = '+fmt(obsProb,3)+'</div><div class="formula">w = '+formula+' = '+calc+' = '+fmt(r.rawW,2)+'</div><div class="meaning">'+rarity+'. '+(r.capped?'The raw weight is capped at '+state.cap+'. ':'')+'At '+Math.round(state.intensity*100)+'% transition, this subject currently counts as <b>'+fmt(r.currentW,2)+'</b> weighted subjects.</div></div>'+
+  '<div class="subject-nav"><button id="prevSubject">← Previous subject</button><button id="nextSubject">Next subject →</button></div>';
+  $('prevSubject').onclick=()=>selectSubject((state.selected-1+state.data.length)%state.data.length);
+  $('nextSubject').onclick=()=>selectSubject((state.selected+1)%state.data.length);
+}
+
+function hist(rows,key,wkey,bins,lo,hi){const h=Array(bins).fill(0);let sw=0;for(const r of rows){const w=r[wkey],j=clamp(Math.floor((r[key]-lo)/(hi-lo)*bins),0,bins-1);h[j]+=w;sw+=w}return h.map(x=>sw?x/sw:0)}
+function areaPath(h,x0,x1,y0,y1,maxY){const bw=(x1-x0)/h.length;let d='M '+x0+' '+y1;for(let i=0;i<h.length;i++){const x=x0+(i+.5)*bw,y=y1-(h[i]/maxY)*(y1-y0);d+=' L '+x.toFixed(2)+' '+y.toFixed(2)}d+=' L '+x1+' '+y1+' Z';return d}
+function linePath(h,x0,x1,y0,y1,maxY){const bw=(x1-x0)/h.length;return h.map((v,i)=>(i?'L':'M')+' '+(x0+(i+.5)*bw).toFixed(2)+' '+(y1-(v/maxY)*(y1-y0)).toFixed(2)).join(' ')}
+function renderDistribution(){
+  const key=state.dist,m=varMeta[key],svg=$('distSvg');let s='<style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="780" height="330" fill="#fff"/>';
+  const panels=[{title:'Observed arms',w:'one',x0:50,x1:375},{title:'Current weighted arms',w:'currentW',x0:430,x1:755}];
+  for(const r of state.data)r.one=1;
+  if(m.continuous){
+    const vals=state.data.map(r=>r[key]),lo=Math.min(...vals),hi=Math.max(...vals),bins=14;
+    for(const p of panels){
+      const h1=hist(armRows(1),key,p.w,bins,lo,hi),h0=hist(armRows(0),key,p.w,bins,lo,hi),mx=Math.max(.001,...h1,...h0)*1.12,y0=58,y1=270;
+      s+=svgText((p.x0+p.x1)/2,28,p.title,'text-anchor="middle" font-size="13" font-weight="800" fill="'+COLORS.ink+'"');
+      for(let k=0;k<=4;k++){const y=y1-(y1-y0)*k/4;s+='<line x1="'+p.x0+'" x2="'+p.x1+'" y1="'+y+'" y2="'+y+'" stroke="'+COLORS.grid+'"/>'}
+      s+='<path d="'+areaPath(h0,p.x0,p.x1,y0,y1,mx)+'" fill="'+COLORS.control+'" fill-opacity=".18"/><path d="'+linePath(h0,p.x0,p.x1,y0,y1,mx)+'" fill="none" stroke="'+COLORS.control+'" stroke-width="3"/>';
+      s+='<path d="'+areaPath(h1,p.x0,p.x1,y0,y1,mx)+'" fill="'+COLORS.smoke+'" fill-opacity=".18"/><path d="'+linePath(h1,p.x0,p.x1,y0,y1,mx)+'" fill="none" stroke="'+COLORS.smoke+'" stroke-width="3"/>';
+      s+='<line x1="'+p.x0+'" x2="'+p.x1+'" y1="'+y1+'" y2="'+y1+'" stroke="#98A2B3"/>';
+      s+=svgText(p.x0,y1+18,m.format(lo),'text-anchor="start" font-size="10" fill="'+COLORS.muted+'"')+svgText(p.x1,y1+18,m.format(hi),'text-anchor="end" font-size="10" fill="'+COLORS.muted+'"');
+      const a1=weightedMean(armRows(1),key,p.w),a0=weightedMean(armRows(0),key,p.w);
+      s+=svgText((p.x0+p.x1)/2,305,'means: smoker '+m.format(a1)+' • non-smoker '+m.format(a0),'text-anchor="middle" font-size="10" fill="'+COLORS.muted+'"');
+    }
+  } else {
+    for(const p of panels){
+      const v1=weightedMean(armRows(1),key,p.w),v0=weightedMean(armRows(0),key,p.w),base=270,top=65,maxH=190,cx=(p.x0+p.x1)/2;
+      s+=svgText(cx,28,p.title,'text-anchor="middle" font-size="13" font-weight="800" fill="'+COLORS.ink+'"');
+      for(let k=0;k<=4;k++){const y=base-maxH*k/4;s+='<line x1="'+p.x0+'" x2="'+p.x1+'" y1="'+y+'" y2="'+y+'" stroke="'+COLORS.grid+'"/>'+svgText(p.x0-5,y+3,(25*k)+'%','text-anchor="end" font-size="9" fill="'+COLORS.muted+'"')}
+      const bw=72,xA=cx-90,xB=cx+18;
+      s+='<rect x="'+xA+'" y="'+(base-v1*maxH)+'" width="'+bw+'" height="'+(v1*maxH)+'" rx="7" fill="'+COLORS.smoke+'" fill-opacity=".85"/><rect x="'+xB+'" y="'+(base-v0*maxH)+'" width="'+bw+'" height="'+(v0*maxH)+'" rx="7" fill="'+COLORS.control+'" fill-opacity=".85"/>';
+      s+=svgText(xA+bw/2,base-v1*maxH-8,pct(v1,1),'text-anchor="middle" font-size="11" font-weight="800" fill="'+COLORS.smoke+'"')+svgText(xB+bw/2,base-v0*maxH-8,pct(v0,1),'text-anchor="middle" font-size="11" font-weight="800" fill="'+COLORS.control+'"');
+      s+=svgText(xA+bw/2,base+18,'Smoker','text-anchor="middle" font-size="10" fill="'+COLORS.muted+'"')+svgText(xB+bw/2,base+18,'Non-smoker','text-anchor="middle" font-size="10" fill="'+COLORS.muted+'"');
+    }
+  }
+  s+=svgText(390,324,m.label,'text-anchor="middle" font-size="11" font-weight="700" fill="'+COLORS.ink+'"');
+  svg.innerHTML=s;
+}
+
+function smdFor(key,wkey){
+  const a=armRows(1),b=armRows(0),m1=weightedMean(a,key,wkey),m0=weightedMean(b,key,wkey);
+  const v1=weightedVar(a,key,'one'),v0=weightedVar(b,key,'one'),den=Math.sqrt((v1+v0)/2)||1;
+  return Math.abs(m1-m0)/den;
+}
+function renderBalance(){
+  for(const r of state.data)r.one=1;
+  const keys=['age','bmi','income','female','college','htn'],vals=keys.map(k=>({k,before:smdFor(k,'one'),after:smdFor(k,'currentW')}));
+  const maxV=Math.max(.35,...vals.flatMap(v=>[v.before,v.after]))*1.12,L=175,R=748,T=32,rowH=43;
+  let s='<style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="780" height="330" fill="#fff"/>';
+  for(const t of axisTicks(0,maxV,5)){const x=sx(t,0,maxV,L,R);s+='<line x1="'+x+'" x2="'+x+'" y1="'+T+'" y2="'+(T+rowH*keys.length)+'" stroke="'+COLORS.grid+'"/>'+svgText(x,T-8,fmt(t,2),'text-anchor="middle" font-size="9" fill="'+COLORS.muted+'"')}
+  const x10=sx(.10,0,maxV,L,R);s+='<line x1="'+x10+'" x2="'+x10+'" y1="'+(T-2)+'" y2="'+(T+rowH*keys.length)+'" stroke="'+COLORS.danger+'" stroke-width="2" stroke-dasharray="5 4"/>';
+  vals.forEach((v,i)=>{const y=T+22+i*rowH,xb=sx(v.before,0,maxV,L,R),xa=sx(v.after,0,maxV,L,R);s+=svgText(L-10,y+4,varMeta[v.k].short,'text-anchor="end" font-size="11" font-weight="700" fill="'+COLORS.ink+'"');s+='<line x1="'+Math.min(xb,xa)+'" x2="'+Math.max(xb,xa)+'" y1="'+y+'" y2="'+y+'" stroke="#C7CDD6" stroke-width="3"/>';s+='<circle cx="'+xb+'" cy="'+y+'" r="5" fill="'+COLORS.gray+'"/><circle cx="'+xa+'" cy="'+y+'" r="7" fill="'+COLORS.accent+'" stroke="#fff" stroke-width="2"/>';s+=svgText(xb,y-9,fmt(v.before,2),'text-anchor="middle" font-size="9" fill="'+COLORS.gray+'"')+svgText(xa,y+17,fmt(v.after,2),'text-anchor="middle" font-size="9" font-weight="800" fill="'+COLORS.accent+'"')});
+  s+=svgText((L+R)/2,318,'Absolute standardized mean difference','text-anchor="middle" font-size="11" font-weight="700" fill="'+COLORS.ink+'"');
+  $('balanceSvg').innerHTML=s;
+}
+
+function renderPropensity(){
+  const svg=$('propensitySvg'),L=55,R=750,topY=38,baseY=178,bins=20,h1=hist(armRows(1),'ehat','one',bins,0,1),h0=hist(armRows(0),'ehat','one',bins,0,1),mx=Math.max(.001,...h1,...h0)*1.12;
+  let s='<style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="780" height="330" fill="#fff"/>';
+  for(let k=0;k<=10;k++){const x=L+(R-L)*k/10;s+='<line x1="'+x+'" x2="'+x+'" y1="'+topY+'" y2="305" stroke="'+COLORS.grid+'"/>'+svgText(x,319,(k/10).toFixed(1),'text-anchor="middle" font-size="9" fill="'+COLORS.muted+'"')}
+  s+=svgText(L,22,'Fitted propensity distributions','font-size="11" font-weight="800" fill="'+COLORS.ink+'"');
+  s+='<path d="'+areaPath(h0,L,R,topY,baseY,mx)+'" fill="'+COLORS.control+'" fill-opacity=".20"/><path d="'+linePath(h0,L,R,topY,baseY,mx)+'" fill="none" stroke="'+COLORS.control+'" stroke-width="3"/>';
+  s+='<path d="'+areaPath(h1,L,R,topY,baseY,mx)+'" fill="'+COLORS.smoke+'" fill-opacity=".20"/><path d="'+linePath(h1,L,R,topY,baseY,mx)+'" fill="none" stroke="'+COLORS.smoke+'" stroke-width="3"/>';
+  s+='<line x1="'+L+'" x2="'+R+'" y1="'+baseY+'" y2="'+baseY+'" stroke="#98A2B3"/>';
+  s+=svgText(L,205,'Inverse-weight curves (capped for display at 12)','font-size="11" font-weight="800" fill="'+COLORS.ink+'"');
+  const y0=296,yTop=215,maxW=12;let d1='',d0='';for(let k=1;k<100;k++){const e=k/100,x=sx(e,0,1,L,R),w1=Math.min(1/e,maxW),w0=Math.min(1/(1-e),maxW),yy1=sy(w1,1,maxW,yTop,y0),yy0=sy(w0,1,maxW,yTop,y0);d1+=(k===1?'M':' L')+' '+x+' '+yy1;d0+=(k===1?'M':' L')+' '+x+' '+yy0}s+='<path d="'+d1+'" fill="none" stroke="'+COLORS.smoke+'" stroke-width="2.5"/><path d="'+d0+'" fill="none" stroke="'+COLORS.control+'" stroke-width="2.5"/>';
+  s+=svgText(R-5,226,'w=1/ê','text-anchor="end" font-size="10" font-weight="800" fill="'+COLORS.smoke+'"')+svgText(L+5,226,'w=1/(1−ê)','font-size="10" font-weight="800" fill="'+COLORS.control+'"');
+  const r=state.data[state.selected];if(r){const x=sx(r.ehat,0,1,L,R),w=Math.min(r.rawW,maxW),y=sy(w,1,maxW,yTop,y0);s+='<circle cx="'+x+'" cy="'+y+'" r="7" fill="'+COLORS.accent+'" stroke="#fff" stroke-width="2"/><line x1="'+x+'" x2="'+x+'" y1="'+baseY+'" y2="'+y+'" stroke="'+COLORS.accent+'" stroke-dasharray="4 3"/>'+svgText(x,y-10,r.id,'text-anchor="middle" font-size="10" font-weight="800" fill="'+COLORS.accent+'"')}
+  s+=svgText((L+R)/2,329,'Fitted propensity ê = P(smoker | X)','text-anchor="middle" font-size="11" font-weight="700" fill="'+COLORS.ink+'"');
+  svg.innerHTML=s;
+}
+
+function renderEstimates(){
+  for(const r of state.data)r.one=1;
+  const crude=estimate('one'),current=estimate('currentW'),full=estimate('ipwW'),truth={r1:state.trueRisk1,r0:state.trueRisk0,rd:state.trueATE,rr:state.trueRisk0>0?state.trueRisk1/state.trueRisk0:NaN};
+  const ci=state.inference&&state.inference.current,ciText=ci&&ci.valid?'95% CI ['+pct(ci.ci.rd[0],1)+', '+pct(ci.ci.rd[1],1)+']':'CI unavailable';
+  const cards=[['Crude',crude,'','RR '+fmt(crude.rr,2)],['Current '+Math.round(state.intensity*100)+'%',current,'current',ciText],['Full IPW',full,'','RR '+fmt(full.rr,2)],['Known truth',truth,'truth','RR '+fmt(truth.rr,2)]];
+  const sw1=sumArm(1,'currentW'),sw0=sumArm(0,'currentW'),sy1=armRows(1).reduce((s,r)=>s+r.currentW*r.Y,0),sy0=armRows(0).reduce((s,r)=>s+r.currentW*r.Y,0);
+  $('estimatePanel').innerHTML='<div class="estimate-grid">'+cards.map(c=>'<div class="est '+c[2]+'"><div class="name">'+c[0]+'</div><div class="rd">RD '+(c[1].rd>=0?'+':'')+pct(c[1].rd,1)+'</div><div class="sub">'+c[3]+'</div></div>').join('')+'</div>'+ 
+  '<svg class="chart" viewBox="0 0 640 165" aria-label="Weighted CVD risks with 95 percent confidence intervals"><style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="640" height="165" fill="#fff"/>'+riskBars(current,ci)+'</svg>'+ 
+  '<div class="risk-formula"><strong>Normalized weighted risks at the current slider position</strong><div class="formula-line">Smoker risk = Σ(T·w·Y) / Σ(T·w) = '+fmt(sy1,2)+' / '+fmt(sw1,2)+' = '+pct(current.r1,1)+'</div><div class="formula-line">Non-smoker risk = Σ((1−T)·w·Y) / Σ((1−T)·w) = '+fmt(sy0,2)+' / '+fmt(sw0,2)+' = '+pct(current.r0,1)+'</div><div class="formula-line">Risk difference = '+pct(current.r1,1)+' − '+pct(current.r0,1)+' = '+(current.rd>=0?'+':'')+pct(current.rd,1)+'</div><div class="formula-line">95% CI for RD = '+(ci&&ci.valid?'['+pct(ci.ci.rd[0],1)+', '+pct(ci.ci.rd[1],1)+']':'unavailable')+'</div></div>';
+}
+function riskBars(est,ci){
+  const hi1=ci&&ci.valid?Math.min(1,ci.ci.r1[1]):est.r1,hi0=ci&&ci.valid?Math.min(1,ci.ci.r0[1]):est.r0;
+  const max=Math.max(.35,est.r1,est.r0,hi1,hi0)*1.15,L=105,R=605,rows=[{name:'Smoker risk',v:est.r1,c:COLORS.smoke,y:50,ci:ci&&ci.valid?ci.ci.r1:null},{name:'Non-smoker risk',v:est.r0,c:COLORS.control,y:112,ci:ci&&ci.valid?ci.ci.r0:null}];let s='';
+  for(let k=0;k<=5;k++){const x=L+(R-L)*k/5;s+='<line x1="'+x+'" x2="'+x+'" y1="20" y2="137" stroke="'+COLORS.grid+'"/>'+svgText(x,155,pct(max*k/5,0),'text-anchor="middle" font-size="9" fill="'+COLORS.muted+'"')}
+  for(const r of rows){
+    const xv=L+(R-L)*r.v/max;s+=svgText(L-8,r.y+5,r.name,'text-anchor="end" font-size="11" font-weight="700" fill="'+COLORS.ink+'"')+'<rect x="'+L+'" y="'+(r.y-13)+'" width="'+((R-L)*r.v/max)+'" height="26" rx="9" fill="'+r.c+'" fill-opacity=".76"/>';
+    if(r.ci){const lo=clamp(r.ci[0],0,max),hi=clamp(r.ci[1],0,max),xl=L+(R-L)*lo/max,xh=L+(R-L)*hi/max;s+='<line x1="'+xl+'" x2="'+xh+'" y1="'+r.y+'" y2="'+r.y+'" stroke="#111827" stroke-width="3"/><line x1="'+xl+'" x2="'+xl+'" y1="'+(r.y-7)+'" y2="'+(r.y+7)+'" stroke="#111827" stroke-width="2"/><line x1="'+xh+'" x2="'+xh+'" y1="'+(r.y-7)+'" y2="'+(r.y+7)+'" stroke="#111827" stroke-width="2"/><circle cx="'+xv+'" cy="'+r.y+'" r="5" fill="'+r.c+'" stroke="#fff" stroke-width="2"/>'}
+    s+=svgText(Math.min(R-3,xv+8),r.y-17,pct(r.v,1),'font-size="11" font-weight="850" fill="'+r.c+'"');
+  }
+  return s;
+}
+
+function renderCI(){
+  const methods=[{key:'crude',name:'Crude',sub:'No adjustment',color:COLORS.gray},{key:'current',name:'Current '+Math.round(state.intensity*100)+'%',sub:'Teaching slider',color:COLORS.accent},{key:'full',name:'Full IPW',sub:'Formal 100% weighting',color:COLORS.smoke}];
+  const truth=state.trueATE,valid=methods.map(m=>({...m,res:state.inference?state.inference[m.key]:null})).filter(m=>m.res&&m.res.valid);
+  if(!valid.length){$('ciSvg').innerHTML='';$('ciStatusPanel').innerHTML='<div class="ci-status-item miss">CI unavailable</div>';return}
+  let lo=Math.min(0,truth,...valid.map(m=>m.res.ci.rd[0])),hi=Math.max(0,truth,...valid.map(m=>m.res.ci.rd[1])),span=Math.max(.12,hi-lo),pad=.12*span;lo-=pad;hi+=pad;
+  lo=Math.max(-1,lo);hi=Math.min(1,hi);if(hi-lo<.12){const mid=(hi+lo)/2;lo=mid-.06;hi=mid+.06}
+  const L=168,R=748,T=48,B=275,sxv=x=>sx(x,lo,hi,L,R),ys=[86,164,242];
+  let g='<style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="780" height="330" fill="#fff"/>';
+  for(const t of axisTicks(lo,hi,5)){const x=sxv(t);g+='<line x1="'+x+'" x2="'+x+'" y1="'+T+'" y2="'+B+'" stroke="'+COLORS.grid+'"/>'+svgText(x,308,(t>=0?'+':'')+pct(t,0),'text-anchor="middle" font-size="9" fill="'+COLORS.muted+'"')}
+  if(lo<=0&&hi>=0){const x=sxv(0);g+='<line x1="'+x+'" x2="'+x+'" y1="'+T+'" y2="'+B+'" stroke="#98A2B3" stroke-width="2" stroke-dasharray="5 4"/>'}
+  const xt=sxv(truth);g+='<line x1="'+xt+'" x2="'+xt+'" y1="'+(T-9)+'" y2="'+B+'" stroke="'+COLORS.green+'" stroke-width="3"/>'+svgText(xt,T-16,'Known truth '+(truth>=0?'+':'')+pct(truth,1),'text-anchor="middle" font-size="10" font-weight="850" fill="'+COLORS.green+'"');
+  valid.forEach((m,i)=>{const y=ys[i],r=m.res,x1=sxv(clamp(r.ci.rd[0],lo,hi)),x2=sxv(clamp(r.ci.rd[1],lo,hi)),xp=sxv(r.rd),cover=r.ci.rd[0]<=truth&&truth<=r.ci.rd[1],status=cover?COLORS.green:COLORS.danger;
+    g+=svgText(L-15,y-4,m.name,'text-anchor="end" font-size="12" font-weight="850" fill="'+COLORS.ink+'"')+svgText(L-15,y+13,m.sub,'text-anchor="end" font-size="9" fill="'+COLORS.muted+'"');
+    g+='<line x1="'+x1+'" x2="'+x2+'" y1="'+y+'" y2="'+y+'" stroke="'+m.color+'" stroke-width="5" stroke-linecap="round"><title>'+m.name+' RD '+pct(r.rd,2)+'; 95% CI ['+pct(r.ci.rd[0],2)+', '+pct(r.ci.rd[1],2)+']; '+(cover?'contains':'misses')+' truth</title></line><line x1="'+x1+'" x2="'+x1+'" y1="'+(y-8)+'" y2="'+(y+8)+'" stroke="'+m.color+'" stroke-width="2"/><line x1="'+x2+'" x2="'+x2+'" y1="'+(y-8)+'" y2="'+(y+8)+'" stroke="'+m.color+'" stroke-width="2"/><circle cx="'+xp+'" cy="'+y+'" r="7" fill="'+m.color+'" stroke="#fff" stroke-width="2"/><circle cx="758" cy="'+y+'" r="6" fill="'+status+'"/>';
+  });
+  g+=svgText((L+R)/2,327,'Risk difference (smoker risk − non-smoker risk)','text-anchor="middle" font-size="11" font-weight="700" fill="'+COLORS.ink+'"');
+  $('ciSvg').innerHTML=g;
+  $('ciStatusPanel').innerHTML=valid.map(m=>{const r=m.res,cover=r.ci.rd[0]<=truth&&truth<=r.ci.rd[1];return '<div class="ci-status-item '+(cover?'cover':'miss')+'"><div class="ci-status-name">'+m.name+'</div><div class="ci-status-value">RD '+(r.rd>=0?'+':'')+pct(r.rd,1)+'<br>95% CI ['+pct(r.ci.rd[0],1)+', '+pct(r.ci.rd[1],1)+']</div><div class="ci-badge">'+(cover?'✓ Truth contained':'✕ Truth missed')+'</div></div>'}).join('');
+}
+function coverageStats(results,key,truth){
+  const vals=results.map(r=>r[key]).filter(r=>r&&r.valid&&Number.isFinite(r.rd)&&Number.isFinite(r.ci.rd[0])&&Number.isFinite(r.ci.rd[1]));
+  if(!vals.length)return{valid:0,total:results.length,coverage:NaN,bias:NaN,width:NaN,rmse:NaN,covered:0,vals:[]};
+  const covered=vals.filter(r=>r.ci.rd[0]<=truth&&truth<=r.ci.rd[1]).length,errors=vals.map(r=>r.rd-truth);
+  return{valid:vals.length,total:results.length,covered,coverage:covered/vals.length,bias:mean(errors),width:mean(vals.map(r=>r.ci.rd[1]-r.ci.rd[0])),rmse:Math.sqrt(mean(errors.map(e=>e*e))),vals};
+}
+function renderCoverage(){
+  const run=$('runCoverage'),pctDone=state.coverageTotal?state.coverageDone/state.coverageTotal:0;
+  run.disabled=state.coverageRunning;run.textContent=state.coverageRunning?'Running…':(state.coverageResults?'Run again':'Run experiment');
+  $('coverageProgressFill').style.width=(100*pctDone).toFixed(1)+'%';$('coverageProgressPct').textContent=Math.round(100*pctDone)+'%';
+  $('coverageProgressText').textContent=state.coverageRunning?'Generating sample '+state.coverageDone+' of '+state.coverageTotal:(state.coverageResults?'Completed '+state.coverageResults.length+' repeated samples':'No experiment run yet');
+  if(!state.coverageResults){$('coverageSummary').innerHTML='';$('coverageSvg').innerHTML='';$('coverageEmpty').style.display='block';return}
+  $('coverageEmpty').style.display='none';
+  const truth=state.coverageTruth,selected=$('coverageEstimator').value,meta={crude:['Crude','No adjustment'],current:['Current '+Math.round(state.intensity*100)+'%','Slider setting'],full:['Full IPW','100% weighting']};
+  const stats={crude:coverageStats(state.coverageResults,'crude',truth),current:coverageStats(state.coverageResults,'current',truth),full:coverageStats(state.coverageResults,'full',truth)};
+  $('coverageSummary').innerHTML=['crude','current','full'].map(k=>{const q=stats[k];return '<button class="coverage-stat '+(k===selected?'selected':'')+'" data-method="'+k+'"><div class="name">'+meta[k][0]+'</div><div class="number">'+pct(q.coverage,1)+'</div><div class="detail">'+q.covered+' / '+q.valid+' CIs cover truth<br>Bias '+(q.bias>=0?'+':'')+pct(q.bias,1)+' • mean width '+pct(q.width,1)+'</div></button>'}).join('');
+  $('coverageSummary').querySelectorAll('[data-method]').forEach(b=>b.onclick=()=>{$('coverageEstimator').value=b.dataset.method;renderCoverage()});
+  const q=stats[selected],all=q.vals.map((r,i)=>({r,i,cover:r.ci.rd[0]<=truth&&truth<=r.ci.rd[1]}));
+  if(!all.length){$('coverageSvg').innerHTML='';return}
+  const maxShow=44,step=Math.max(1,Math.ceil(all.length/maxShow)),shown=all.filter((_,i)=>i%step===0).slice(0,maxShow).sort((a,b)=>a.r.rd-b.r.rd);
+  let lo=Math.min(0,truth,...shown.map(o=>o.r.ci.rd[0])),hi=Math.max(0,truth,...shown.map(o=>o.r.ci.rd[1])),span=Math.max(.12,hi-lo),pad=.10*span;lo=Math.max(-1,lo-pad);hi=Math.min(1,hi+pad);if(hi-lo<.12){const mid=(hi+lo)/2;lo=mid-.06;hi=mid+.06}
+  const L=88,R=748,T=50,B=377,sxv=x=>sx(x,lo,hi,L,R),rowH=(B-T)/Math.max(1,shown.length-1);
+  let g='<style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="780" height="430" fill="#fff"/>';
+  for(const t of axisTicks(lo,hi,5)){const x=sxv(t);g+='<line x1="'+x+'" x2="'+x+'" y1="'+T+'" y2="'+B+'" stroke="'+COLORS.grid+'"/>'+svgText(x,407,(t>=0?'+':'')+pct(t,0),'text-anchor="middle" font-size="9" fill="'+COLORS.muted+'"')}
+  if(lo<=0&&hi>=0){const x=sxv(0);g+='<line x1="'+x+'" x2="'+x+'" y1="'+T+'" y2="'+B+'" stroke="#98A2B3" stroke-width="1.5" stroke-dasharray="4 4"/>'}
+  const xt=sxv(truth);g+='<line x1="'+xt+'" x2="'+xt+'" y1="'+(T-10)+'" y2="'+B+'" stroke="'+COLORS.green+'" stroke-width="3"/>'+svgText(xt,T-18,'Truth '+(truth>=0?'+':'')+pct(truth,1),'text-anchor="middle" font-size="10" font-weight="850" fill="'+COLORS.green+'"');
+  shown.forEach((o,j)=>{const y=T+j*rowH,r=o.r,c=o.cover?COLORS.green:COLORS.danger,x1=sxv(clamp(r.ci.rd[0],lo,hi)),x2=sxv(clamp(r.ci.rd[1],lo,hi)),xp=sxv(r.rd);g+=svgText(L-8,y+3,'#'+String(o.i+1).padStart(2,'0'),'text-anchor="end" font-size="8" fill="'+COLORS.muted+'"')+'<line x1="'+x1+'" x2="'+x2+'" y1="'+y+'" y2="'+y+'" stroke="'+c+'" stroke-width="2.5" stroke-linecap="round"><title>Sample '+(o.i+1)+': RD '+pct(r.rd,2)+'; 95% CI ['+pct(r.ci.rd[0],2)+', '+pct(r.ci.rd[1],2)+']; '+(o.cover?'covers':'misses')+' truth</title></line><circle cx="'+xp+'" cy="'+y+'" r="3.4" fill="'+c+'" stroke="#fff" stroke-width="1"/>'});
+  g+=svgText((L+R)/2,427,meta[selected][0]+' risk-difference estimates and 95% CIs','text-anchor="middle" font-size="11" font-weight="700" fill="'+COLORS.ink+'"')+svgText(R,24,'Empirical coverage '+pct(q.coverage,1)+' ('+q.covered+'/'+q.valid+')','text-anchor="end" font-size="12" font-weight="850" fill="'+(q.coverage>=.90?COLORS.green:COLORS.danger)+'"');
+  $('coverageSvg').innerHTML=g;
+}
+function runCoverage(){
+  stop();readControls();
+  const M=+$('coverageM').value,token=++state.coverageToken,truth=state.trueATE,model=state.model,capOn=state.capOn,cap=state.cap,alpha=state.intensity;
+  const base=state.data.map(r=>({zAge:r.zAge,zBmi:r.zBmi,zInc:r.zInc,female:r.female,college:r.college,htn:r.htn,trueE:r.trueE,q0:r.q0,q1:r.q1}));
+  const rng=mulberry32((state.seed^0x9E3779B9)>>>0);state.coverageRunning=true;state.coverageDone=0;state.coverageTotal=M;state.coverageResults=[];state.coverageTruth=truth;renderCoverage();
+  function one(){
+    const rows=base.map((b,i)=>{const T=rng()<b.trueE?1:0,q=T?b.q1:b.q0,Y=rng()<q?1:0;return{id:'R'+i,...b,T,Y}}),X=rows.map(r=>designRow(r,model));
+    const fit=fitLogistic(X,rows.map(r=>r.T));rows.forEach((r,i)=>r.ehat=fit.p[i]);
+    return{crude:sandwichFor(rows,0,{model,capOn,cap}),current:sandwichFor(rows,alpha,{model,capOn,cap}),full:sandwichFor(rows,1,{model,capOn,cap})};
+  }
+  function step(){
+    if(token!==state.coverageToken)return;
+    const end=Math.min(M,state.coverageDone+3);for(;state.coverageDone<end;state.coverageDone++)state.coverageResults.push(one());renderCoverage();
+    if(state.coverageDone<M)setTimeout(step,0);else{state.coverageRunning=false;renderCoverage()}
+  }
+  setTimeout(step,0);
+}
+
+function renderTable(){
+  const rows=state.data.map((r,i)=>({r,i})).sort((a,b)=>b.r.rawW-a.r.rawW).slice(0,40);
+  $('subjectTable').innerHTML=rows.map(o=>{const r=o.r;return '<tr data-index="'+o.i+'" class="'+(o.i===state.selected?'selected':'')+'"><td>'+r.id+'</td><td>'+fmt(r.age,1)+'</td><td>'+fmt(r.bmi,1)+'</td><td>'+fmt(r.income,2)+'</td><td>'+(r.female?'Yes':'No')+'</td><td>'+(r.college?'Yes':'No')+'</td><td>'+(r.htn?'Yes':'No')+'</td><td>'+r.T+'</td><td>'+r.Y+'</td><td>'+fmt(r.ehat,3)+'</td><td>'+fmt(r.rawW,2)+(r.capped?'*':'')+'</td><td>'+fmt(r.currentW,2)+'</td></tr>'}).join('');
+  $('subjectTable').querySelectorAll('tr').forEach(tr=>tr.onclick=()=>selectSubject(+tr.dataset.index));
+}
+
+function renderAll(){computeInference();renderMetrics();renderScatter();renderSubject();renderDistribution();renderBalance();renderPropensity();renderEstimates();renderCI();renderCoverage();renderTable()}
+
+function preset(name){
+  const p={random:{conf:.05,overlap:.95,effect:1.8,model:'correct'},typical:{conf:1.25,overlap:.68,effect:1.8,model:'correct'},poor:{conf:2.15,overlap:.22,effect:1.8,model:'correct'},misspec:{conf:1.55,overlap:.55,effect:1.8,model:'omit'}}[name];
+  $('confRange').value=p.conf;$('overlapRange').value=p.overlap;$('effectRange').value=p.effect;$('psModel').value=p.model;$('weightRange').value=100;buildCohort();
+}
+function reset(){
+  $('nRange').value=defaults.n;$('confRange').value=defaults.conf;$('overlapRange').value=defaults.overlap;$('effectRange').value=defaults.effect;$('seedInput').value=defaults.seed;$('psModel').value=defaults.model;$('capToggle').checked=defaults.capOn;$('capRange').value=defaults.cap;$('weightRange').value=100;$('xVar').value=defaults.x;$('yVar').value=defaults.y;$('distVar').value=defaults.dist;state.selected=0;buildCohort();
+}
+function animate(){
+  invalidateCoverage();renderCoverage();
+  if(state.animation)clearInterval(state.animation);$('weightRange').value=0;updateWeights();let v=0;state.animation=setInterval(()=>{v+=2;$('weightRange').value=Math.min(100,v);updateWeights();if(v>=100){clearInterval(state.animation);state.animation=null}},55);
+}
+function stop(){if(state.animation){clearInterval(state.animation);state.animation=null}}
+function exportCSV(){
+  const head=['id','age','bmi','income_ratio','female','college','hypertension','smoker_T','cvd_Y','fitted_propensity','raw_ipw','analysis_weight'];
+  const lines=[head.join(',')].concat(state.data.map(r=>[r.id,fmt(r.age,3),fmt(r.bmi,3),fmt(r.income,3),r.female,r.college,r.htn,r.T,r.Y,fmt(r.ehat,6),fmt(r.rawW,6),fmt(r.currentW,6)].join(',')));
+  downloadBlob(lines.join('\n'),'ipw_teaching_cohort.csv','text/csv');
+}
+function downloadBlob(text,name,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},100)}
+function saveSvg(id){const src=$(id),clone=src.cloneNode(true);clone.setAttribute('xmlns','http://www.w3.org/2000/svg');const xml='<?xml version="1.0" encoding="UTF-8"?>\n'+new XMLSerializer().serializeToString(clone);downloadBlob(xml,id.replace('Svg','')+'.svg','image/svg+xml')}
+
+['nRange','confRange','overlapRange','effectRange','seedInput','psModel'].forEach(id=>$(id).addEventListener(id==='seedInput'?'change':'input',()=>{stop();buildCohort()}));
+['capToggle','capRange'].forEach(id=>$(id).addEventListener('input',()=>{stop();invalidateCoverage();updateWeights()}));
+$('weightRange').addEventListener('input',()=>{stop();invalidateCoverage();updateWeights()});
+$('xVar').addEventListener('change',()=>{readControls();renderScatter()});$('yVar').addEventListener('change',()=>{readControls();renderScatter()});$('distVar').addEventListener('change',()=>{readControls();renderDistribution()});
+$('newCohort').onclick=()=>{$('seedInput').value=((+$('seedInput').value+Math.floor(1000+Math.random()*900000))%99999999)||1;state.selected=0;buildCohort()};
+$('resetControls').onclick=reset;$('animateWeights').onclick=animate;$('stopAnimation').onclick=stop;$('exportCsv').onclick=exportCSV;$('runCoverage').onclick=runCoverage;$('coverageEstimator').addEventListener('change',renderCoverage);
+document.querySelectorAll('.preset').forEach(b=>b.onclick=()=>preset(b.dataset.preset));document.querySelectorAll('[data-svg]').forEach(b=>b.onclick=()=>saveSvg(b.dataset.svg));
+window.addEventListener('resize',hideTip);
+reset();
+})();
+</script>
+</body>
+</html>
