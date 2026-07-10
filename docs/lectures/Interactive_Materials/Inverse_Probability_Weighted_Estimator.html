@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Inverse Probability Weighted Estimator</title>
+<title>Inverse Probability Weighted Estimator — Se Yoon Lee, Ph.D.</title>
 <style>
   :root{
     color-scheme:light;
@@ -148,16 +148,98 @@
   @media(max-width:1180px){.app{grid-template-columns:1fr}.controls{position:relative;top:auto}.metrics{grid-template-columns:repeat(3,1fr)}.grid-top{grid-template-columns:1fr}.grid-two{grid-template-columns:1fr}}
   @media(max-width:650px){.hero-inner{display:block}.hero-badge{display:inline-block;margin-top:14px}.app{padding:10px}.metrics{grid-template-columns:repeat(2,1fr)}.estimate-grid{grid-template-columns:1fr 1fr}.preset-row{grid-template-columns:1fr 1fr}.card-head{display:block}.mini-controls{justify-content:flex-start;margin-top:9px}.kv{grid-template-columns:1fr 1fr}}
   @media print{.controls,.hero-badge,.table-card,.footer,.primary-row,.preset-row{display:none!important}.app{display:block;max-width:none}.card{break-inside:avoid;box-shadow:none}.hero{padding:12px}.metrics{grid-template-columns:repeat(6,1fr)}}
+
+
+  /* Graduate-level mathematical formulation */
+  .hero .title-author{font-weight:600;white-space:nowrap}
+  @media(max-width:900px){.hero .title-author{display:block;margin-top:7px;font-size:.58em;letter-spacing:-.15px;white-space:normal}}
+  .math-card{margin:0 0 12px;overflow:hidden}
+  .math-card .card-head{padding-bottom:12px;background:linear-gradient(180deg,#FFFFFF 0%,#FCFBFF 100%)}
+  .graduate-tag{display:inline-flex;align-items:center;gap:6px;border:1px solid #CFC5FF;background:#F7F4FF;color:#5B45C8;border-radius:999px;padding:5px 9px;font-size:10px;font-weight:900;letter-spacing:.55px;text-transform:uppercase;white-space:nowrap}
+  .math-tabs{display:flex;gap:7px;flex-wrap:wrap;padding:0 16px 12px;border-bottom:1px solid #E7EBF1}
+  .math-tab{border:1px solid var(--line);background:#fff;color:#475467;border-radius:10px;padding:8px 11px;font-size:11px;font-weight:820}
+  .math-tab:hover{border-color:#B7A9FF;color:#5B45C8;background:#FAF8FF}
+  .math-tab[aria-selected="true"]{border-color:var(--accent);background:var(--accent);color:#fff}
+  .math-panel{display:none;padding:16px}
+  .math-panel.active{display:block}
+  .math-scroll{overflow-x:auto;overflow-y:hidden;padding:3px 2px 7px;-webkit-overflow-scrolling:touch}
+  math{font-family:"Cambria Math","STIX Two Math","Times New Roman",serif;color:var(--ink)}
+  math[display="block"]{display:block;width:max-content;min-width:min-content;max-width:none;margin:0 auto;font-size:clamp(18px,1.65vw,27px);line-height:1.35}
+  .math-chain{border:1px solid #D9D2FF;background:linear-gradient(135deg,#F7F4FF,#F8FBFF);border-radius:15px;padding:15px 12px;margin-bottom:13px}
+  .math-chain .chain-label{font-size:10px;color:#5B45C8;font-weight:900;letter-spacing:.65px;text-transform:uppercase;margin:0 0 8px 3px}
+  .math-chain math[display="block"]{font-size:clamp(17px,1.8vw,29px)}
+  .math-step-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .math-step{border:1px solid #DEE4EC;border-radius:13px;background:#FCFCFD;padding:11px 12px;min-width:0}
+  .math-step-top{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+  .math-step-number{display:grid;place-items:center;width:25px;height:25px;border-radius:50%;background:#EEE9FF;color:#5B45C8;font-size:11px;font-weight:900;flex:0 0 auto}
+  .math-step-title{font-size:12px;font-weight:850;color:#344054}
+  .math-step p{margin:7px 0 0;color:#667085;font-size:10px;line-height:1.5}
+  .math-step math[display="block"]{font-size:clamp(15px,1.25vw,20px);margin-left:0}
+  .math-current,.current-math-result{margin-top:12px;border:1px solid #D9D2FF;background:#F8F6FF;border-radius:12px;padding:10px 12px;color:#536075;font-size:11px;line-height:1.55}
+  .math-current strong,.current-math-result strong{color:#5B45C8}
+  .math-current .current-numbers,.current-math-result .current-numbers{display:flex;gap:8px;flex-wrap:wrap;margin-top:7px}
+  .math-current .number-chip,.current-math-result .number-chip{display:inline-flex;align-items:center;border:1px solid #D9D2FF;background:#fff;border-radius:999px;padding:5px 8px;font-variant-numeric:tabular-nums;font-weight:800;color:#344054;white-space:nowrap}
+  .assumption-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:13px}
+  .assumption{border:1px solid #DEE4EC;border-radius:13px;background:#FCFCFD;padding:11px 12px;min-width:0}
+  .assumption h4{margin:0 0 6px;font-size:12px;color:#344054}
+  .assumption p{margin:7px 0 0;color:#667085;font-size:10px;line-height:1.5}
+  .assumption math[display="block"]{font-size:clamp(15px,1.15vw,19px);margin-left:0}
+  .identification-box{border:1px solid #B8E5D2;background:#F2FBF7;border-radius:14px;padding:13px}
+  .identification-box .box-title{font-size:10px;color:#176A4C;font-weight:900;letter-spacing:.6px;text-transform:uppercase;margin-bottom:8px}
+  .identification-box math[display="block"]{font-size:clamp(16px,1.45vw,23px)}
+  .model-grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(280px,.85fr);gap:12px}
+  .model-equation-box,.model-interpretation{border:1px solid #DEE4EC;border-radius:13px;background:#FCFCFD;padding:12px;min-width:0}
+  .model-equation-box h4,.model-interpretation h4{margin:0 0 7px;font-size:12px}
+  .model-equation-box p,.model-interpretation p{margin:7px 0 0;color:#667085;font-size:10px;line-height:1.55}
+  .selected-model-line{margin-top:10px;border:1px solid #D9D2FF;background:#F8F6FF;border-radius:11px;padding:10px 11px}
+  .selected-model-line .label{font-size:9px;text-transform:uppercase;letter-spacing:.6px;color:#5B45C8;font-weight:900;margin-bottom:6px}
+  .math-plain{font-family:"Cambria Math","STIX Two Math","Times New Roman",serif;font-size:clamp(15px,1.25vw,20px);line-height:1.75;color:#162033;overflow-wrap:anywhere}
+  .math-plain i{font-family:"Cambria Math","STIX Two Math","Times New Roman",serif}
+  .notation-row{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-top:12px}
+  .notation-item{border:1px solid #E1E6ED;border-radius:10px;padding:8px 9px;background:#fff;min-width:0}
+  .notation-item b{display:block;font-family:"Cambria Math","STIX Two Math","Times New Roman",serif;font-size:15px;margin-bottom:2px}
+  .notation-item span{display:block;color:#667085;font-size:9px;line-height:1.35}
+  .inference-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .inference-box{border:1px solid #DEE4EC;border-radius:13px;background:#FCFCFD;padding:12px;min-width:0}
+  .inference-box h4{margin:0 0 7px;font-size:12px}
+  .inference-box p{margin:7px 0 0;color:#667085;font-size:10px;line-height:1.5}
+  .inference-box math[display="block"]{font-size:clamp(15px,1.2vw,20px);margin-left:0}
+  .warning-math{margin-top:11px;border-left:4px solid #D18B18;background:#FFF9EB;border-radius:9px;padding:9px 11px;color:#6F4B08;font-size:10px;line-height:1.5}
+  .technical-note{margin-top:11px;border-left:4px solid var(--accent);background:#F8F6FF;border-radius:9px;padding:9px 11px;color:#514A72;font-size:10px;line-height:1.5}
+  .math-compact .math-scroll{padding-top:8px}
+  .math-compact math[display="block"]{font-size:clamp(16px,1.3vw,21px)}
+  @media(max-width:980px){.math-step-grid,.assumption-grid{grid-template-columns:1fr}.model-grid,.inference-grid{grid-template-columns:1fr}.notation-row{grid-template-columns:repeat(3,1fr)}}
+  @media(max-width:650px){.math-tabs{display:grid;grid-template-columns:1fr 1fr}.math-tab{width:100%}.notation-row{grid-template-columns:1fr 1fr}.math-panel{padding:12px}.math-chain{padding:12px 7px}math[display="block"]{font-size:17px}.math-chain math[display="block"]{font-size:17px}}
+
+
+  /* Population-moment balance module */
+  .moment-identity{margin:0 16px 10px;padding:14px 16px;border:1px solid #D9D2FF;border-radius:14px;background:linear-gradient(135deg,#FBFAFF,#F6FAFF);overflow:auto}
+  .moment-identity math{font-size:clamp(17px,1.55vw,23px);min-width:max-content}
+  .moment-definition{margin:0 16px 10px;padding:10px 12px;border:1px solid #E1E6ED;border-radius:11px;background:#FCFCFD;color:#475467;font-size:12px;line-height:1.55}
+  .moment-definition strong{color:var(--ink)}
+  .moment-subformula{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:10px;color:#5B45C8;margin-top:5px;overflow-wrap:anywhere}
+  .moment-summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;padding:0 16px 14px}
+  .moment-stat{border:1px solid #E1E6ED;border-radius:12px;padding:9px 10px;background:#FCFCFD;min-width:0}
+  .moment-stat .name{font-size:9px;text-transform:uppercase;letter-spacing:.45px;color:#667085;font-weight:850}
+  .moment-stat .number{font-size:17px;font-weight:880;margin-top:4px;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .moment-stat .detail{font-size:9px;color:#7B8495;margin-top:3px;line-height:1.35}
+  .moment-quality.close{border-color:#A9DCC8;background:#F2FBF7}.moment-quality.close .number{color:#176A4C}
+  .moment-quality.moderate{border-color:#F0D4A3;background:#FFF9ED}.moment-quality.moderate .number{color:#9A5B00}
+  .moment-quality.large{border-color:#F0BBBB;background:#FFF5F5}.moment-quality.large .number{color:#A52D2D}
+  .moment-controls{max-width:100%}.moment-controls select{min-width:126px}
+  @media(max-width:850px){.moment-summary-grid{grid-template-columns:1fr 1fr}.moment-controls select{min-width:104px}}
+  @media(max-width:520px){.moment-summary-grid{grid-template-columns:1fr}}
+
 </style>
 </head>
 <body>
 <header class="hero">
   <div class="hero-inner">
     <div>
-      <h1>Inverse Probability Weighted Estimator</h1>
+      <h1>Inverse Probability Weighted Estimator <span class="title-author">— Se Yoon Lee, Ph.D.</span></h1>
       <p>Explore how inverse probability weighting turns a confounded observational smoking study into a weighted pseudo-population. Move the controls, inspect individual subjects, and watch covariate distributions, balance, weights, and the estimated risk difference update together.</p>
     </div>
-    <div class="hero-badge">SELF-CONTAINED • INLINE SVG • NO INTERNET</div>
+    <div class="hero-badge">GRADUATE-LEVEL • SELF-CONTAINED • INLINE SVG</div>
   </div>
 </header>
 
@@ -219,7 +301,7 @@
         <option value="omit">Misspecified: age + BMI + sex only</option>
       </select>
     </div>
-    <div class="checkrow"><input id="capToggle" type="checkbox" checked><label for="capToggle">Cap very large weights for visualization and estimation.</label></div>
+    <div class="checkrow"><input id="capToggle" type="checkbox"><label for="capToggle">Optionally cap very large weights. Capping changes the Horvitz–Thompson estimator and can disrupt moment balance.</label></div>
     <div class="control" id="capControl" style="margin-top:11px">
       <div class="control-top"><label for="capRange">Weight cap</label><span class="value" id="capValue"></span></div>
       <input id="capRange" type="range" min="3" max="30" step="1" value="15">
@@ -238,12 +320,92 @@
       <button class="primary" id="animateWeights">Animate 0 → 100%</button>
       <button class="secondary" id="stopAnimation">Stop</button>
     </div>
-    <div class="teaching-note">The intermediate 1%–99% settings are a visual teaching transition. The formal normalized IPW estimator is shown at 100%.</div>
+    <div class="teaching-note">At 0%, constant inverse marginal-treatment weights reproduce the crude arm means in the HT formula. At 100%, the formal Horvitz–Thompson IPW estimator is used. Intermediate values are a pedagogical interpolation.</div>
   </div>
 </aside>
 
 <section class="workspace">
   <div class="metrics" id="metricStrip" aria-live="polite"></div>
+
+
+  <article class="card math-card" aria-labelledby="mathFrameworkTitle">
+    <div class="card-head">
+      <div><h3 id="mathFrameworkTitle">Mathematical formulation</h3><p>The implementation uses the Horvitz–Thompson empirical mean throughout. Both potential-outcome means retain the original denominator <i>n</i>; there is no arm-specific self-normalization. Because this is the only IPW estimator used on the page, the superscript “HT” is omitted from the mathematical notation.</p></div>
+      <span class="graduate-tag">Graduate-level notation</span>
+    </div>
+    <div class="math-tabs" role="tablist" aria-label="Mathematical formulation sections">
+      <button class="math-tab" role="tab" aria-selected="true" data-math-tab="estimator">Estimator</button>
+      <button class="math-tab" role="tab" aria-selected="false" data-math-tab="identification">Identification</button>
+      <button class="math-tab" role="tab" aria-selected="false" data-math-tab="propensity">Balance identity</button>
+      <button class="math-tab" role="tab" aria-selected="false" data-math-tab="inference">Inference</button>
+    </div>
+
+    <section class="math-panel active" id="mathPanelEstimator" role="tabpanel">
+      <div class="math-chain"><div class="chain-label">Horvitz–Thompson estimation map</div><div class="math-scroll">
+        <math display="block"><mrow>
+          <msub><mover accent="true"><mi>e</mi><mo>^</mo></mover><mi>i</mi></msub><mo>=</mo><mover accent="true"><mi>P</mi><mo>^</mo></mover><mo>(</mo><msub><mi>T</mi><mi>i</mi></msub><mo>=</mo><mn>1</mn><mo>|</mo><msub><mi>X</mi><mi>i</mi></msub><mo>)</mo>
+          <mspace width=".6em"/><mo>⟶</mo><mspace width=".6em"/>
+          <msub><mover accent="true"><mi>μ</mi><mo>^</mo></mover><mn>1</mn></msub><mo>,</mo><msub><mover accent="true"><mi>μ</mi><mo>^</mo></mover><mn>0</mn></msub>
+          <mspace width=".6em"/><mo>⟶</mo><mspace width=".6em"/>
+          <msub><mover accent="true"><mi>Δ</mi><mo>^</mo></mover><mtext>ATE</mtext></msub><mo>=</mo><msub><mover accent="true"><mi>μ</mi><mo>^</mo></mover><mn>1</mn></msub><mo>−</mo><msub><mover accent="true"><mi>μ</mi><mo>^</mo></mover><mn>0</mn></msub>
+        </mrow></math>
+      </div></div>
+      <div class="math-step-grid">
+        <div class="math-step"><div class="math-step-top"><span class="math-step-number">1</span><span class="math-step-title">Potential-outcome means</span></div><div class="math-scroll">
+          <math display="block"><mrow>
+            <msub><mover accent="true"><mi>μ</mi><mo>^</mo></mover><mn>1</mn></msub><mo>=</mo><mfrac><mn>1</mn><mi>n</mi></mfrac><munderover><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></munderover><mfrac><mrow><msub><mi>T</mi><mi>i</mi></msub><msub><mi>Y</mi><mi>i</mi></msub></mrow><msub><mover accent="true"><mi>e</mi><mo>^</mo></mover><mi>i</mi></msub></mfrac><mo>,</mo><mspace width=".8em"/>
+            <msub><mover accent="true"><mi>μ</mi><mo>^</mo></mover><mn>0</mn></msub><mo>=</mo><mfrac><mn>1</mn><mi>n</mi></mfrac><munderover><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></munderover><mfrac><mrow><mo>(</mo><mn>1</mn><mo>−</mo><msub><mi>T</mi><mi>i</mi></msub><mo>)</mo><msub><mi>Y</mi><mi>i</mi></msub></mrow><mrow><mn>1</mn><mo>−</mo><msub><mover accent="true"><mi>e</mi><mo>^</mo></mover><mi>i</mi></msub></mrow></mfrac>
+          </mrow></math></div><p>The denominator remains <i>n</i>. Therefore, finite-sample treated and control weight totals are not forced to equal <i>n</i>.</p></div>
+        <div class="math-step"><div class="math-step-top"><span class="math-step-number">2</span><span class="math-step-title">ATE risk difference</span></div><div class="math-scroll">
+          <math display="block"><mrow><msub><mover accent="true"><mi>Δ</mi><mo>^</mo></mover><mtext>ATE</mtext></msub><mo>=</mo><mfrac><mn>1</mn><mi>n</mi></mfrac><munderover><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></munderover><mrow><mo>[</mo><mfrac><mrow><msub><mi>T</mi><mi>i</mi></msub><msub><mi>Y</mi><mi>i</mi></msub></mrow><msub><mover accent="true"><mi>e</mi><mo>^</mo></mover><mi>i</mi></msub></mfrac><mo>−</mo><mfrac><mrow><mo>(</mo><mn>1</mn><mo>−</mo><msub><mi>T</mi><mi>i</mi></msub><mo>)</mo><msub><mi>Y</mi><mi>i</mi></msub></mrow><mrow><mn>1</mn><mo>−</mo><msub><mover accent="true"><mi>e</mi><mo>^</mo></mover><mi>i</mi></msub></mrow></mfrac><mo>]</mo></mrow></mrow></math>
+        </div><p>This is the default estimator in every estimate, confidence-interval, and repeated-sampling panel at 100% weighting.</p></div>
+        <div class="math-step"><div class="math-step-top"><span class="math-step-number">3</span><span class="math-step-title">Crude-to-HT transition</span></div><div class="math-scroll">
+          <math display="block"><mtable columnalign="left" rowspacing=".45em">
+            <mtr><mtd><msub><mi>w</mi><mrow><mn>1</mn><mi>i</mi></mrow></msub><mo>(</mo><mi>α</mi><mo>)</mo><mo>=</mo><mfrac><mrow><mn>1</mn><mo>−</mo><mi>α</mi></mrow><mover accent="true"><mi>π</mi><mo>^</mo></mover></mfrac><mo>+</mo><mfrac><mi>α</mi><msub><mover accent="true"><mi>e</mi><mo>^</mo></mover><mi>i</mi></msub></mfrac></mtd></mtr>
+            <mtr><mtd><msub><mi>w</mi><mrow><mn>0</mn><mi>i</mi></mrow></msub><mo>(</mo><mi>α</mi><mo>)</mo><mo>=</mo><mfrac><mrow><mn>1</mn><mo>−</mo><mi>α</mi></mrow><mrow><mn>1</mn><mo>−</mo><mover accent="true"><mi>π</mi><mo>^</mo></mover></mrow></mfrac><mo>+</mo><mfrac><mi>α</mi><mrow><mn>1</mn><mo>−</mo><msub><mover accent="true"><mi>e</mi><mo>^</mo></mover><mi>i</mi></msub></mrow></mfrac></mtd></mtr>
+          </mtable></math></div><p>At α=0 the HT empirical means equal the crude arm means; at α=1 they equal the formal HT-IPW means.</p></div>
+      </div>
+      <div class="current-math-result" id="mathCurrentEstimate"></div>
+    </section>
+
+    <section class="math-panel" id="mathPanelIdentification" role="tabpanel" hidden>
+      <div class="math-section-title">Identification assumptions</div>
+      <div class="assumption-grid">
+        <div class="assumption"><strong>Consistency</strong><div class="math-scroll"><math display="block"><mrow><mi>Y</mi><mo>=</mo><mi>T</mi><mi>Y</mi><mo>(</mo><mn>1</mn><mo>)</mo><mo>+</mo><mo>(</mo><mn>1</mn><mo>−</mo><mi>T</mi><mo>)</mo><mi>Y</mi><mo>(</mo><mn>0</mn><mo>)</mo></mrow></math></div></div>
+        <div class="assumption"><strong>Conditional exchangeability</strong><div class="math-scroll"><math display="block"><mrow><mo>{</mo><mi>Y</mi><mo>(</mo><mn>1</mn><mo>)</mo><mo>,</mo><mi>Y</mi><mo>(</mo><mn>0</mn><mo>)</mo><mo>}</mo><mo>⊥</mo><mi>T</mi><mo>|</mo><mi>X</mi></mrow></math></div></div>
+        <div class="assumption"><strong>Positivity</strong><div class="math-scroll"><math display="block"><mrow><mn>0</mn><mo>&lt;</mo><mi>e</mi><mo>(</mo><mi>X</mi><mo>)</mo><mo>&lt;</mo><mn>1</mn><mspace width=".5em"/><mtext>a.s.</mtext></mrow></math></div></div>
+      </div>
+      <div class="derivation-box"><h4>Identification step</h4><div class="math-scroll"><math display="block"><mrow><mi>E</mi><mo>[</mo><mfrac><mrow><mi>T</mi><mi>Y</mi></mrow><mrow><mi>e</mi><mo>(</mo><mi>X</mi><mo>)</mo></mrow></mfrac><mo>|</mo><mi>X</mi><mo>]</mo><mo>=</mo><mi>E</mi><mo>{</mo><mi>Y</mi><mo>(</mo><mn>1</mn><mo>)</mo><mo>|</mo><mi>X</mi><mo>}</mo></mrow></math></div><p>Integrating over X gives E{Y(1)}; the analogous control expression identifies E{Y(0)}.</p></div>
+    </section>
+
+    <section class="math-panel" id="mathPanelPropensity" role="tabpanel" hidden>
+      <div class="math-step-grid">
+        <div class="math-step"><div class="math-step-top"><span class="math-step-number">1</span><span class="math-step-title">Propensity model</span></div><div class="math-scroll"><math display="block"><mrow><mi>logit</mi><mo>{</mo><msub><mi>e</mi><mi>γ</mi></msub><mo>(</mo><msub><mi>X</mi><mi>i</mi></msub><mo>)</mo><mo>}</mo><mo>=</mo><msubsup><mi>Z</mi><mi>i</mi><mo>ᵀ</mo></msubsup><mi>γ</mi></mrow></math></div><p><strong>Selected model:</strong> <span id="mathSelectedPSName"></span></p><div class="model-equation" id="mathSelectedPSEquation"></div></div>
+        <div class="math-step"><div class="math-step-top"><span class="math-step-number">2</span><span class="math-step-title">Population balancing identity</span></div><div class="math-scroll"><math display="block"><mrow>
+          <mi>E</mi><mo>{</mo><mfrac><mrow><mi>T</mi><mi>f</mi><mo>(</mo><mi>X</mi><mo>)</mo></mrow><mrow><mi>e</mi><mo>(</mo><mi>X</mi><mo>)</mo></mrow></mfrac><mo>}</mo><mo>=</mo><mi>E</mi><mo>{</mo><mi>f</mi><mo>(</mo><mi>X</mi><mo>)</mo><mo>}</mo><mo>=</mo><mi>E</mi><mo>{</mo><mfrac><mrow><mo>(</mo><mn>1</mn><mo>−</mo><mi>T</mi><mo>)</mo><mi>f</mi><mo>(</mo><mi>X</mi><mo>)</mo></mrow><mrow><mn>1</mn><mo>−</mo><mi>e</mi><mo>(</mo><mi>X</mi><mo>)</mo></mrow></mfrac><mo>}</mo>
+        </mrow></math></div><p>The identity holds for every integrable function f, including constants, first moments, higher moments, centered moments, and indicators.</p></div>
+        <div class="math-step"><div class="math-step-top"><span class="math-step-number">3</span><span class="math-step-title">Finite-sample check</span></div><div class="math-scroll"><math display="block"><mrow>
+          <msub><mover accent="true"><mi>M</mi><mo>^</mo></mover><mn>1</mn></msub><mo>(</mo><mi>f</mi><mo>)</mo><mo>=</mo><mfrac><mn>1</mn><mi>n</mi></mfrac><mo>∑</mo><mfrac><mrow><msub><mi>T</mi><mi>i</mi></msub><mi>f</mi><mo>(</mo><msub><mi>X</mi><mi>i</mi></msub><mo>)</mo></mrow><msub><mover accent="true"><mi>e</mi><mo>^</mo></mover><mi>i</mi></msub></mfrac><mo>,</mo><mspace width=".6em"/>
+          <mover accent="true"><mi>M</mi><mo>^</mo></mover><mo>(</mo><mi>f</mi><mo>)</mo><mo>=</mo><mfrac><mn>1</mn><mi>n</mi></mfrac><mo>∑</mo><mi>f</mi><mo>(</mo><msub><mi>X</mi><mi>i</mi></msub><mo>)</mo><mo>,</mo><mspace width=".6em"/>
+          <msub><mover accent="true"><mi>M</mi><mo>^</mo></mover><mn>0</mn></msub><mo>(</mo><mi>f</mi><mo>)</mo><mo>=</mo><mfrac><mn>1</mn><mi>n</mi></mfrac><mo>∑</mo><mfrac><mrow><mo>(</mo><mn>1</mn><mo>−</mo><msub><mi>T</mi><mi>i</mi></msub><mo>)</mo><mi>f</mi><mo>(</mo><msub><mi>X</mi><mi>i</mi></msub><mo>)</mo></mrow><mrow><mn>1</mn><mo>−</mo><msub><mover accent="true"><mi>e</mi><mo>^</mo></mover><mi>i</mi></msub></mrow></mfrac>
+        </mrow></math></div><p>Finite-sample equality is approximate. Model misspecification, poor overlap, capping, and sampling variation are visible in the new plots.</p></div>
+      </div><div class="current-math-result" id="mathBalanceDiagnostics"></div>
+    </section>
+
+    <section class="math-panel" id="mathPanelInference" role="tabpanel" hidden>
+      <div class="derivation-box"><h4>Stacked estimating equation for full HT-IPW</h4><div class="math-scroll"><math display="block"><mrow>
+        <msub><mi>U</mi><mi>i</mi></msub><mo>(</mo><mi>θ</mi><mo>)</mo><mo>=</mo><mfenced open="(" close=")"><mtable>
+          <mtr><mtd><msub><mi>Z</mi><mi>i</mi></msub><mo>{</mo><msub><mi>T</mi><mi>i</mi></msub><mo>−</mo><msub><mi>e</mi><mi>γ</mi></msub><mo>(</mo><msub><mi>X</mi><mi>i</mi></msub><mo>)</mo><mo>}</mo></mtd></mtr>
+          <mtr><mtd><mfrac><mrow><msub><mi>T</mi><mi>i</mi></msub><msub><mi>Y</mi><mi>i</mi></msub></mrow><msub><mi>e</mi><mi>γ</mi></msub><mo>(</mo><msub><mi>X</mi><mi>i</mi></msub><mo>)</mo></mfrac><mo>−</mo><msub><mi>μ</mi><mn>1</mn></msub></mtd></mtr>
+          <mtr><mtd><mfrac><mrow><mo>(</mo><mn>1</mn><mo>−</mo><msub><mi>T</mi><mi>i</mi></msub><mo>)</mo><msub><mi>Y</mi><mi>i</mi></msub></mrow><mrow><mn>1</mn><mo>−</mo><msub><mi>e</mi><mi>γ</mi></msub><mo>(</mo><msub><mi>X</mi><mi>i</mi></msub><mo>)</mo></mrow></mfrac><mo>−</mo><msub><mi>μ</mi><mn>0</mn></msub></mtd></mtr>
+        </mtable></mfenced>
+      </mrow></math></div></div>
+      <div class="math-step-grid"><div class="math-step"><div class="math-step-top"><span class="math-step-number">1</span><span class="math-step-title">Sandwich variance</span></div><div class="math-scroll"><math display="block"><mrow><mover accent="true"><mi>V</mi><mo>^</mo></mover><mo>=</mo><mfrac><mn>1</mn><mi>n</mi></mfrac><msup><mover accent="true"><mi>A</mi><mo>^</mo></mover><mrow><mo>−</mo><mn>1</mn></mrow></msup><mover accent="true"><mi>B</mi><mo>^</mo></mover><msup><mover accent="true"><mi>A</mi><mo>^</mo></mover><mrow><mo>−</mo><mi>ᵀ</mi></mrow></msup></mrow></math></div></div>
+      <div class="math-step"><div class="math-step-top"><span class="math-step-number">2</span><span class="math-step-title">95% Wald interval</span></div><div class="math-scroll"><math display="block"><mrow><mover accent="true"><mi>Δ</mi><mo>^</mo></mover><mo>±</mo><mn>1.96</mn><mover accent="true"><mi>SE</mi><mo>^</mo></mover><mo>(</mo><mover accent="true"><mi>Δ</mi><mo>^</mo></mover><mo>)</mo></mrow></math></div></div></div>
+      <div class="technical-note"><b>Capping note.</b> Enabling the cap changes the estimator to truncated HT. The implementation uses the corresponding piecewise derivative, with derivative zero above the cap.</div>
+      <div class="current-math-result" id="mathInferenceCurrent"></div>
+    </section>
+  </article>
 
   <div class="grid-top">
     <article class="card">
@@ -273,7 +435,7 @@
       </div>
       <div class="legend"><span><i class="dot" style="background:var(--smoke)"></i>Smokers</span><span><i class="dot" style="background:var(--control)"></i>Non-smokers</span></div>
       <div class="chart-wrap"><svg id="distSvg" class="chart" viewBox="0 0 780 330" role="img" aria-label="Covariate distributions before and after weighting"></svg></div>
-      <div class="chart-note">Each arm is normalized to a distribution. Weighting should make the orange and blue shapes more similar when the propensity model is adequate and overlap is sufficient.</div>
+      <div class="chart-note">The density curves are normalized only for visual comparison. The causal estimator itself remains Horvitz–Thompson with denominator n.</div>
     </article>
 
     <article class="card">
@@ -284,16 +446,41 @@
     </article>
   </div>
 
+
   <div class="grid-two">
     <article class="card">
-      <div class="card-head"><div><h3>4. Propensity overlap and inverse weights</h3><p>The fitted propensity score is P(smoker | measured baseline covariates).</p></div></div>
+      <div class="card-head">
+        <div><h3>4A. Population balancing identity for a selected function</h3><p>Choose a covariate and f(X), then compare the target empirical moment with its treated- and control-arm HT reconstructions.</p></div>
+        <div class="mini-controls moment-controls">
+          <label for="momentVar">Xj</label><select id="momentVar"><option value="age">Age</option><option value="bmi">BMI</option><option value="income">Income ratio</option><option value="female">Female</option><option value="college">College</option><option value="htn">Hypertension</option></select>
+          <label for="momentFn">f(X)</label><select id="momentFn"><option value="one">0th: 1</option><option value="first" selected>1st: Xj</option><option value="second">2nd raw: Xj²</option><option value="variance">Centered 2nd</option><option value="third">Standardized 3rd</option><option value="tail">Upper-tail indicator</option></select>
+          <label for="momentWeightSource">Weights</label><select id="momentWeightSource"><option value="analysis" selected>Full fitted HT</option><option value="uncapped">Fitted HT, uncapped</option><option value="true">Known true e(X)</option><option value="current">Current slider</option></select>
+        </div>
+      </div>
+      <div class="moment-identity"><math display="block"><mrow><mi>E</mi><mo>{</mo><mfrac><mrow><mi>T</mi><mi>f</mi><mo>(</mo><mi>X</mi><mo>)</mo></mrow><mrow><mi>e</mi><mo>(</mo><mi>X</mi><mo>)</mo></mrow></mfrac><mo>}</mo><mo>=</mo><mi>E</mi><mo>{</mo><mi>f</mi><mo>(</mo><mi>X</mi><mo>)</mo><mo>}</mo><mo>=</mo><mi>E</mi><mo>{</mo><mfrac><mrow><mo>(</mo><mn>1</mn><mo>−</mo><mi>T</mi><mo>)</mo><mi>f</mi><mo>(</mo><mi>X</mi><mo>)</mo></mrow><mrow><mn>1</mn><mo>−</mo><mi>e</mi><mo>(</mo><mi>X</mi><mo>)</mo></mrow></mfrac><mo>}</mo></mrow></math></div>
+      <div class="moment-definition" id="momentFunctionEquation"></div>
+      <div class="chart-wrap"><svg id="momentBalanceSvg" class="chart" viewBox="0 0 780 350" role="img"></svg></div>
+      <div class="moment-summary-grid" id="momentSummaryPanel"></div>
+      <div class="chart-note">D<sub>t</sub>(f)={M̂<sub>t</sub>(f)−M̂(f)}/SD{f(X)}. For f(X)=1, D is the HT mass error. The 0.05 and 0.10 guides are descriptive, not formal test cutoffs.</div>
+    </article>
+    <article class="card">
+      <div class="card-head"><div><h3>4B. Balance profile across several functions</h3><p>Inspect mass, mean, higher moments, centered variance, skewness, and upper-tail balance simultaneously.</p></div></div>
+      <div class="legend"><span><i class="dot" style="background:var(--smoke)"></i>|Treated discrepancy|</span><span><i class="dot" style="background:var(--control)"></i>|Control discrepancy|</span><span>guides = 0.05 and 0.10</span></div>
+      <div class="chart-wrap"><svg id="momentProfileSvg" class="chart" viewBox="0 0 780 390" role="img"></svg></div>
+      <div class="chart-note">First-moment balance alone does not guarantee balance of variance, skewness, or tail probabilities. Compare fitted, uncapped, true, and current-transition weights.</div>
+    </article>
+  </div>
+
+  <div class="grid-two">
+    <article class="card">
+      <div class="card-head"><div><h3>5. Propensity overlap and inverse weights</h3><p>The fitted propensity score is P(smoker | measured baseline covariates).</p></div></div>
       <div class="legend"><span><i class="dot" style="background:var(--smoke)"></i>Smoker propensity distribution</span><span><i class="dot" style="background:var(--control)"></i>Non-smoker propensity distribution</span></div>
       <div class="chart-wrap"><svg id="propensitySvg" class="chart" viewBox="0 0 780 330" role="img" aria-label="Propensity score overlap and weight curves"></svg></div>
       <div class="chart-note">A smoker with a very small fitted propensity receives 1/ê; a non-smoker with a very large fitted propensity receives 1/(1−ê). Both situations create large weights.</div>
     </article>
 
     <article class="card">
-      <div class="card-head"><div><h3>5. Crude versus IPW causal estimate</h3><p>Normalized weighted CVD risks and the risk difference.</p></div></div>
+      <div class="card-head"><div><h3>6. Crude versus Horvitz–Thompson causal estimate</h3><p>HT treatment-specific risks use the original cohort size n as the denominator.</p></div></div>
       <div class="estimate-body" id="estimatePanel"></div>
     </article>
   </div>
@@ -303,20 +490,20 @@
   <div class="grid-two">
     <article class="card">
       <div class="card-head">
-        <div><h3>6. The current cohort: 95% confidence intervals</h3><p>Point estimates, 95% Wald intervals, and an explicit check of whether each interval contains the known causal truth.</p></div>
+        <div><h3>7. The current cohort: 95% confidence intervals</h3><p>Point estimates, 95% Wald intervals, and an explicit check of whether each interval contains the known causal truth.</p></div>
       </div>
       <div class="legend"><span><i class="dot" style="background:var(--accent)"></i>Point estimate</span><span><i class="dot" style="background:var(--green)"></i>Known true ATE</span><span>gray dashed line = no effect</span></div>
       <div class="chart-wrap"><svg id="ciSvg" class="chart" viewBox="0 0 780 330" role="img" aria-label="Risk-difference estimates with 95 percent confidence intervals and known truth"></svg></div>
       <div class="ci-status-grid" id="ciStatusPanel"></div>
-      <div class="chart-note">The instant intervals use a stacked M-estimation sandwich for the fitted logistic propensity model and the two normalized weighted risks. Capped weights are linearized piecewise. A 95% CI is not guaranteed to contain the truth in one dataset; 95% refers to long-run repeated-sampling coverage.</div>
+      <div class="chart-note">The instant intervals use a stacked M-estimation sandwich for the fitted logistic propensity model and the two Horvitz–Thompson means. Capped weights are linearized piecewise. A 95% CI is not guaranteed to contain the truth in one dataset; 95% refers to long-run repeated-sampling coverage.</div>
     </article>
 
     <article class="card">
       <div class="card-head">
-        <div><h3>7. Repeated-sampling coverage experiment</h3><p>Regenerate smoking and CVD outcomes for the same baseline covariates, refit the propensity model, and examine many 95% CIs.</p></div>
+        <div><h3>8. Repeated-sampling coverage experiment</h3><p>Regenerate smoking and CVD outcomes for the same baseline covariates, refit the propensity model, and examine many 95% CIs.</p></div>
         <div class="mini-controls">
           <label for="coverageEstimator">Show</label>
-          <select id="coverageEstimator"><option value="full">Full IPW</option><option value="current">Current slider</option><option value="crude">Crude</option></select>
+          <select id="coverageEstimator"><option value="full">HT-IPW</option><option value="current">Current slider</option><option value="crude">Crude</option></select>
           <label for="coverageM">Samples</label>
           <select id="coverageM"><option value="40">40</option><option value="80" selected>80</option><option value="120">120</option><option value="200">200</option></select>
           <button class="mini-button" id="runCoverage">Run experiment</button>
@@ -336,7 +523,7 @@
   <article class="card table-card">
     <details>
       <summary>Inspect the subjects with the largest weights</summary>
-      <div class="table-tools"><button id="exportCsv">Export cohort CSV</button><button data-svg="scatterSvg">Save subject plot as SVG</button><button data-svg="balanceSvg">Save balance plot as SVG</button><button data-svg="ciSvg">Save CI plot as SVG</button><button data-svg="coverageSvg">Save coverage plot as SVG</button><button onclick="window.print()">Print dashboard</button></div>
+      <div class="table-tools"><button id="exportCsv">Export cohort CSV</button><button data-svg="scatterSvg">Save subject plot as SVG</button><button data-svg="balanceSvg">Save SMD plot as SVG</button><button data-svg="momentBalanceSvg">Save moment identity as SVG</button><button data-svg="momentProfileSvg">Save moment profile as SVG</button><button data-svg="ciSvg">Save CI plot as SVG</button><button data-svg="coverageSvg">Save coverage plot as SVG</button><button onclick="window.print()">Print dashboard</button></div>
       <div class="table-wrap"><table><thead><tr><th>Subject</th><th>Age</th><th>BMI</th><th>Income ratio</th><th>Female</th><th>College</th><th>Hypertension</th><th>Smoker</th><th>CVD</th><th>ê</th><th>Raw IPW</th><th>Current w</th></tr></thead><tbody id="subjectTable"></tbody></table></div>
     </details>
   </article>
@@ -344,15 +531,15 @@
 </main>
 
 <div class="tooltip" id="tooltip"></div>
-<footer class="footer">Synthetic data are generated entirely in the browser for teaching. The true causal effect is therefore known from the data-generating mechanism, allowing direct CI-containment and repeated-sampling coverage checks. Use <span class="kbd">Tab</span> to reach controls and chart selectors; click a plotted subject to pin its details.</footer>
+<footer class="footer"><b>Se Yoon Lee, Ph.D.</b> • Synthetic data are generated entirely in the browser for teaching. The true causal effect is therefore known from the data-generating mechanism, allowing direct CI-containment and repeated-sampling coverage checks. Use <span class="kbd">Tab</span> to reach controls and chart selectors; click a plotted subject to pin its details.</footer>
 
 <script>
 (function(){
 "use strict";
 
 const COLORS={smoke:"#E56B2F",control:"#2F6EA5",accent:"#7A5AF8",gray:"#98A2B3",ink:"#162033",muted:"#667085",green:"#208A62",danger:"#C23B3B",grid:"#E4E8EF"};
-const defaults={n:240,conf:1.25,overlap:.68,effect:1.80,seed:20260710,model:"correct",capOn:true,cap:15,intensity:1,x:"age",y:"bmi",dist:"age"};
-const state={data:[],selected:0,trueATE:0,trueRisk1:0,trueRisk0:0,animation:null,inference:null,psBeta:null,
+const defaults={n:240,conf:1.25,overlap:.68,effect:1.80,seed:20260710,model:"correct",capOn:false,cap:15,intensity:1,x:"age",y:"bmi",dist:"age",momentVar:"age",momentFn:"first",momentWeightSource:"analysis"};
+const state={data:[],selected:0,trueATE:0,trueRisk1:0,trueRisk0:0,piHat:0,animation:null,inference:null,psBeta:null,
   coverageResults:null,coverageRunning:false,coverageDone:0,coverageTotal:0,coverageToken:0,coverageTruth:NaN,...defaults};
 const $=id=>document.getElementById(id);
 const fmt=(x,d=2)=>Number.isFinite(x)?x.toFixed(d):"—";
@@ -421,38 +608,24 @@ function matMul(A,B){
 function sandwichFor(rows,alpha,opts={}){
   const model=opts.model||state.model,capOn=opts.capOn===undefined?state.capOn:opts.capOn,cap=opts.cap===undefined?state.cap:opts.cap;
   if(!rows.length)return{valid:false};
-  const X=rows.map(r=>designRow(r,model)),p=X[0].length,n=rows.length,d=p+2;
-  let sw1=0,sw0=0,sy1=0,sy0=0;
-  const info=rows.map((r,i)=>{
-    const e=clamp(r.ehat,.005,.995),raw=r.T?1/e:1/(1-e),base=capOn?Math.min(raw,cap):raw,w=1+alpha*(base-1);
-    if(r.T){sw1+=w;sy1+=w*r.Y}else{sw0+=w;sy0+=w*r.Y}
-    return{e,raw,w,capped:capOn&&raw>=cap,x:X[i]};
-  });
-  if(sw1<=0||sw0<=0)return{valid:false};
-  const mu1=sy1/sw1,mu0=sy0/sw0,rd=mu1-mu0,rr=mu0>0?mu1/mu0:NaN;
-  const A=Array.from({length:d},()=>Array(d).fill(0)),B=Array.from({length:d},()=>Array(d).fill(0));
+  const X=rows.map(r=>designRow(r,model)),p=X[0].length,n=rows.length,pi=clamp(mean(rows.map(r=>r.T)),.005,.995),d=p+3;
+  let sy1=0,sy0=0;
+  const info=rows.map((r,i)=>{const e=clamp(r.ehat,.005,.995),raw=r.T?1/e:1/(1-e),full=capOn?Math.min(raw,cap):raw,crude=r.T?1/pi:1/(1-pi),w=(1-alpha)*crude+alpha*full;if(r.T)sy1+=w*r.Y;else sy0+=w*r.Y;return{e,raw,w,capped:capOn&&raw>=cap,x:X[i]}});
+  const mu1=sy1/n,mu0=sy0/n,rd=mu1-mu0,rr=mu0>0?mu1/mu0:NaN,A=Array.from({length:d},()=>Array(d).fill(0)),B=Array.from({length:d},()=>Array(d).fill(0)),iPi=p,iMu1=p+1,iMu0=p+2;
   for(let i=0;i<n;i++){
     const r=rows[i],q=info[i],x=q.x,e=q.e,psi=Array(d).fill(0);
     for(let j=0;j<p;j++)psi[j]=x[j]*(r.T-e);
-    psi[p]=r.T?q.w*(r.Y-mu1):0;
-    psi[p+1]=r.T?0:q.w*(r.Y-mu0);
+    psi[iPi]=r.T-pi;psi[iMu1]=r.T*q.w*r.Y-mu1;psi[iMu0]=(1-r.T)*q.w*r.Y-mu0;
     for(let j=0;j<p;j++)for(let k=0;k<p;k++)A[j][k]+=-e*(1-e)*x[j]*x[k];
-    if(r.T){
-      if(!q.capped)for(let j=0;j<p;j++)A[p][j]+=alpha*(-(1-e)/e)*x[j]*(r.Y-mu1);
-      A[p][p]+=-q.w;
-    }else{
-      if(!q.capped)for(let j=0;j<p;j++)A[p+1][j]+=alpha*(e/(1-e))*x[j]*(r.Y-mu0);
-      A[p+1][p+1]+=-q.w;
-    }
+    A[iPi][iPi]+=-1;A[iMu1][iMu1]+=-1;A[iMu0][iMu0]+=-1;
+    if(r.T){if(!q.capped)for(let j=0;j<p;j++)A[iMu1][j]+=alpha*r.Y*(-(1-e)/e)*x[j];A[iMu1][iPi]+=(1-alpha)*r.Y*(-1/(pi*pi));}
+    else{if(!q.capped)for(let j=0;j<p;j++)A[iMu0][j]+=alpha*r.Y*(e/(1-e))*x[j];A[iMu0][iPi]+=(1-alpha)*r.Y/(1-pi)/(1-pi);}
     for(let j=0;j<d;j++)for(let k=0;k<d;k++)B[j][k]+=psi[j]*psi[k];
   }
   for(let j=0;j<d;j++)for(let k=0;k<d;k++){A[j][k]/=n;B[j][k]/=n}
-  let invA,V;
-  try{invA=matrixInverse(A);V=matMul(matMul(invA,B),transpose(invA));for(let j=0;j<d;j++)for(let k=0;k<d;k++)V[j][k]/=n}catch(err){return{valid:false}}
-  const v1=Math.max(0,V[p][p]),v0=Math.max(0,V[p+1][p+1]),vrd=Math.max(0,v1+v0-2*V[p][p+1]);
-  const se1=Math.sqrt(v1),se0=Math.sqrt(v0),se=Math.sqrt(vrd),z=1.959963984540054;
-  return{valid:[mu1,mu0,rd,se].every(Number.isFinite),r1:mu1,r0:mu0,rd,rr,se,se1,se0,
-    ci:{rd:[rd-z*se,rd+z*se],r1:[mu1-z*se1,mu1+z*se1],r0:[mu0-z*se0,mu0+z*se0]}};
+  let V;try{const invA=matrixInverse(A);V=matMul(matMul(invA,B),transpose(invA));for(let j=0;j<d;j++)for(let k=0;k<d;k++)V[j][k]/=n}catch(e){return{valid:false}}
+  const v1=Math.max(0,V[iMu1][iMu1]),v0=Math.max(0,V[iMu0][iMu0]),vrd=Math.max(0,v1+v0-2*V[iMu1][iMu0]),se1=Math.sqrt(v1),se0=Math.sqrt(v0),se=Math.sqrt(vrd),z=1.959963984540054;
+  return{valid:[mu1,mu0,rd,se].every(Number.isFinite),r1:mu1,r0:mu0,rd,rr,se,se1,se0,pi,ci:{rd:[rd-z*se,rd+z*se],r1:[mu1-z*se1,mu1+z*se1],r0:[mu0-z*se0,mu0+z*se0]}};
 }
 function computeInference(){
   state.inference={crude:sandwichFor(state.data,0),current:sandwichFor(state.data,state.intensity),full:sandwichFor(state.data,1)};
@@ -520,21 +693,14 @@ function buildCohort(){
 }
 
 function updateWeights(){
-  readControls();updateLabels();
-  for(const r of state.data){
-    r.rawW=r.T?1/r.ehat:1/(1-r.ehat);
-    r.ipwW=state.capOn?Math.min(r.rawW,state.cap):r.rawW;
-    r.currentW=1+state.intensity*(r.ipwW-1);
-    r.capped=state.capOn&&r.rawW>state.cap;
-  }
+  readControls();updateLabels();state.piHat=clamp(mean(state.data.map(r=>r.T)),.005,.995);
+  for(const r of state.data){r.rawW=r.T?1/r.ehat:1/(1-r.ehat);r.ipwW=state.capOn?Math.min(r.rawW,state.cap):r.rawW;r.crudeW=r.T?1/state.piHat:1/(1-state.piHat);r.currentW=(1-state.intensity)*r.crudeW+state.intensity*r.ipwW;r.trueW=r.T?1/r.trueE:1/(1-r.trueE);r.capped=state.capOn&&r.rawW>state.cap;}
   renderAll();
 }
-
 function armRows(t){return state.data.filter(r=>r.T===t)}
-function risk(t,wkey){const rows=armRows(t);let sw=0,sy=0;for(const r of rows){const w=r[wkey];sw+=w;sy+=w*r.Y}return sw?sy/sw:NaN}
-function estimate(wkey){const r1=risk(1,wkey),r0=risk(0,wkey);return{r1,r0,rd:r1-r0,rr:r0>0?r1/r0:NaN}}
+function htRisk(t,wkey){const n=state.data.length;let s=0;for(const r of state.data)if(r.T===t)s+=r[wkey]*r.Y;return n?s/n:NaN}
+function estimateHT(wkey){const r1=htRisk(1,wkey),r0=htRisk(0,wkey);return{r1,r0,rd:r1-r0,rr:r0>0?r1/r0:NaN}}
 function sumArm(t,wkey){return armRows(t).reduce((s,r)=>s+r[wkey],0)}
-
 function renderMetrics(){
   const smokers=armRows(1),controls=armRows(0),maxW=Math.max(...state.data.map(r=>r.rawW)),capped=state.data.filter(r=>r.capped).length;
   const cards=[
@@ -587,21 +753,11 @@ function hideTip(){$('tooltip').style.opacity='0'}
 function selectSubject(i){state.selected=clamp(i,0,state.data.length-1);renderScatter();renderSubject();renderPropensity();renderTable()}
 
 function renderSubject(){
-  const r=state.data[state.selected]||state.data[0];if(!r)return;
-  const obsProb=r.T?r.ehat:1-r.ehat,formula=r.T?'1 / ê':'1 / (1 − ê)',calc=r.T?'1 / '+fmt(r.ehat,3):'1 / (1 − '+fmt(r.ehat,3)+')';
-  let rarity=obsProb<.20?'Rare observed status → large weight':obsProb<.45?'Somewhat uncommon observed status':'Common observed status → modest weight';
-  $('subjectPanel').innerHTML='<div class="subject-id"><strong>'+r.id+'</strong><span class="status-pill '+(r.T?'status-smoke':'status-control')+'">'+(r.T?'T=1 smoker':'T=0 non-smoker')+'</span></div>'+
-  '<div class="kv">'+
-  '<div><div class="label">Age</div><div class="num">'+fmt(r.age,1)+' years</div></div><div><div class="label">BMI</div><div class="num">'+fmt(r.bmi,1)+'</div></div>'+
-  '<div><div class="label">Income ratio</div><div class="num">'+fmt(r.income,2)+'</div></div><div><div class="label">Sex</div><div class="num">'+(r.female?'Female':'Male')+'</div></div>'+
-  '<div><div class="label">College</div><div class="num">'+(r.college?'Yes':'No')+'</div></div><div><div class="label">Hypertension</div><div class="num">'+(r.htn?'Yes':'No')+'</div></div>'+
-  '<div><div class="label">Outcome</div><div class="num">'+(r.Y?'CVD (Y=1)':'No CVD (Y=0)')+'</div></div><div><div class="label">Fitted ê</div><div class="num">'+fmt(r.ehat,3)+'</div></div></div>'+
-  '<div class="formula-box"><div class="small">Observed-treatment probability = '+fmt(obsProb,3)+'</div><div class="formula">w = '+formula+' = '+calc+' = '+fmt(r.rawW,2)+'</div><div class="meaning">'+rarity+'. '+(r.capped?'The raw weight is capped at '+state.cap+'. ':'')+'At '+Math.round(state.intensity*100)+'% transition, this subject currently counts as <b>'+fmt(r.currentW,2)+'</b> weighted subjects.</div></div>'+
-  '<div class="subject-nav"><button id="prevSubject">← Previous subject</button><button id="nextSubject">Next subject →</button></div>';
-  $('prevSubject').onclick=()=>selectSubject((state.selected-1+state.data.length)%state.data.length);
-  $('nextSubject').onclick=()=>selectSubject((state.selected+1)%state.data.length);
+  const r=state.data[state.selected]||state.data[0];if(!r)return;const obsProb=r.T?r.ehat:1-r.ehat,formula=r.T?'1 / ê':'1 / (1 − ê)',calc=r.T?'1 / '+fmt(r.ehat,3):'1 / (1 − '+fmt(r.ehat,3)+')';
+  const rarity=obsProb<.20?'Rare observed status → large weight':obsProb<.45?'Somewhat uncommon observed status':'Common observed status → modest weight';
+  $('subjectPanel').innerHTML='<div class="subject-id"><strong>'+r.id+'</strong><span class="status-pill '+(r.T?'status-smoke':'status-control')+'">'+(r.T?'T=1 smoker':'T=0 non-smoker')+'</span></div><div class="kv"><div><div class="label">Age</div><div class="num">'+fmt(r.age,1)+' years</div></div><div><div class="label">BMI</div><div class="num">'+fmt(r.bmi,1)+'</div></div><div><div class="label">Income ratio</div><div class="num">'+fmt(r.income,2)+'</div></div><div><div class="label">Sex</div><div class="num">'+(r.female?'Female':'Male')+'</div></div><div><div class="label">College</div><div class="num">'+(r.college?'Yes':'No')+'</div></div><div><div class="label">Hypertension</div><div class="num">'+(r.htn?'Yes':'No')+'</div></div><div><div class="label">Outcome</div><div class="num">'+(r.Y?'CVD (Y=1)':'No CVD (Y=0)')+'</div></div><div><div class="label">Fitted ê</div><div class="num">'+fmt(r.ehat,3)+'</div></div></div><div class="formula-box"><div class="small">Observed-treatment probability = '+fmt(obsProb,3)+'</div><div class="formula">w = '+formula+' = '+calc+' = '+fmt(r.rawW,2)+'</div><div class="meaning">'+rarity+'. '+(r.capped?'The raw HT weight is capped at '+state.cap+'. ':'')+'Crude-end weight = '+fmt(r.crudeW,2)+'. Current interpolated weight = <b>'+fmt(r.currentW,2)+'</b>.</div></div><div class="subject-nav"><button id="prevSubject">← Previous subject</button><button id="nextSubject">Next subject →</button></div>';
+  $('prevSubject').onclick=()=>selectSubject((state.selected-1+state.data.length)%state.data.length);$('nextSubject').onclick=()=>selectSubject((state.selected+1)%state.data.length);
 }
-
 function hist(rows,key,wkey,bins,lo,hi){const h=Array(bins).fill(0);let sw=0;for(const r of rows){const w=r[wkey],j=clamp(Math.floor((r[key]-lo)/(hi-lo)*bins),0,bins-1);h[j]+=w;sw+=w}return h.map(x=>sw?x/sw:0)}
 function areaPath(h,x0,x1,y0,y1,maxY){const bw=(x1-x0)/h.length;let d='M '+x0+' '+y1;for(let i=0;i<h.length;i++){const x=x0+(i+.5)*bw,y=y1-(h[i]/maxY)*(y1-y0);d+=' L '+x.toFixed(2)+' '+y.toFixed(2)}d+=' L '+x1+' '+y1+' Z';return d}
 function linePath(h,x0,x1,y0,y1,maxY){const bw=(x1-x0)/h.length;return h.map((v,i)=>(i?'L':'M')+' '+(x0+(i+.5)*bw).toFixed(2)+' '+(y1-(v/maxY)*(y1-y0)).toFixed(2)).join(' ')}
@@ -654,6 +810,17 @@ function renderBalance(){
   $('balanceSvg').innerHTML=s;
 }
 
+function quantile(a,p){const z=a.slice().sort((x,y)=>x-y),h=(z.length-1)*p,l=Math.floor(h),u=Math.ceil(h);return z[l]+(z[u]-z[l])*(h-l)}
+function rmsCentered(a){const m=mean(a);return Math.sqrt(mean(a.map(v=>(v-m)*(v-m))))}
+function smartNum(x){if(!Number.isFinite(x))return'—';const a=Math.abs(x);if(a>=10000||(a>0&&a<.001))return x.toExponential(2);if(a>=100)return fmt(x,1);if(a>=10)return fmt(x,2);return fmt(x,3)}
+const momentOrder=['one','first','second','variance','third','tail'],momentLabels={one:'0th: 1',first:'1st: Xⱼ',second:'2nd raw: Xⱼ²',variance:'Centered 2nd',third:'Std. 3rd: Zⱼ³',tail:'Upper tail'};
+function momentValues(key,fn){const x=state.data.map(r=>r[key]),m=mean(x),s=rmsCentered(x)||1,q=quantile(x,.75),binary=!varMeta[key].continuous;let values,formula;if(fn==='one'){values=x.map(()=>1);formula='f(X)=1 (population mass)'}else if(fn==='first'){values=x.slice();formula='f(X)='+varMeta[key].short}else if(fn==='second'){values=x.map(v=>v*v);formula='f(X)='+varMeta[key].short+'²'}else if(fn==='variance'){values=x.map(v=>(v-m)*(v-m));formula='f(X)=('+varMeta[key].short+' − '+smartNum(m)+')²'}else if(fn==='third'){values=x.map(v=>Math.pow((v-m)/s,3));formula='f(X)={('+varMeta[key].short+' − '+smartNum(m)+')/'+smartNum(s)+'}³'}else{values=x.map(v=>binary?(v===1?1:0):(v>q?1:0));formula=binary?'f(X)=𝟙('+varMeta[key].short+'=1)':'f(X)=𝟙('+varMeta[key].short+' > Q₀.₇₅='+smartNum(q)+')'}return{values,formula}}
+function momentWeight(r,s){return s==='current'?r.currentW:s==='uncapped'?r.rawW:s==='true'?r.trueW:r.ipwW}
+function momentWeightLabel(s){return s==='current'?'Current transition at α='+fmt(state.intensity,2):s==='uncapped'?'Fitted HT, uncapped':s==='true'?'Known true propensity (simulation only)':state.capOn?'Fitted HT, capped at '+state.cap:'Fitted HT, uncapped'}
+function computeMoment(key,fn,source){const o=momentValues(key,fn),f=o.values,n=state.data.length,target=mean(f);let treated=0,control=0;for(let i=0;i<n;i++){const r=state.data[i],w=momentWeight(r,source);treated+=r.T*w*f[i]/n;control+=(1-r.T)*w*f[i]/n}let scale=rmsCentered(f);if(fn==='one'||scale<1e-10)scale=1;return{...o,fn,target,treated,control,d1:(treated-target)/scale,d0:(control-target)/scale}}
+function renderMomentBalance(){const key=$('momentVar').value,fn=$('momentFn').value,source=$('momentWeightSource').value,q=computeMoment(key,fn,source);$('momentFunctionEquation').innerHTML='<strong>'+q.formula+'</strong><div>'+momentWeightLabel(source)+'</div><div class="moment-subformula">M̂₁=n⁻¹ΣTᵢw₁ᵢf(Xᵢ), M̂=n⁻¹Σf(Xᵢ), M̂₀=n⁻¹Σ(1−Tᵢ)w₀ᵢf(Xᵢ)</div>';let lo=Math.min(q.target,q.treated,q.control),hi=Math.max(q.target,q.treated,q.control),span=hi-lo;if(span<1e-8){span=Math.max(Math.abs(q.target)*.2,.2);lo=q.target-span/2;hi=q.target+span/2}else{lo-=.18*span;hi+=.18*span}const L=175,R=735,T=38,B=286,sxv=v=>sx(v,lo,hi,L,R),rows=[['Target Pₙf',q.target,COLORS.green,90,0],['Treated HT',q.treated,COLORS.smoke,172,q.d1],['Control HT',q.control,COLORS.control,254,q.d0]];let g='<style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="780" height="350" fill="#fff"/>';for(const t of axisTicks(lo,hi,5)){const x=sxv(t);g+='<line x1="'+x+'" x2="'+x+'" y1="'+T+'" y2="'+B+'" stroke="'+COLORS.grid+'"/>'+svgText(x,319,smartNum(t),'text-anchor="middle" font-size="9" fill="'+COLORS.muted+'"')}const xt=sxv(q.target);g+='<line x1="'+xt+'" x2="'+xt+'" y1="'+(T-5)+'" y2="'+B+'" stroke="'+COLORS.green+'" stroke-width="3" stroke-dasharray="6 4"/>'+svgText(xt,T-12,'Target moment','text-anchor="middle" font-size="10" font-weight="850" fill="'+COLORS.green+'"');rows.forEach((r,i)=>{const x=sxv(r[1]);g+=svgText(L-14,r[3]+4,r[0],'text-anchor="end" font-size="12" font-weight="800" fill="'+COLORS.ink+'"');if(i)g+='<line x1="'+xt+'" x2="'+x+'" y1="'+r[3]+'" y2="'+r[3]+'" stroke="'+r[2]+'" stroke-width="5" opacity=".55"/>';g+='<circle cx="'+x+'" cy="'+r[3]+'" r="8" fill="'+r[2]+'" stroke="#fff" stroke-width="2"/>'+svgText(Math.min(R-2,x+12),r[3]-12,smartNum(r[1]),'font-size="11" font-weight="850" fill="'+r[2]+'"');if(i)g+=svgText(R,r[3]+18,'D = '+(r[4]>=0?'+':'')+fmt(r[4],3),'text-anchor="end" font-size="10" font-weight="800" fill="'+r[2]+'"')});g+=svgText((L+R)/2,344,'Raw moment scale: '+q.formula,'text-anchor="middle" font-size="11" font-weight="700" fill="'+COLORS.ink+'"');$('momentBalanceSvg').innerHTML=g;const md=Math.max(Math.abs(q.d1),Math.abs(q.d0)),qual=md<=.05?['close','Close balance']:md<=.10?['moderate','Moderate discrepancy']:['large','Large discrepancy'];$('momentSummaryPanel').innerHTML='<div class="moment-stat"><div class="name">Target</div><div class="number">'+smartNum(q.target)+'</div><div class="detail">Pₙf</div></div><div class="moment-stat"><div class="name">Treated HT</div><div class="number">'+smartNum(q.treated)+'</div><div class="detail">D₁ '+(q.d1>=0?'+':'')+fmt(q.d1,3)+'</div></div><div class="moment-stat"><div class="name">Control HT</div><div class="number">'+smartNum(q.control)+'</div><div class="detail">D₀ '+(q.d0>=0?'+':'')+fmt(q.d0,3)+'</div></div><div class="moment-stat moment-quality '+qual[0]+'"><div class="name">Maximum |D|</div><div class="number">'+fmt(md,3)+'</div><div class="detail">'+qual[1]+'</div></div>'}
+function renderMomentProfile(){const key=$('momentVar').value,sel=$('momentFn').value,source=$('momentWeightSource').value,v=momentOrder.map(f=>computeMoment(key,f,source)),mx=Math.max(.18,...v.flatMap(q=>[Math.abs(q.d1),Math.abs(q.d0)]))*1.16,L=205,R=742,T=43,rowH=50;let g='<style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="780" height="390" fill="#fff"/>';for(const t of axisTicks(0,mx,5)){const x=sx(t,0,mx,L,R);g+='<line x1="'+x+'" x2="'+x+'" y1="'+T+'" y2="'+(T+rowH*v.length)+'" stroke="'+COLORS.grid+'"/>'+svgText(x,T-11,fmt(t,2),'text-anchor="middle" font-size="9" fill="'+COLORS.muted+'"')}[.05,.10].forEach((z,j)=>{if(z<=mx){const x=sx(z,0,mx,L,R);g+='<line x1="'+x+'" x2="'+x+'" y1="'+(T-3)+'" y2="'+(T+rowH*v.length)+'" stroke="'+(j?COLORS.danger:'#D49A2A')+'" stroke-width="2" stroke-dasharray="5 4"/>'}});v.forEach((q,i)=>{const y=T+24+i*rowH,a=Math.abs(q.d1),b=Math.abs(q.d0),x1=sx(a,0,mx,L,R),x0=sx(b,0,mx,L,R);if(q.fn===sel)g+='<rect x="12" y="'+(y-22)+'" width="750" height="43" rx="9" fill="#F5F2FF"/>';g+=svgText(L-12,y+4,momentLabels[q.fn],'text-anchor="end" font-size="11" font-weight="'+(q.fn===sel?'850':'700')+'" fill="'+COLORS.ink+'"')+'<line x1="'+Math.min(x1,x0)+'" x2="'+Math.max(x1,x0)+'" y1="'+y+'" y2="'+y+'" stroke="#CDD3DC" stroke-width="3"/><circle cx="'+x1+'" cy="'+(y-5)+'" r="6" fill="'+COLORS.smoke+'"/><circle cx="'+x0+'" cy="'+(y+5)+'" r="6" fill="'+COLORS.control+'"/>'+svgText(Math.min(R,x1+9),y-9,fmt(a,2),'font-size="9" fill="'+COLORS.smoke+'"')+svgText(Math.min(R,x0+9),y+16,fmt(b,2),'font-size="9" fill="'+COLORS.control+'"')});g+=svgText((L+R)/2,382,'Absolute standardized moment discrepancy |Dₜ(f)|','text-anchor="middle" font-size="11" font-weight="700" fill="'+COLORS.ink+'"');$('momentProfileSvg').innerHTML=g}
+
 function renderPropensity(){
   const svg=$('propensitySvg'),L=55,R=750,topY=38,baseY=178,bins=20,h1=hist(armRows(1),'ehat','one',bins,0,1),h0=hist(armRows(0),'ehat','one',bins,0,1),mx=Math.max(.001,...h1,...h0)*1.12;
   let s='<style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="780" height="330" fill="#fff"/>';
@@ -671,17 +838,11 @@ function renderPropensity(){
 }
 
 function renderEstimates(){
-  for(const r of state.data)r.one=1;
-  const crude=estimate('one'),current=estimate('currentW'),full=estimate('ipwW'),truth={r1:state.trueRisk1,r0:state.trueRisk0,rd:state.trueATE,rr:state.trueRisk0>0?state.trueRisk1/state.trueRisk0:NaN};
-  const ci=state.inference&&state.inference.current,ciText=ci&&ci.valid?'95% CI ['+pct(ci.ci.rd[0],1)+', '+pct(ci.ci.rd[1],1)+']':'CI unavailable';
-  const cards=[['Crude',crude,'','RR '+fmt(crude.rr,2)],['Current '+Math.round(state.intensity*100)+'%',current,'current',ciText],['Full IPW',full,'','RR '+fmt(full.rr,2)],['Known truth',truth,'truth','RR '+fmt(truth.rr,2)]];
-  const sw1=sumArm(1,'currentW'),sw0=sumArm(0,'currentW'),sy1=armRows(1).reduce((s,r)=>s+r.currentW*r.Y,0),sy0=armRows(0).reduce((s,r)=>s+r.currentW*r.Y,0);
-  $('estimatePanel').innerHTML='<div class="estimate-grid">'+cards.map(c=>'<div class="est '+c[2]+'"><div class="name">'+c[0]+'</div><div class="rd">RD '+(c[1].rd>=0?'+':'')+pct(c[1].rd,1)+'</div><div class="sub">'+c[3]+'</div></div>').join('')+'</div>'+ 
-  '<svg class="chart" viewBox="0 0 640 165" aria-label="Weighted CVD risks with 95 percent confidence intervals"><style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="640" height="165" fill="#fff"/>'+riskBars(current,ci)+'</svg>'+ 
-  '<div class="risk-formula"><strong>Normalized weighted risks at the current slider position</strong><div class="formula-line">Smoker risk = Σ(T·w·Y) / Σ(T·w) = '+fmt(sy1,2)+' / '+fmt(sw1,2)+' = '+pct(current.r1,1)+'</div><div class="formula-line">Non-smoker risk = Σ((1−T)·w·Y) / Σ((1−T)·w) = '+fmt(sy0,2)+' / '+fmt(sw0,2)+' = '+pct(current.r0,1)+'</div><div class="formula-line">Risk difference = '+pct(current.r1,1)+' − '+pct(current.r0,1)+' = '+(current.rd>=0?'+':'')+pct(current.rd,1)+'</div><div class="formula-line">95% CI for RD = '+(ci&&ci.valid?'['+pct(ci.ci.rd[0],1)+', '+pct(ci.ci.rd[1],1)+']':'unavailable')+'</div></div>';
+  for(const r of state.data)r.one=1;const crude=estimateHT('crudeW'),current=estimateHT('currentW'),full=estimateHT('ipwW'),truth={r1:state.trueRisk1,r0:state.trueRisk0,rd:state.trueATE,rr:state.trueRisk0>0?state.trueRisk1/state.trueRisk0:NaN},ci=state.inference&&state.inference.current,ciText=ci&&ci.valid?'95% CI ['+pct(ci.ci.rd[0],1)+', '+pct(ci.ci.rd[1],1)+']':'CI unavailable',cards=[['Crude',crude,'','RR '+fmt(crude.rr,2)],['Current '+Math.round(state.intensity*100)+'%',current,'current',ciText],['HT-IPW',full,'','RR '+fmt(full.rr,2)],['Known truth',truth,'truth','RR '+fmt(truth.rr,2)]],n=state.data.length,sy1=armRows(1).reduce((s,r)=>s+r.currentW*r.Y,0),sy0=armRows(0).reduce((s,r)=>s+r.currentW*r.Y,0),mass1=sumArm(1,'currentW')/n,mass0=sumArm(0,'currentW')/n;
+  $('estimatePanel').innerHTML='<div class="estimate-grid">'+cards.map(c=>'<div class="est '+c[2]+'"><div class="name">'+c[0]+'</div><div class="rd">RD '+(c[1].rd>=0?'+':'')+pct(c[1].rd,1)+'</div><div class="sub">'+c[3]+'</div></div>').join('')+'</div><svg class="chart" viewBox="0 0 640 165"><style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="640" height="165" fill="#fff"/>'+riskBars(current,ci)+'</svg><div class="risk-formula"><strong>Horvitz–Thompson risks at the current slider position</strong><div class="formula-line">μ̂₁(α) = n⁻¹ΣT·w(α)·Y = '+fmt(sy1,2)+' / '+n+' = '+pct(current.r1,1)+'</div><div class="formula-line">μ̂₀(α) = n⁻¹Σ(1−T)·w(α)·Y = '+fmt(sy0,2)+' / '+n+' = '+pct(current.r0,1)+'</div><div class="formula-line">HT masses: n⁻¹ΣT·w = '+fmt(mass1,3)+'; n⁻¹Σ(1−T)·w = '+fmt(mass0,3)+' (not forced to 1)</div><div class="formula-line">RD = '+(current.rd>=0?'+':'')+pct(current.rd,1)+'; 95% CI '+(ci&&ci.valid?'['+pct(ci.ci.rd[0],1)+', '+pct(ci.ci.rd[1],1)+']':'unavailable')+'</div></div>';
 }
 function riskBars(est,ci){
-  const hi1=ci&&ci.valid?Math.min(1,ci.ci.r1[1]):est.r1,hi0=ci&&ci.valid?Math.min(1,ci.ci.r0[1]):est.r0;
+  const hi1=ci&&ci.valid?ci.ci.r1[1]:est.r1,hi0=ci&&ci.valid?ci.ci.r0[1]:est.r0;
   const max=Math.max(.35,est.r1,est.r0,hi1,hi0)*1.15,L=105,R=605,rows=[{name:'Smoker risk',v:est.r1,c:COLORS.smoke,y:50,ci:ci&&ci.valid?ci.ci.r1:null},{name:'Non-smoker risk',v:est.r0,c:COLORS.control,y:112,ci:ci&&ci.valid?ci.ci.r0:null}];let s='';
   for(let k=0;k<=5;k++){const x=L+(R-L)*k/5;s+='<line x1="'+x+'" x2="'+x+'" y1="20" y2="137" stroke="'+COLORS.grid+'"/>'+svgText(x,155,pct(max*k/5,0),'text-anchor="middle" font-size="9" fill="'+COLORS.muted+'"')}
   for(const r of rows){
@@ -693,7 +854,7 @@ function riskBars(est,ci){
 }
 
 function renderCI(){
-  const methods=[{key:'crude',name:'Crude',sub:'No adjustment',color:COLORS.gray},{key:'current',name:'Current '+Math.round(state.intensity*100)+'%',sub:'Teaching slider',color:COLORS.accent},{key:'full',name:'Full IPW',sub:'Formal 100% weighting',color:COLORS.smoke}];
+  const methods=[{key:'crude',name:'Crude',sub:'No adjustment',color:COLORS.gray},{key:'current',name:'Current '+Math.round(state.intensity*100)+'%',sub:'Teaching slider',color:COLORS.accent},{key:'full',name:'HT-IPW',sub:'Formal HT at 100%',color:COLORS.smoke}];
   const truth=state.trueATE,valid=methods.map(m=>({...m,res:state.inference?state.inference[m.key]:null})).filter(m=>m.res&&m.res.valid);
   if(!valid.length){$('ciSvg').innerHTML='';$('ciStatusPanel').innerHTML='<div class="ci-status-item miss">CI unavailable</div>';return}
   let lo=Math.min(0,truth,...valid.map(m=>m.res.ci.rd[0])),hi=Math.max(0,truth,...valid.map(m=>m.res.ci.rd[1])),span=Math.max(.12,hi-lo),pad=.12*span;lo-=pad;hi+=pad;
@@ -724,7 +885,7 @@ function renderCoverage(){
   $('coverageProgressText').textContent=state.coverageRunning?'Generating sample '+state.coverageDone+' of '+state.coverageTotal:(state.coverageResults?'Completed '+state.coverageResults.length+' repeated samples':'No experiment run yet');
   if(!state.coverageResults){$('coverageSummary').innerHTML='';$('coverageSvg').innerHTML='';$('coverageEmpty').style.display='block';return}
   $('coverageEmpty').style.display='none';
-  const truth=state.coverageTruth,selected=$('coverageEstimator').value,meta={crude:['Crude','No adjustment'],current:['Current '+Math.round(state.intensity*100)+'%','Slider setting'],full:['Full IPW','100% weighting']};
+  const truth=state.coverageTruth,selected=$('coverageEstimator').value,meta={crude:['Crude','No adjustment'],current:['Current '+Math.round(state.intensity*100)+'%','Slider setting'],full:['HT-IPW','100% Horvitz–Thompson']};
   const stats={crude:coverageStats(state.coverageResults,'crude',truth),current:coverageStats(state.coverageResults,'current',truth),full:coverageStats(state.coverageResults,'full',truth)};
   $('coverageSummary').innerHTML=['crude','current','full'].map(k=>{const q=stats[k];return '<button class="coverage-stat '+(k===selected?'selected':'')+'" data-method="'+k+'"><div class="name">'+meta[k][0]+'</div><div class="number">'+pct(q.coverage,1)+'</div><div class="detail">'+q.covered+' / '+q.valid+' CIs cover truth<br>Bias '+(q.bias>=0?'+':'')+pct(q.bias,1)+' • mean width '+pct(q.width,1)+'</div></button>'}).join('');
   $('coverageSummary').querySelectorAll('[data-method]').forEach(b=>b.onclick=()=>{$('coverageEstimator').value=b.dataset.method;renderCoverage()});
@@ -765,14 +926,42 @@ function renderTable(){
   $('subjectTable').querySelectorAll('tr').forEach(tr=>tr.onclick=()=>selectSubject(+tr.dataset.index));
 }
 
-function renderAll(){computeInference();renderMetrics();renderScatter();renderSubject();renderDistribution();renderBalance();renderPropensity();renderEstimates();renderCI();renderCoverage();renderTable()}
+
+
+function psEquationHTML(model){
+  const base='<i>η</i><sub>γ</sub>(x) = γ<sub>0</sub> + γ<sub>A</sub>z<sub>age</sub> + γ<sub>B</sub>z<sub>BMI</sub>';
+  if(model==='omit')return base+' + γ<sub>F</sub>female';
+  return base+' + γ<sub>I</sub>z<sub>income</sub> + γ<sub>F</sub>female + γ<sub>C</sub>college + γ<sub>H</sub>HTN';
+}
+function renderMathFramework(){
+  if(!state.inference||!state.data.length)return;for(const r of state.data)r.one=1;const cur=state.inference.current,full=state.inference.full,modelLabel=state.model==='correct'?'All measured covariates':'Age + BMI + sex only (misspecified)';$('mathSelectedPSName').textContent=modelLabel;$('mathSelectedPSEquation').innerHTML=psEquationHTML(state.model);const a=Math.round(state.intensity*100),formal=a===100,curCover=cur&&cur.valid&&cur.ci.rd[0]<=state.trueATE&&state.trueATE<=cur.ci.rd[1],fullCover=full&&full.valid&&full.ci.rd[0]<=state.trueATE&&state.trueATE<=full.ci.rd[1];$('mathCurrentEstimate').innerHTML='<strong>'+(formal?'Formal Horvitz–Thompson calculation':'Crude-to-HT interpolation')+' — α = '+fmt(state.intensity,2)+'</strong><div class="current-numbers">'+(cur&&cur.valid?'<span class="number-chip">μ̂₁ = '+pct(cur.r1,2)+'</span><span class="number-chip">μ̂₀ = '+pct(cur.r0,2)+'</span><span class="number-chip">Δ̂ = '+(cur.rd>=0?'+':'')+pct(cur.rd,2)+'</span><span class="number-chip">95% CI ['+pct(cur.ci.rd[0],2)+', '+pct(cur.ci.rd[1],2)+']</span><span class="number-chip">'+(curCover?'✓ contains truth':'✕ misses truth')+'</span>':'Estimate unavailable')+'</div>';const keys=['age','bmi','income','female','college','htn'],maxSmd=Math.max(...keys.map(k=>smdFor(k,'currentW'))),mass1=sumArm(1,'ipwW')/state.data.length,mass0=sumArm(0,'ipwW')/state.data.length;$('mathBalanceDiagnostics').innerHTML='<strong>Current diagnostics</strong><div class="current-numbers"><span class="number-chip">Max |SMD| = '+fmt(maxSmd,3)+'</span><span class="number-chip">HT mass₁ = '+fmt(mass1,3)+'</span><span class="number-chip">HT mass₀ = '+fmt(mass0,3)+'</span><span class="number-chip">Cap = '+(state.capOn?state.cap:'off')+'</span></div><div style="margin-top:7px">The moment plots evaluate the finite-sample analog of the population identity for selectable f(X).</div>';$('mathInferenceCurrent').innerHTML='<strong>Full HT-IPW sandwich result</strong><div class="current-numbers">'+(full&&full.valid?'<span class="number-chip">Δ̂ = '+(full.rd>=0?'+':'')+pct(full.rd,2)+'</span><span class="number-chip">SE = '+pct(full.se,2)+'</span><span class="number-chip">95% CI ['+pct(full.ci.rd[0],2)+', '+pct(full.ci.rd[1],2)+']</span><span class="number-chip">'+(fullCover?'✓ contains truth':'✕ misses truth')+'</span>':'Inference unavailable')+'</div>';
+}
+function activateMathTab(name,focus=true){
+  const tabs=[...document.querySelectorAll('[data-math-tab]')],panels=[...document.querySelectorAll('.math-panel')];
+  tabs.forEach(tab=>{const on=tab.dataset.mathTab===name;tab.setAttribute('aria-selected',on?'true':'false');tab.tabIndex=on?0:-1;if(on&&focus)tab.focus()});
+  panels.forEach(panel=>{const on=panel.id==='mathPanel'+name.charAt(0).toUpperCase()+name.slice(1);panel.classList.toggle('active',on);panel.hidden=!on});
+}
+function initMathTabs(){
+  const tabs=[...document.querySelectorAll('[data-math-tab]')];
+  tabs.forEach((tab,index)=>{
+    tab.tabIndex=index===0?0:-1;
+    tab.addEventListener('click',()=>activateMathTab(tab.dataset.mathTab,false));
+    tab.addEventListener('keydown',e=>{
+      if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;e.preventDefault();
+      let j=index;if(e.key==='ArrowRight')j=(index+1)%tabs.length;if(e.key==='ArrowLeft')j=(index-1+tabs.length)%tabs.length;if(e.key==='Home')j=0;if(e.key==='End')j=tabs.length-1;
+      activateMathTab(tabs[j].dataset.mathTab,true);
+    });
+  });
+}
+
+function renderAll(){computeInference();renderMetrics();renderMathFramework();renderScatter();renderSubject();renderDistribution();renderBalance();renderMomentBalance();renderMomentProfile();renderPropensity();renderEstimates();renderCI();renderCoverage();renderTable()}
 
 function preset(name){
   const p={random:{conf:.05,overlap:.95,effect:1.8,model:'correct'},typical:{conf:1.25,overlap:.68,effect:1.8,model:'correct'},poor:{conf:2.15,overlap:.22,effect:1.8,model:'correct'},misspec:{conf:1.55,overlap:.55,effect:1.8,model:'omit'}}[name];
   $('confRange').value=p.conf;$('overlapRange').value=p.overlap;$('effectRange').value=p.effect;$('psModel').value=p.model;$('weightRange').value=100;buildCohort();
 }
 function reset(){
-  $('nRange').value=defaults.n;$('confRange').value=defaults.conf;$('overlapRange').value=defaults.overlap;$('effectRange').value=defaults.effect;$('seedInput').value=defaults.seed;$('psModel').value=defaults.model;$('capToggle').checked=defaults.capOn;$('capRange').value=defaults.cap;$('weightRange').value=100;$('xVar').value=defaults.x;$('yVar').value=defaults.y;$('distVar').value=defaults.dist;state.selected=0;buildCohort();
+  $('nRange').value=defaults.n;$('confRange').value=defaults.conf;$('overlapRange').value=defaults.overlap;$('effectRange').value=defaults.effect;$('seedInput').value=defaults.seed;$('psModel').value=defaults.model;$('capToggle').checked=defaults.capOn;$('capRange').value=defaults.cap;$('weightRange').value=100;$('xVar').value=defaults.x;$('yVar').value=defaults.y;$('distVar').value=defaults.dist;$('momentVar').value=defaults.momentVar;$('momentFn').value=defaults.momentFn;$('momentWeightSource').value=defaults.momentWeightSource;state.selected=0;buildCohort();
 }
 function animate(){
   invalidateCoverage();renderCoverage();
@@ -790,11 +979,12 @@ function saveSvg(id){const src=$(id),clone=src.cloneNode(true);clone.setAttribut
 ['nRange','confRange','overlapRange','effectRange','seedInput','psModel'].forEach(id=>$(id).addEventListener(id==='seedInput'?'change':'input',()=>{stop();buildCohort()}));
 ['capToggle','capRange'].forEach(id=>$(id).addEventListener('input',()=>{stop();invalidateCoverage();updateWeights()}));
 $('weightRange').addEventListener('input',()=>{stop();invalidateCoverage();updateWeights()});
-$('xVar').addEventListener('change',()=>{readControls();renderScatter()});$('yVar').addEventListener('change',()=>{readControls();renderScatter()});$('distVar').addEventListener('change',()=>{readControls();renderDistribution()});
+$('xVar').addEventListener('change',()=>{readControls();renderScatter()});$('yVar').addEventListener('change',()=>{readControls();renderScatter()});$('distVar').addEventListener('change',()=>{readControls();renderDistribution()});['momentVar','momentFn','momentWeightSource'].forEach(id=>$(id).addEventListener('change',()=>{renderMomentBalance();renderMomentProfile()}));
 $('newCohort').onclick=()=>{$('seedInput').value=((+$('seedInput').value+Math.floor(1000+Math.random()*900000))%99999999)||1;state.selected=0;buildCohort()};
 $('resetControls').onclick=reset;$('animateWeights').onclick=animate;$('stopAnimation').onclick=stop;$('exportCsv').onclick=exportCSV;$('runCoverage').onclick=runCoverage;$('coverageEstimator').addEventListener('change',renderCoverage);
 document.querySelectorAll('.preset').forEach(b=>b.onclick=()=>preset(b.dataset.preset));document.querySelectorAll('[data-svg]').forEach(b=>b.onclick=()=>saveSvg(b.dataset.svg));
 window.addEventListener('resize',hideTip);
+initMathTabs();
 reset();
 })();
 </script>
