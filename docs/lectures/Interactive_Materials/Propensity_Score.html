@@ -1,0 +1,523 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Propensity Score — Se Yoon Lee, Ph.D. (Mathematically Audited)</title>
+<style>
+:root{
+  color-scheme:light;
+  --ink:#162033;--muted:#667085;--line:#D7DEE8;--panel:#fff;--bg:#F4F7FB;
+  --smoke:#E56B2F;--control:#2F6EA5;--accent:#7057E8;--green:#208A62;
+  --danger:#C23B3B;--amber:#B66A00;--teal:#167C86;--gray:#98A2B3;
+  --soft-orange:#FFF1E8;--soft-blue:#EAF3FB;--soft-purple:#F2EEFF;
+  --soft-green:#EAF8F2;--soft-red:#FFF1F1;--soft-amber:#FFF8E8;
+  --shadow:0 6px 20px rgba(20,32,55,.055);
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif}
+body{min-width:320px}
+button,select,input{font:inherit}button{cursor:pointer}
+math{font-family:"Cambria Math","STIX Two Math","Times New Roman",serif;color:var(--ink)}
+.hero{padding:28px clamp(18px,4vw,58px) 22px;background:linear-gradient(135deg,#fff 0%,#F6F3FF 53%,#EDF7FA 100%);border-bottom:1px solid var(--line)}
+.hero-inner{max-width:1780px;margin:0 auto;display:flex;gap:25px;align-items:flex-start;justify-content:space-between}
+.hero h1{margin:0 0 8px;font-size:clamp(29px,3.1vw,49px);line-height:1.05;letter-spacing:-.75px}.hero .author{font-weight:600;white-space:nowrap}
+.hero p{margin:0;max-width:1120px;color:var(--muted);font-size:clamp(15px,1.4vw,19px);line-height:1.55}
+.hero-equation{margin-top:13px;display:inline-flex;gap:12px;align-items:center;max-width:100%;padding:9px 13px;border:1px solid #C6D0DE;border-left:4px solid var(--accent);border-radius:12px;background:rgba(255,255,255,.88);overflow:auto}
+.hero-equation strong{white-space:nowrap;color:#5B45C8;font-size:11px;text-transform:uppercase;letter-spacing:.65px}.hero-equation math{font-size:clamp(18px,1.6vw,25px);min-width:max-content}
+.hero-badge{flex:0 0 auto;padding:11px 15px;border-radius:999px;border:1px solid #CFC5FF;background:#fff;color:#5B45C8;font-weight:850;font-size:12px;letter-spacing:.4px;white-space:nowrap}
+.app{max-width:1780px;margin:0 auto;padding:18px;display:grid;grid-template-columns:348px minmax(0,1fr);gap:18px;align-items:start}
+.controls{position:sticky;top:12px;max-height:calc(100vh - 24px);overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:20px;box-shadow:0 10px 28px rgba(20,32,55,.08)}
+.controls-head{padding:18px 18px 14px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#fff,#FAFBFD)}.controls-head h2{margin:0 0 5px;font-size:19px}.controls-head p{margin:0;color:var(--muted);font-size:13px;line-height:1.45}
+.control-section{padding:15px 18px;border-bottom:1px solid #E7EBF1}.control-section:last-child{border-bottom:0}.section-label{font-size:11px;letter-spacing:.8px;text-transform:uppercase;color:#7B8495;font-weight:900;margin-bottom:10px}
+.preset-row{display:grid;grid-template-columns:1fr 1fr;gap:7px}.preset{border:1px solid var(--line);background:#fff;border-radius:11px;padding:8px 9px;font-size:11px;font-weight:780;color:#344054;line-height:1.28}.preset:hover,.preset.active{border-color:var(--accent);color:#5B45C8;background:#FAF8FF}
+.control{margin:0 0 14px}.control:last-child{margin-bottom:0}.control-top{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:6px}.control label{font-size:13px;font-weight:730}.value{font-size:12px;color:#5B45C8;font-weight:850;font-variant-numeric:tabular-nums}
+input[type="range"]{width:100%;accent-color:var(--accent)}.range-ends{display:flex;justify-content:space-between;gap:8px;color:#98A2B3;font-size:10px;margin-top:2px}
+select,input[type="number"]{width:100%;border:1px solid var(--line);border-radius:10px;background:#fff;padding:9px 10px;color:var(--ink)}
+.checkrow{display:flex;gap:9px;align-items:flex-start;font-size:12px;color:#475467;line-height:1.4}.checkrow input{margin-top:2px;accent-color:var(--accent)}
+.primary-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}.primary,.secondary,.mini-button{border-radius:11px;padding:9px 10px;font-weight:790;font-size:12px}.primary,.mini-button.primary{border:1px solid var(--accent);background:var(--accent);color:#fff}.secondary,.mini-button{border:1px solid var(--line);background:#fff;color:#344054}.primary:hover,.mini-button.primary:hover{filter:brightness(.96)}.secondary:hover,.mini-button:hover{border-color:var(--accent);color:#5B45C8}
+.teaching-note{font-size:11px;line-height:1.5;color:#667085;background:#F7F8FB;border-radius:10px;padding:9px 10px;margin-top:10px}.oracle-note{display:none;margin-top:9px;border-left:4px solid var(--amber);background:#FFF9EB;border-radius:9px;padding:8px 10px;color:#6F4B08;font-size:10px;line-height:1.5}.oracle-note.show{display:block}
+.workspace{min-width:0}.metrics{display:grid;grid-template-columns:repeat(6,minmax(115px,1fr));gap:10px;margin-bottom:12px}.metric{background:#fff;border:1px solid var(--line);border-radius:15px;padding:11px 13px;min-width:0;box-shadow:0 3px 12px rgba(20,32,55,.04)}.metric .k{font-size:9px;color:#7B8495;text-transform:uppercase;font-weight:900;letter-spacing:.55px;white-space:nowrap}.metric .v{margin-top:4px;font-size:19px;font-weight:880;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.metric .sub{font-size:9px;color:#7B8495;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.metric.good{border-color:#A9DCC8;background:#F2FBF7}.metric.warn{border-color:#F0D39E;background:#FFF9EB}.metric.bad{border-color:#F0BBBB;background:#FFF5F5}
+.card{background:#fff;border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);min-width:0;overflow:hidden}.card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:15px 16px 10px}.card-head h3{margin:0 0 4px;font-size:17px;line-height:1.25}.card-head p{margin:0;color:var(--muted);font-size:12px;line-height:1.45}.full-card{margin-bottom:12px}.grid-two{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}.grid-top{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(300px,.75fr);gap:12px;margin-bottom:12px}
+.mini-controls{display:flex;gap:7px;align-items:center;flex-wrap:wrap;justify-content:flex-end}.mini-controls label{font-size:10px;font-weight:800;color:#667085}.mini-controls select{width:auto;min-width:120px;padding:6px 8px;font-size:11px}.mini-button{padding:7px 9px;font-size:11px;white-space:nowrap}.mini-range{display:grid;grid-template-columns:auto 120px auto;gap:6px;align-items:center}.mini-range input{width:120px}.mini-range output{font-size:10px;font-weight:850;color:#5B45C8;min-width:34px;text-align:right}
+.legend{display:flex;flex-wrap:wrap;gap:12px;padding:0 16px 8px;color:#667085;font-size:11px}.legend span{display:inline-flex;align-items:center;gap:5px}.dot{width:10px;height:10px;border-radius:50%;display:inline-block}.line-key{width:17px;height:0;border-top:3px solid;display:inline-block}.ring{width:11px;height:11px;border-radius:50%;display:inline-block;border:2px solid var(--danger);background:#fff}.band-key{width:18px;height:10px;border-radius:3px;background:#E9E4FF;border:1px solid #B9AAFF}
+.chart-wrap{position:relative;padding:0 8px 10px}svg.chart{display:block;width:100%;height:auto;overflow:visible;touch-action:none}.chart-note{padding:0 16px 13px;color:#667085;font-size:11px;line-height:1.5}.chart-note strong{color:var(--ink)}
+.tooltip{position:fixed;z-index:50;pointer-events:none;background:#111827;color:#fff;border-radius:10px;padding:9px 10px;box-shadow:0 8px 24px rgba(0,0,0,.24);font-size:11px;line-height:1.45;opacity:0;transform:translate(10px,10px);max-width:290px}
+.math-card{margin-bottom:12px;border-top:3px solid var(--accent)}.math-tabs{display:flex;gap:7px;flex-wrap:wrap;padding:0 16px 12px;border-bottom:1px solid #E7EBF1}.math-tab{border:1px solid var(--line);background:#fff;color:#475467;border-radius:10px;padding:8px 11px;font-size:11px;font-weight:830}.math-tab[aria-selected="true"]{border-color:var(--accent);background:var(--accent);color:#fff}.math-panel{display:none;padding:16px}.math-panel.active{display:block}.math-scroll{overflow:auto;padding:4px 2px 7px}math[display="block"]{display:block;width:max-content;min-width:min-content;margin:0 auto;font-size:clamp(17px,1.45vw,24px);line-height:1.35}.math-chain{border:1px solid #D9D2FF;background:linear-gradient(135deg,#F7F4FF,#F8FBFF);border-radius:15px;padding:14px 12px;margin-bottom:12px}.math-chain .label{font-size:10px;color:#5B45C8;font-weight:900;letter-spacing:.65px;text-transform:uppercase;margin-bottom:7px}.math-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.math-box{border:1px solid #DEE4EC;border-radius:13px;background:#FCFCFD;padding:11px 12px;min-width:0}.math-box h4{margin:0 0 7px;font-size:12px}.math-box p{margin:7px 0 0;color:#667085;font-size:10px;line-height:1.5}.math-box math[display="block"]{font-size:clamp(15px,1.1vw,19px);margin-left:0}.smd-formula math[display="block"]{font-size:clamp(12.5px,.92vw,16px)}.live-math{margin-top:11px;border:1px solid #B7DCE0;background:#F2FAFB;border-radius:12px;padding:10px 12px;font-size:10px;line-height:1.5;color:#4E6570}.live-math strong{color:#075E68}.number-row{display:flex;gap:7px;flex-wrap:wrap;margin-top:7px}.number-chip{border:1px solid #D9D2FF;background:#fff;border-radius:999px;padding:5px 8px;font-weight:850;color:#344054;font-variant-numeric:tabular-nums}.warning-math{margin-top:10px;border-left:4px solid var(--amber);background:#FFF9EB;border-radius:9px;padding:9px 11px;color:#6F4B08;font-size:10px;line-height:1.5}
+.subject-body{padding:2px 16px 16px}.subject-title{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}.subject-title strong{font-size:24px}.status-pill{padding:5px 8px;border-radius:999px;font-size:10px;font-weight:900}.status-t1{background:var(--soft-orange);color:#A94317}.status-t0{background:var(--soft-blue);color:#245C88}.kv{display:grid;grid-template-columns:1fr 1fr;gap:7px}.kv div{border:1px solid #E4E8EF;border-radius:10px;padding:8px 9px;background:#FCFCFD}.kv .label{display:block;font-size:9px;text-transform:uppercase;letter-spacing:.45px;color:#7B8495;font-weight:850}.kv .num{display:block;font-size:14px;font-weight:790;margin-top:2px;font-variant-numeric:tabular-nums;line-height:1.25}.score-box{margin-top:10px;border:1px solid #D9D2FF;background:#F8F6FF;border-radius:12px;padding:10px 11px;font-size:11px;line-height:1.55}.score-box strong{color:#5B45C8}.subject-nav{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:10px}.subject-nav button{border:1px solid var(--line);background:#fff;border-radius:10px;padding:7px;font-size:11px;font-weight:760}
+.band-status,.diag-status{padding:0 16px 14px}.status-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.status-card{border:1px solid #E1E6ED;border-radius:11px;background:#FCFCFD;padding:9px 10px;min-width:0}.status-card .name{font-size:9px;color:#667085;text-transform:uppercase;font-weight:900;letter-spacing:.4px}.status-card .value{font-size:17px;font-weight:880;margin-top:4px;color:var(--ink);font-variant-numeric:tabular-nums}.status-card .detail{font-size:9px;color:#7B8495;margin-top:2px;line-height:1.35}.band-message{margin-top:8px;border-radius:11px;padding:9px 10px;font-size:10px;line-height:1.5}.band-message.good{background:#F2FBF7;border:1px solid #A9DCC8;color:#176A4C}.band-message.warn{background:#FFF9EB;border:1px solid #F0D39E;color:#76500D}.band-message.bad{background:#FFF5F5;border:1px solid #F0BBBB;color:#A52D2D}
+.misconceptions{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;padding:0 16px 15px}.misconception{border:1px solid #E1E6ED;border-radius:12px;background:#FCFCFD;padding:10px 11px}.misconception b{display:block;font-size:11px;margin-bottom:4px}.misconception span{display:block;color:#667085;font-size:10px;line-height:1.45}.misconception .no{color:var(--danger)}.misconception .yes{color:var(--green)}
+.table-card{margin-bottom:18px}details summary{cursor:pointer;padding:14px 16px;font-weight:800;list-style:none;display:flex;align-items:center;justify-content:space-between}details summary::-webkit-details-marker{display:none}details summary::after{content:"＋";color:var(--accent);font-size:20px}details[open] summary::after{content:"−"}.table-tools{display:flex;gap:8px;padding:0 16px 10px;flex-wrap:wrap}.table-tools button{border:1px solid var(--line);background:#fff;border-radius:9px;padding:7px 9px;font-size:11px;font-weight:760}.table-wrap{overflow:auto;max-height:430px;border-top:1px solid #E7EBF1}table{width:100%;border-collapse:collapse;font-size:10px;white-space:nowrap}th,td{padding:8px 9px;border-bottom:1px solid #EDF0F4;text-align:right;font-variant-numeric:tabular-nums}th:first-child,td:first-child{text-align:left}th{position:sticky;top:0;background:#F8FAFC;color:#667085;text-transform:uppercase;font-size:9px;letter-spacing:.42px;z-index:1}tbody tr{cursor:pointer}tbody tr:hover,tbody tr.selected{background:#F4F0FF}.coef-note{padding:0 16px 12px;color:#667085;font-size:10px;line-height:1.5}
+.footer{max-width:1780px;margin:0 auto;padding:0 18px 28px;color:#667085;font-size:11px;line-height:1.55}
+@media(max-width:1220px){.app{grid-template-columns:1fr}.controls{position:relative;top:auto;max-height:none}.metrics{grid-template-columns:repeat(3,1fr)}.grid-two,.grid-top{grid-template-columns:1fr}.misconceptions{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:760px){.hero-inner{display:block}.hero-badge{display:inline-block;margin-top:14px}.hero .author{display:block;font-size:.58em;margin-top:7px;white-space:normal}.app{padding:10px}.metrics{grid-template-columns:repeat(2,1fr)}.math-grid{grid-template-columns:1fr}.status-grid{grid-template-columns:1fr 1fr}.card-head{display:block}.mini-controls{justify-content:flex-start;margin-top:9px}.math-tabs{display:grid;grid-template-columns:1fr 1fr}.kv{grid-template-columns:1fr}.misconceptions{grid-template-columns:1fr}}
+@media(max-width:480px){.preset-row,.primary-row,.status-grid{grid-template-columns:1fr}.hero-equation{display:block}.hero-equation strong{display:block;margin-bottom:6px}.mini-range{grid-template-columns:auto 1fr auto}.mini-range input{width:100%}}
+@media print{.controls,.hero-badge,.table-card,.footer,.preset-row,.primary-row{display:none!important}.app{display:block;max-width:none}.card{break-inside:avoid;box-shadow:none}.metrics{grid-template-columns:repeat(6,1fr)}}
+
+  .audit-note{margin-top:10px;border-left:4px solid var(--teal);background:#F1FAFB;border-radius:9px;padding:9px 11px;color:#315F66;font-size:10px;line-height:1.5}
+  .fit-note{padding:9px 16px 11px;color:#667085;font-size:10px;line-height:1.5;border-top:1px solid #EEF1F5;background:#FBFCFD}
+
+</style>
+</head>
+<body>
+<header class="hero">
+  <div class="hero-inner">
+    <div>
+      <h1>Propensity Score <span class="author">— Se Yoon Lee, Ph.D.</span></h1>
+      <p>Explore how measured baseline covariates are compressed into a treatment-assignment probability, why the true propensity score is a balancing score, and why overlap and post-design balance—not treatment-model p-values—are the central diagnostics.</p>
+      <div class="hero-equation"><strong>Definition</strong><math aria-label="The propensity score is the probability of treatment given baseline covariates"><mrow><mi>e</mi><mo>(</mo><mi>X</mi><mo>)</mo><mo>=</mo><mi>P</mi><mo>(</mo><mi>T</mi><mo>=</mo><mn>1</mn><mo>|</mo><mi>X</mi><mo>)</mo></mrow></math></div>
+    </div>
+    <div class="hero-badge">GRADUATE-LEVEL • INLINE SVG • OFFLINE</div>
+  </div>
+</header>
+
+<main class="app">
+<aside class="controls" aria-label="Simulation controls">
+  <div class="controls-head"><h2>Construct the observational study</h2><p>The synthetic cohort mirrors the lecture's smoking example: age, gender, race/ethnicity, education, income, and BMI are measured before smoking status.</p></div>
+  <div class="control-section">
+    <div class="section-label">Scenario presets</div>
+    <div class="preset-row">
+      <button class="preset active" data-preset="lecture">Lecture default</button>
+      <button class="preset" data-preset="strong">Strong imbalance</button>
+      <button class="preset" data-preset="poor">Poor overlap</button>
+      <button class="preset" data-preset="omit">Omitted predictors</button>
+      <button class="preset" data-preset="nonlinear">Nonlinear misspecification</button>
+      <button class="preset" data-preset="random">Randomized-like</button>
+    </div>
+  </div>
+  <div class="control-section">
+    <div class="section-label">Cohort and assignment</div>
+    <div class="control"><div class="control-top"><label for="nRange">Number of participants</label><span class="value" id="nValue"></span></div><input id="nRange" type="range" min="240" max="900" step="20" value="420"><div class="range-ends"><span>240</span><span>900</span></div></div>
+    <div class="control"><div class="control-top"><label for="prevRange">Smoking prevalence</label><span class="value" id="prevValue"></span></div><input id="prevRange" type="range" min="15" max="60" step="1" value="35"><div class="range-ends"><span>15%</span><span>60%</span></div></div>
+    <div class="control"><div class="control-top"><label for="selectionRange">Covariate-driven selection</label><span class="value" id="selectionValue"></span></div><input id="selectionRange" type="range" min="0" max="2.7" step="0.05" value="0.90"><div class="range-ends"><span>nearly random</span><span>strong separation</span></div></div>
+    <div class="control"><div class="control-top"><label for="nonlinearRange">True nonlinear assignment</label><span class="value" id="nonlinearValue"></span></div><input id="nonlinearRange" type="range" min="0" max="1.5" step="0.05" value="0"><div class="range-ends"><span>main effects</span><span>strong interactions</span></div></div>
+  </div>
+  <div class="control-section">
+    <div class="section-label">Estimated propensity score</div>
+    <div class="control"><label for="modelSelect" style="display:block;margin-bottom:6px">Treatment-model specification</label><select id="modelSelect"><option value="lecture">Lecture main-effects model</option><option value="expanded">Expanded nonlinear model</option><option value="sparse">Age + gender + BMI only</option></select></div>
+    <div class="control"><label for="sourceSelect" style="display:block;margin-bottom:6px">Score used in diagnostics</label><select id="sourceSelect"><option value="fitted">Estimated score ê(X)</option><option value="oracle">True score e(X), simulation only</option></select></div>
+    <div class="oracle-note" id="oracleNote"><b>Oracle mode:</b> the true treatment probability is known only because this page generated the data. Real analyses must work with an estimated score.</div>
+  </div>
+  <div class="control-section">
+    <div class="section-label">Narrow score band</div>
+    <div class="control"><div class="control-top"><label for="bandCenter">Band center</label><span class="value" id="bandCenterValue"></span></div><input id="bandCenter" type="range" min="0.05" max="0.95" step="0.01" value="0.50"></div>
+    <div class="control"><div class="control-top"><label for="bandWidth">Band width</label><span class="value" id="bandWidthValue"></span></div><input id="bandWidth" type="range" min="0.04" max="0.30" step="0.01" value="0.12"></div>
+  </div>
+  <div class="control-section">
+    <div class="section-label">Reproducibility</div>
+    <div class="control"><div class="control-top"><label for="seedInput">Cohort seed</label><span class="value" id="seedValue"></span></div><input id="seedInput" type="number" min="1" max="99999999" value="20260711"></div>
+    <div class="primary-row"><button class="primary" id="newCohort">New cohort</button><button class="secondary" id="resetControls">Reset</button></div>
+  </div>
+</aside>
+
+<section class="workspace">
+  <div class="metrics" id="metricStrip" aria-live="polite"></div>
+
+  <article class="card math-card" aria-labelledby="mathTitle">
+    <div class="card-head"><div><h3 id="mathTitle">Mathematical formulation</h3><p>Definition, balancing-score argument, causal identification, positivity, inverse weighting, and diagnostic implications.</p></div><span class="hero-badge" style="padding:7px 10px;font-size:10px">NATIVE MATHML</span></div>
+    <div class="math-tabs" role="tablist">
+      <button class="math-tab" data-tab="definition" aria-selected="true">Definition &amp; estimation</button>
+      <button class="math-tab" data-tab="balance" aria-selected="false">Balancing score</button>
+      <button class="math-tab" data-tab="causal" aria-selected="false">Causal identification</button>
+      <button class="math-tab" data-tab="positivity" aria-selected="false">Positivity &amp; IPW</button>
+      <button class="math-tab" data-tab="diagnostics" aria-selected="false">Diagnostics</button>
+    </div>
+    <section class="math-panel active" id="panelDefinition">
+      <div class="math-chain"><div class="label">Measured baseline covariates → treatment probability</div><div class="math-scroll"><math display="block"><mrow><mi mathvariant="bold">X</mi><mspace width=".7em"/><mo>⟶</mo><mspace width=".7em"/><mi>e</mi><mo>(</mo><mi mathvariant="bold">X</mi><mo>)</mo><mo>=</mo><mi>P</mi><mo>(</mo><mi>T</mi><mo>=</mo><mn>1</mn><mo>|</mo><mi mathvariant="bold">X</mi><mo>)</mo><mspace width=".7em"/><mo>⟶</mo><mspace width=".7em"/><mover accent="true"><mi>e</mi><mo>^</mo></mover><mo>(</mo><mi mathvariant="bold">X</mi><mo>)</mo></mrow></math></div></div>
+      <div class="math-grid">
+        <div class="math-box"><h4>Working treatment model</h4><div class="math-scroll"><math display="block"><mrow><mi>logit</mi><mo>{</mo><msub><mi>e</mi><mi>γ</mi></msub><mo>(</mo><mi mathvariant="bold">X</mi><mo>)</mo><mo>}</mo><mo>=</mo><msup><mi mathvariant="bold">Z</mi><mi>T</mi></msup><mo>(</mo><mi mathvariant="bold">X</mi><mo>)</mo><mi mathvariant="bold">γ</mi></mrow></math></div><p>The model describes treatment assignment. The outcome is not used to fit it.</p></div>
+        <div class="math-box"><h4>Estimated score</h4><div class="math-scroll"><math display="block"><mrow><msub><mover accent="true"><mi>e</mi><mo>^</mo></mover><mi>i</mi></msub><mo>=</mo><mi>expit</mi><mo>{</mo><msup><mi mathvariant="bold">Z</mi><mi>T</mi></msup><mo>(</mo><msub><mi mathvariant="bold">X</mi><mi>i</mi></msub><mo>)</mo><mover accent="true"><mi mathvariant="bold">γ</mi><mo>^</mo></mover><mo>}</mo></mrow></math></div><p>A fitted value of 0.70 is a modeled treatment probability for that measured profile, not a biological fraction of a person.</p></div>
+        <div class="math-box"><h4>Dimension reduction</h4><div class="math-scroll"><math display="block"><mrow><mi mathvariant="bold">X</mi><mo>∈</mo><msup><mi mathvariant="double-struck">R</mi><mi>p</mi></msup><mspace width=".7em"/><mo>⟶</mo><mspace width=".7em"/><mi>e</mi><mo>(</mo><mi mathvariant="bold">X</mi><mo>)</mo><mo>∈</mo><mo>[</mo><mn>0</mn><mo>,</mo><mn>1</mn><mo>]</mo></mrow></math></div><p>Different covariate profiles can have the same treatment probability. The score is a deterministic function of the measured baseline vector.</p></div>
+      </div>
+      <div class="live-math" id="liveDefinition"></div>
+    </section>
+    <section class="math-panel" id="panelBalance" hidden>
+      <div class="math-chain"><div class="label">Balancing-score property of the true propensity score</div><div class="math-scroll"><math display="block"><mrow><mi>T</mi><mo>⊥</mo><mi mathvariant="bold">X</mi><mo>|</mo><mi>e</mi><mo>(</mo><mi mathvariant="bold">X</mi><mo>)</mo></mrow></math></div></div>
+      <div class="math-grid">
+        <div class="math-box"><h4>Iterated-expectation step</h4><div class="math-scroll"><math display="block"><mrow><mi>E</mi><mo>{</mo><mi>T</mi><mo>|</mo><mi>e</mi><mo>(</mo><mi mathvariant="bold">X</mi><mo>)</mo><mo>}</mo><mo>=</mo><mi>E</mi><mo>[</mo><mi>E</mi><mo>{</mo><mi>T</mi><mo>|</mo><mi mathvariant="bold">X</mi><mo>}</mo><mo>|</mo><mi>e</mi><mo>(</mo><mi mathvariant="bold">X</mi><mo>)</mo><mo>]</mo><mo>=</mo><mi>e</mi><mo>(</mo><mi mathvariant="bold">X</mi><mo>)</mo></mrow></math></div><p>The equality holds almost surely because E(T|X)=e(X).</p></div>
+        <div class="math-box"><h4>Conditioning step</h4><div class="math-scroll"><math display="block"><mrow><mi>P</mi><mo>{</mo><mi>T</mi><mo>=</mo><mn>1</mn><mo>|</mo><mi mathvariant="bold">X</mi><mo>,</mo><mi>e</mi><mo>(</mo><mi mathvariant="bold">X</mi><mo>)</mo><mo>}</mo><mo>=</mo><mi>e</mi><mo>(</mo><mi mathvariant="bold">X</mi><mo>)</mo><mo>=</mo><mi>P</mi><mo>{</mo><mi>T</mi><mo>=</mo><mn>1</mn><mo>|</mo><mi>e</mi><mo>(</mo><mi mathvariant="bold">X</mi><mo>)</mo><mo>}</mo></mrow></math></div><p>Thus, given the true score, the full measured vector provides no additional information about treatment.</p></div>
+      </div>
+      <div class="warning-math"><b>Measure-theoretic qualification:</b> these are regular conditional probabilities and the statement holds almost surely. It avoids treating the event e(X)=r as having positive probability when the score is continuous.</div>
+      <div class="warning-math"><b>Estimated score:</b> exact balance is a theorem for the true score. A fitted score and a finite-width band provide only an empirical approximation that must be checked.</div>
+      <div class="live-math" id="liveBalance"></div>
+    </section>
+    <section class="math-panel" id="panelCausal" hidden>
+      <div class="math-grid">
+        <div class="math-box"><h4>Consistency</h4><div class="math-scroll"><math display="block"><mrow><mi>Y</mi><mo>=</mo><mi>T</mi><mi>Y</mi><mo>(</mo><mn>1</mn><mo>)</mo><mo>+</mo><mo>(</mo><mn>1</mn><mo>−</mo><mi>T</mi><mo>)</mo><mi>Y</mi><mo>(</mo><mn>0</mn><mo>)</mo></mrow></math></div><p>The observed outcome equals the potential outcome under the treatment actually received.</p></div>
+        <div class="math-box"><h4>Conditional exchangeability</h4><div class="math-scroll"><math display="block"><mrow><mo>{</mo><mi>Y</mi><mo>(</mo><mn>1</mn><mo>)</mo><mo>,</mo><mi>Y</mi><mo>(</mo><mn>0</mn><mo>)</mo><mo>}</mo><mo>⊥</mo><mi>T</mi><mo>|</mo><mi mathvariant="bold">X</mi></mrow></math></div><p>The measured baseline vector must be sufficient for the no-unmeasured-confounding assumption.</p></div>
+        <div class="math-box"><h4>Positivity in the target population</h4><div class="math-scroll"><math display="block"><mrow><mn>0</mn><mo>&lt;</mo><mi>e</mi><mo>(</mo><mi mathvariant="bold">X</mi><mo>)</mo><mo>&lt;</mo><mn>1</mn><mspace width=".4em"/><mtext>almost surely</mtext></mrow></math></div><p>Both treatment levels must be possible for covariate profiles represented in the target population.</p></div>
+      </div>
+      <div class="math-chain" style="margin-top:11px"><div class="label">Dimension-reduced causal identification</div><div class="math-scroll"><math display="block"><mrow><mo>{</mo><mi>Y</mi><mo>(</mo><mn>1</mn><mo>)</mo><mo>,</mo><mi>Y</mi><mo>(</mo><mn>0</mn><mo>)</mo><mo>}</mo><mo>⊥</mo><mi>T</mi><mo>|</mo><mi mathvariant="bold">X</mi><mspace width=".7em"/><mo>⇒</mo><mspace width=".7em"/><mo>{</mo><mi>Y</mi><mo>(</mo><mn>1</mn><mo>)</mo><mo>,</mo><mi>Y</mi><mo>(</mo><mn>0</mn><mo>)</mo><mo>}</mo><mo>⊥</mo><mi>T</mi><mo>|</mo><mi>e</mi><mo>(</mo><mi mathvariant="bold">X</mi><mo>)</mo></mrow></math></div></div>
+      <div class="math-scroll"><math display="block"><mrow><mi>E</mi><mo>{</mo><mi>Y</mi><mo>(</mo><mi>t</mi><mo>)</mo><mo>}</mo><mo>=</mo><mi>E</mi><mo>[</mo><mi>E</mi><mo>{</mo><mi>Y</mi><mo>|</mo><mi>T</mi><mo>=</mo><mi>t</mi><mo>,</mo><mi>e</mi><mo>(</mo><mi mathvariant="bold">X</mi><mo>)</mo><mo>}</mo><mo>]</mo></mrow></math></div>
+      <div class="warning-math"><b>Logical distinction:</b> exchangeability is inherited by the true balancing score; positivity is separately required to identify both treatment-specific means. Neither condition is verified by a good propensity-model fit.</div>
+      <div class="live-math" id="liveCausal"></div>
+    </section>
+    <section class="math-panel" id="panelPositivity" hidden>
+      <div class="math-chain"><div class="label">Unstabilized ATE weights</div><div class="math-scroll"><math display="block"><mrow><msub><mi>w</mi><mi>i</mi></msub><mo>=</mo><mfrac><msub><mi>T</mi><mi>i</mi></msub><msub><mover accent="true"><mi>e</mi><mo>^</mo></mover><mi>i</mi></msub></mfrac><mo>+</mo><mfrac><mrow><mn>1</mn><mo>−</mo><msub><mi>T</mi><mi>i</mi></msub></mrow><mrow><mn>1</mn><mo>−</mo><msub><mover accent="true"><mi>e</mi><mo>^</mo></mover><mi>i</mi></msub></mrow></mfrac></mrow></math></div></div>
+      <div class="math-scroll"><math display="block"><mrow><mi>E</mi><mo>{</mo><mfrac><mrow><mi>T</mi><mi>f</mi><mo>(</mo><mi mathvariant="bold">X</mi><mo>)</mo></mrow><mrow><mi>e</mi><mo>(</mo><mi mathvariant="bold">X</mi><mo>)</mo></mrow></mfrac><mo>}</mo><mo>=</mo><mi>E</mi><mo>{</mo><mi>f</mi><mo>(</mo><mi mathvariant="bold">X</mi><mo>)</mo><mo>}</mo><mo>=</mo><mi>E</mi><mo>{</mo><mfrac><mrow><mo>(</mo><mn>1</mn><mo>−</mo><mi>T</mi><mo>)</mo><mi>f</mi><mo>(</mo><mi mathvariant="bold">X</mi><mo>)</mo></mrow><mrow><mn>1</mn><mo>−</mo><mi>e</mi><mo>(</mo><mi mathvariant="bold">X</mi><mo>)</mo></mrow></mfrac><mo>}</mo></mrow></math></div>
+      <div class="math-grid" style="margin-top:10px">
+        <div class="math-box"><h4>Population identity</h4><p>The equality holds for every integrable f and the true propensity score. Estimated weights satisfy it only approximately in a finite sample.</p></div>
+        <div class="math-box"><h4>Kish effective sample size</h4><div class="math-scroll"><math display="block"><mrow><msub><mi>ESS</mi><mi>t</mi></msub><mo>=</mo><mfrac><msup><mrow><mo>{</mo><mo>∑</mo><mi mathvariant="normal">𝟙</mi><mo>(</mo><msub><mi>T</mi><mi>i</mi></msub><mo>=</mo><mi>t</mi><mo>)</mo><msub><mi>w</mi><mi>i</mi></msub><mo>}</mo></mrow><mn>2</mn></msup><mrow><mo>∑</mo><mi mathvariant="normal">𝟙</mi><mo>(</mo><msub><mi>T</mi><mi>i</mi></msub><mo>=</mo><mi>t</mi><mo>)</mo><msubsup><mi>w</mi><mi>i</mi><mn>2</mn></msubsup></mrow></mfrac></mrow></math></div><p>ESS summarizes weight concentration; it is not an actual count of independent subjects.</p></div>
+      </div>
+      <div class="warning-math"><b>Practical positivity:</b> fitted scores close to 0 or 1 can create large, unstable weights even when formal positivity is not literally violated.</div>
+      <div class="live-math" id="livePositivity"></div>
+    </section>
+    <section class="math-panel" id="panelDiagnostics" hidden>
+      <div class="math-grid">
+        <div class="math-box"><h4>Standardized mean difference</h4><div class="math-scroll smd-formula"><math display="block"><mtable rowspacing=".42em"><mtr><mtd><msubsup><mi>SMD</mi><mi>j</mi><mrow><mo>(</mo><mi>w</mi><mo>)</mo></mrow></msubsup><mo>=</mo><mfrac><mrow><msubsup><mover accent="true"><mi>μ</mi><mo>^</mo></mover><mrow><mn>1</mn><mi>j</mi></mrow><mrow><mo>(</mo><mi>w</mi><mo>)</mo></mrow></msubsup><mo>−</mo><msubsup><mover accent="true"><mi>μ</mi><mo>^</mo></mover><mrow><mn>0</mn><mi>j</mi></mrow><mrow><mo>(</mo><mi>w</mi><mo>)</mo></mrow></msubsup></mrow><msub><mover accent="true"><mi>σ</mi><mo>^</mo></mover><mrow><mi>j</mi><mo>,</mo><mtext>ref</mtext></mrow></msub></mfrac></mtd></mtr><mtr><mtd><msubsup><mover accent="true"><mi>σ</mi><mo>^</mo></mover><mrow><mi>j</mi><mo>,</mo><mtext>ref</mtext></mrow><mn>2</mn></msubsup><mo>=</mo><mfrac><mn>1</mn><mn>2</mn></mfrac><mo>(</mo><msubsup><mover accent="true"><mi>σ</mi><mo>^</mo></mover><mrow><mn>1</mn><mi>j</mi></mrow><mn>2</mn></msubsup><mo>+</mo><msubsup><mover accent="true"><mi>σ</mi><mo>^</mo></mover><mrow><mn>0</mn><mi>j</mi></mrow><mn>2</mn></msubsup><mo>)</mo></mtd></mtr><mtr><mtd><msubsup><mover accent="true"><mi>σ</mi><mo>^</mo></mover><mrow><mi>t</mi><mi>j</mi></mrow><mn>2</mn></msubsup><mo>=</mo><msubsup><mi>n</mi><mi>t</mi><mrow><mo>−</mo><mn>1</mn></mrow></msubsup><munder><mo>∑</mo><mrow><mi>i</mi><mo>:</mo><msub><mi>T</mi><mi>i</mi></msub><mo>=</mo><mi>t</mi></mrow></munder><msup><mrow><mo>{</mo><msub><mi>X</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mo>−</mo><msub><mover accent="true"><mi>μ</mi><mo>^</mo></mover><mrow><mi>t</mi><mi>j</mi></mrow></msub><mo>}</mo></mrow><mn>2</mn></msup></mtd></mtr></mtable></math></div><p>The dashboard fixes this unweighted pre-weighting empirical reference scale before weighting, making the before–after mean differences directly comparable. The 0.10 line is a descriptive heuristic, not a causal-identification theorem.</p></div>
+        <div class="math-box"><h4>Empirical min–max common support</h4><div class="math-scroll"><math display="block"><mtable rowspacing=".4em"><mtr><mtd><msub><mi>a</mi><mi>t</mi></msub><mo>=</mo><munder><mi>min</mi><mrow><mi>i</mi><mo>:</mo><msub><mi>T</mi><mi>i</mi></msub><mo>=</mo><mi>t</mi></mrow></munder><msub><mover accent="true"><mi>e</mi><mo>^</mo></mover><mi>i</mi></msub><mo>,</mo><mspace width=".8em"/><msub><mi>b</mi><mi>t</mi></msub><mo>=</mo><munder><mi>max</mi><mrow><mi>i</mi><mo>:</mo><msub><mi>T</mi><mi>i</mi></msub><mo>=</mo><mi>t</mi></mrow></munder><msub><mover accent="true"><mi>e</mi><mo>^</mo></mover><mi>i</mi></msub></mtd></mtr><mtr><mtd><msub><mi>I</mi><mtext>CS</mtext></msub><mo>=</mo><mo>[</mo><mi>max</mi><mo>(</mo><msub><mi>a</mi><mn>1</mn></msub><mo>,</mo><msub><mi>a</mi><mn>0</mn></msub><mo>)</mo><mo>,</mo><mi>min</mi><mo>(</mo><msub><mi>b</mi><mn>1</mn></msub><mo>,</mo><msub><mi>b</mi><mn>0</mn></msub><mo>)</mo><mo>]</mo></mtd></mtr></mtable></math></div><p>The interval is declared empty if its lower endpoint exceeds its upper endpoint. It is sample-dependent and is not proof of population positivity.</p></div>
+        <div class="math-box"><h4>Calibration is not balance</h4><div class="math-scroll"><math display="block"><mrow><mi>E</mi><mo>{</mo><mi>T</mi><mo>|</mo><mi>e</mi><mo>(</mo><mi mathvariant="bold">X</mi><mo>)</mo><mo>}</mo><mo>=</mo><mi>e</mi><mo>(</mo><mi mathvariant="bold">X</mi><mo>)</mo></mrow></math></div><p>Calibration checks treatment probabilities. Balance checks measured covariate distributions. One does not imply the other for a fitted finite-sample model.</p></div>
+        <div class="math-box"><h4>Treatment prediction is secondary</h4><div class="math-scroll"><math display="block"><mrow><mtext>high AUC</mtext><mspace width=".5em"/><mo>≠</mo><mspace width=".5em"/><mtext>good causal design</mtext></mrow></math></div><p>A highly discriminating score can signal separation and poor overlap. The primary diagnostics are balance, overlap, and weight stability.</p></div>
+      </div>
+      <div class="live-math" id="liveDiagnostics"></div>
+    </section>
+  </article>
+
+
+  <div class="grid-top">
+    <article class="card">
+      <div class="card-head"><div><h3>1. Many measured covariates, one propensity score</h3><p>Subject A is the selected participant. Subject B is the nearest participant from the opposite observed treatment group on the active score.</p></div></div>
+      <div class="legend"><span><i class="dot" style="background:var(--smoke)"></i>smoker</span><span><i class="dot" style="background:var(--control)"></i>non-smoker</span><span><i class="line-key" style="border-color:var(--accent)"></i>covariates compressed into score</span></div>
+      <div class="chart-wrap"><svg id="profileSvg" class="chart" viewBox="0 0 980 430" role="img" aria-label="Two subjects with different covariate profiles and similar propensity scores"></svg></div>
+      <div class="chart-note" id="profileNote"></div>
+    </article>
+    <article class="card">
+      <div class="card-head"><div><h3>Selected subject</h3><p>Click a point or table row to inspect another participant.</p></div></div>
+      <div class="subject-body" id="subjectPanel"></div>
+    </article>
+  </div>
+
+  <div class="grid-two">
+    <article class="card">
+      <div class="card-head"><div><h3>2. Propensity-score overlap</h3><p>At a score value, causal comparison is empirically supported only when both observed treatment groups are represented nearby.</p></div></div>
+      <div class="legend"><span><i class="line-key" style="border-color:var(--smoke)"></i>smokers</span><span><i class="line-key" style="border-color:var(--control)"></i>non-smokers</span><span><i class="band-key"></i>current score band</span><span><i class="ring"></i>outside empirical common support</span></div>
+      <div class="chart-wrap"><svg id="overlapSvg" class="chart" viewBox="0 0 820 405" role="img" aria-label="Propensity score distributions by observed smoking group"></svg></div>
+      <div class="chart-note" id="overlapNote"></div>
+    </article>
+    <article class="card">
+      <div class="card-head"><div><h3>3. Treatment calibration on the score scale</h3><p>Within score bins, compare the mean score with the observed smoking proportion.</p></div></div>
+      <div class="legend"><span><i class="line-key" style="border-color:var(--green)"></i>identity line</span><span><i class="dot" style="background:var(--accent)"></i>score-bin estimate</span></div>
+      <div class="chart-wrap"><svg id="calibrationSvg" class="chart" viewBox="0 0 820 405" role="img" aria-label="Observed smoking proportion versus mean propensity score by bins"></svg></div>
+      <div class="chart-note" id="calibrationNote"></div>
+    </article>
+  </div>
+
+  <article class="card full-card">
+    <div class="card-head">
+      <div><h3>4. Balancing within a narrow propensity-score band</h3><p>Choose a covariate and inspect smokers and non-smokers with similar active scores.</p></div>
+      <div class="mini-controls"><label for="bandCov">Covariate</label><select id="bandCov"><option value="age">Age</option><option value="bmi">BMI</option><option value="income">Income-to-poverty ratio</option><option value="male">Male</option><option value="white">Non-Hispanic White</option><option value="college">College graduate+</option></select></div>
+    </div>
+    <div class="chart-wrap"><svg id="bandSvg" class="chart" viewBox="0 0 1060 505" role="img" aria-label="Covariate comparison within a narrow propensity score band"></svg></div>
+    <div class="band-status" id="bandStatus"></div>
+    <div class="chart-note">Exact balance is a property of conditioning on the true score. A finite-width band and an estimated score produce an approximation; the displayed within-band SMD is therefore a diagnostic, not a theorem.</div>
+  </article>
+
+  <div class="grid-two">
+    <article class="card">
+      <div class="card-head"><div><h3>5. Overlap in the original covariate space</h3><p>Age and BMI are only a two-dimensional projection of the full measured covariate space.</p></div></div>
+      <div class="legend"><span><i class="dot" style="background:var(--smoke)"></i>smoker</span><span><i class="dot" style="background:var(--control)"></i>non-smoker</span><span><i class="ring"></i>outside PS common support</span></div>
+      <div class="chart-wrap"><svg id="spaceSvg" class="chart" viewBox="0 0 820 420" role="img" aria-label="Age and BMI overlap by smoking group"></svg></div>
+      <div class="chart-note">A clean-looking age–BMI projection cannot establish multivariate positivity. The plot deliberately avoids drawing a rectangular “overlap region,” because overlap in separate age and BMI ranges does not imply joint multivariate overlap. Race, education, income, and their combinations still matter.</div>
+    </article>
+    <article class="card">
+      <div class="card-head"><div><h3>6. Positivity and inverse-weight consequences</h3><p>Extreme scores generate large ATE weights: 1/e for smokers and 1/(1−e) for non-smokers.</p></div></div>
+      <div class="legend"><span><i class="line-key" style="border-color:var(--smoke)"></i>smoker weight 1/e</span><span><i class="line-key" style="border-color:var(--control)"></i>non-smoker weight 1/(1−e)</span></div>
+      <div class="chart-wrap"><svg id="weightSvg" class="chart" viewBox="0 0 820 390" role="img" aria-label="Inverse probability weight curves and observed subjects"></svg></div>
+      <div class="diag-status" id="weightStatus"></div>
+    </article>
+  </div>
+
+  <div class="grid-two">
+    <article class="card">
+      <div class="card-head"><div><h3>7. Covariate balance before and after ATE weighting</h3><p>Absolute standardized mean differences summarize measured baseline imbalance.</p></div></div>
+      <div class="legend"><span><i class="dot" style="background:var(--gray)"></i>before weighting</span><span><i class="dot" style="background:var(--accent)"></i>after weighting</span><span><i class="line-key" style="border-color:var(--danger)"></i>|SMD| = 0.10 reference</span></div>
+      <div class="chart-wrap"><svg id="loveSvg" class="chart" viewBox="0 0 820 670" role="img" aria-label="Love plot of standardized mean differences before and after weighting"></svg></div>
+      <div class="chart-note" id="loveNote"></div><div class="fit-note">For before–after comparability, the dashboard standardizes both unweighted and weighted mean differences by the same unweighted pre-weighting pooled reference SD. Other software may use a different documented SMD convention.</div>
+    </article>
+    <article class="card">
+      <div class="card-head"><div><h3>8. Propensity-score stratification</h3><p>Within each score quintile, smokers and non-smokers should have more similar measured covariate summaries.</p></div><div class="mini-controls"><label for="strataCov">Covariate</label><select id="strataCov"><option value="age">Age</option><option value="bmi">BMI</option><option value="income">Income ratio</option><option value="male">Male</option><option value="white">NH White</option><option value="college">College graduate+</option></select></div></div>
+      <div class="legend"><span><i class="dot" style="background:var(--smoke)"></i>smoker mean/proportion</span><span><i class="dot" style="background:var(--control)"></i>non-smoker mean/proportion</span></div>
+      <div class="chart-wrap"><svg id="strataSvg" class="chart" viewBox="0 0 820 430" role="img" aria-label="Covariate summaries within propensity score quintiles"></svg></div>
+      <div class="chart-note" id="strataNote"></div>
+    </article>
+  </div>
+
+  <div class="grid-two">
+    <article class="card">
+      <div class="card-head"><div><h3>9. The propensity score is not outcome risk</h3><p>The horizontal axis predicts smoking; the vertical axis predicts CVD under no smoking in the simulation.</p></div></div>
+      <div class="chart-wrap"><svg id="riskVsScoreSvg" class="chart" viewBox="0 0 820 400" role="img" aria-label="Propensity score versus baseline outcome risk"></svg></div>
+      <div class="chart-note" id="riskVsScoreNote"></div>
+    </article>
+    <article class="card">
+      <div class="card-head"><div><h3>10. What the propensity score is—and is not</h3><p>Common interpretation errors from the lecture.</p></div></div>
+      <div class="misconceptions">
+        <div class="misconception"><b class="no">Not outcome risk</b><span>e(X) predicts treatment assignment, not CVD.</span></div>
+        <div class="misconception"><b class="no">Not a recommendation</b><span>A high score does not mean a participant should smoke.</span></div>
+        <div class="misconception"><b class="no">Not proof of exchangeability</b><span>A well-fitting treatment model cannot rule out unmeasured confounding.</span></div>
+        <div class="misconception"><b class="no">Not for post-treatment variables</b><span>Use baseline covariates, not variables caused by treatment.</span></div>
+        <div class="misconception"><b class="yes">Diagnostics are central</b><span>Balance and overlap matter more than treatment-model p-values.</span></div>
+      </div>
+      <div class="chart-note">Extreme scores are substantive warnings about limited comparability, not merely inconvenient numbers to hide.</div>
+    </article>
+  </div>
+
+  <article class="card table-card">
+    <details>
+      <summary>Inspect coefficients, participants, and export resolution-independent graphics</summary>
+      <div class="table-tools"><button id="exportCsv">Export cohort CSV</button><button data-svg="profileSvg">Save score map SVG</button><button data-svg="overlapSvg">Save overlap SVG</button><button data-svg="bandSvg">Save score-band SVG</button><button data-svg="loveSvg">Save balance SVG</button><button data-svg="strataSvg">Save stratification SVG</button><button onclick="window.print()">Print dashboard</button></div>
+      <div class="coef-note" id="coefModelNote"><b>Treatment-model coefficient table.</b> Coefficients and odds ratios are shown for transparency. Wald inference is displayed only for an unpenalized converged logistic maximum-likelihood fit and remains secondary to balance and overlap diagnostics.</div>
+      <div class="table-wrap"><table><thead><tr><th>Term</th><th>Coefficient</th><th>Odds ratio</th><th>SE</th><th>p-value</th></tr></thead><tbody id="coefBody"></tbody></table></div>
+      <div class="coef-note" style="padding-top:12px"><b>Participant-level data.</b> Click a row to select that participant.</div>
+      <div class="table-wrap"><table><thead><tr><th>ID</th><th>T</th><th>Y</th><th>Age</th><th>Gender</th><th>Race</th><th>Education</th><th>Income</th><th>BMI</th><th>true e</th><th>ê</th><th>active score</th><th>ATE weight</th><th>PS quintile</th></tr></thead><tbody id="dataBody"></tbody></table></div>
+    </details>
+  </article>
+</section>
+</main>
+<div class="tooltip" id="tooltip"></div>
+<footer class="footer"><b>Se Yoon Lee, Ph.D.</b> • Synthetic teaching data are generated entirely in the browser. The oracle true propensity score and true outcome risks are visible only because the data-generating mechanism is known. In an actual observational analysis, the propensity score is estimated and causal interpretation additionally requires consistency, conditional exchangeability, positivity, and a clearly defined target population.</footer>
+
+<script>
+(function(){
+'use strict';
+const $=id=>document.getElementById(id);
+const NS='http://www.w3.org/2000/svg';
+const C={ink:'#162033',muted:'#667085',grid:'#E7ECF2',smoke:'#E56B2F',control:'#2F6EA5',accent:'#7057E8',green:'#208A62',danger:'#C23B3B',amber:'#B66A00',teal:'#167C86',gray:'#98A2B3'};
+const raceLabels=['Mexican American','Other Hispanic','Non-Hispanic White','Non-Hispanic Black','Non-Hispanic Asian'];
+const eduLabels=['Less than 9th grade','9–12th, no diploma','High school/GED','Some college/AA','College graduate+'];
+const covMeta={
+  age:{label:'Age',short:'Age',type:'continuous',fmt:v=>Number.isFinite(v)?v.toFixed(1):'—'},
+  bmi:{label:'BMI',short:'BMI',type:'continuous',fmt:v=>Number.isFinite(v)?v.toFixed(1):'—'},
+  income:{label:'Income-to-poverty ratio',short:'Income ratio',type:'continuous',fmt:v=>Number.isFinite(v)?v.toFixed(2):'—'},
+  male:{label:'Male',short:'Male',type:'binary',fmt:v=>Number.isFinite(v)?(100*v).toFixed(1)+'%':'—'},
+  white:{label:'Non-Hispanic White',short:'NH White',type:'binary',fmt:v=>Number.isFinite(v)?(100*v).toFixed(1)+'%':'—'},
+  college:{label:'College graduate or above',short:'College+',type:'binary',fmt:v=>Number.isFinite(v)?(100*v).toFixed(1)+'%':'—'},
+  raceMex:{label:'Race: Mexican American',short:'Mexican American',type:'binary',fmt:v=>Number.isFinite(v)?(100*v).toFixed(1)+'%':'—'},
+  raceOtherHisp:{label:'Race: Other Hispanic',short:'Other Hispanic',type:'binary',fmt:v=>Number.isFinite(v)?(100*v).toFixed(1)+'%':'—'},
+  raceWhite:{label:'Race: Non-Hispanic White',short:'NH White',type:'binary',fmt:v=>Number.isFinite(v)?(100*v).toFixed(1)+'%':'—'},
+  raceBlack:{label:'Race: Non-Hispanic Black',short:'NH Black',type:'binary',fmt:v=>Number.isFinite(v)?(100*v).toFixed(1)+'%':'—'},
+  raceAsian:{label:'Race: Non-Hispanic Asian',short:'NH Asian',type:'binary',fmt:v=>Number.isFinite(v)?(100*v).toFixed(1)+'%':'—'},
+  eduLt9:{label:'Education: Less than 9th grade',short:'Education <9th',type:'binary',fmt:v=>Number.isFinite(v)?(100*v).toFixed(1)+'%':'—'},
+  eduNoDiploma:{label:'Education: 9–12th, no diploma',short:'No diploma',type:'binary',fmt:v=>Number.isFinite(v)?(100*v).toFixed(1)+'%':'—'},
+  eduHS:{label:'Education: High school/GED',short:'High school/GED',type:'binary',fmt:v=>Number.isFinite(v)?(100*v).toFixed(1)+'%':'—'},
+  eduSomeCollege:{label:'Education: Some college/AA',short:'Some college/AA',type:'binary',fmt:v=>Number.isFinite(v)?(100*v).toFixed(1)+'%':'—'},
+  eduCollege:{label:'Education: College graduate+',short:'College+',type:'binary',fmt:v=>Number.isFinite(v)?(100*v).toFixed(1)+'%':'—'}
+};
+const balanceKeys=['age','bmi','income','male','raceMex','raceOtherHisp','raceWhite','raceBlack','raceAsian','eduLt9','eduNoDiploma','eduHS','eduSomeCollege','eduCollege'];
+const defaults={n:420,prev:.35,selection:.90,nonlinear:0,model:'lecture',source:'fitted',seed:20260711,bandCenter:.50,bandWidth:.12,bandCov:'age',strataCov:'age'};
+const state={...defaults,data:[],fit:null,selected:0,preset:'lecture',common:{low:0,high:1,nonempty:true,fracAll:1,frac1:1,frac0:1},balance:[],quintiles:[],quintileMode:'rank',mass:{treated:1,control:1}};
+
+function clamp(x,a,b){return Math.max(a,Math.min(b,x))}
+function logistic(x){return x>=0?1/(1+Math.exp(-x)):Math.exp(x)/(1+Math.exp(x))}
+function logit(p){p=clamp(p,1e-9,1-1e-9);return Math.log(p/(1-p))}
+function sum(a){return a.reduce((s,x)=>s+x,0)}
+function mean(a){return a.length?sum(a)/a.length:NaN}
+function variance(a){if(!a.length)return NaN;const m=mean(a);return a.reduce((s,x)=>s+(x-m)*(x-m),0)/a.length}
+function sd(a){return Math.sqrt(Math.max(0,variance(a)))}
+function weightedMean(a,w){let sw=0,s=0;for(let i=0;i<a.length;i++){if(Number.isFinite(a[i])&&Number.isFinite(w[i])){sw+=w[i];s+=w[i]*a[i]}}return sw?s/sw:NaN}
+function weightedVar(a,w){const m=weightedMean(a,w);let sw=0,s=0;for(let i=0;i<a.length;i++){if(Number.isFinite(a[i])&&Number.isFinite(w[i])){sw+=w[i];s+=w[i]*(a[i]-m)*(a[i]-m)}}return sw?s/sw:NaN}
+function quantile(a,p){if(!a.length)return NaN;const b=[...a].sort((x,y)=>x-y),h=(b.length-1)*p,l=Math.floor(h),u=Math.ceil(h);return l===u?b[l]:b[l]+(h-l)*(b[u]-b[l])}
+function correlation(a,b){if(!a.length)return NaN;const ma=mean(a),mb=mean(b),sa=sd(a),sb=sd(b);if(!(sa>0&&sb>0))return 0;return mean(a.map((x,i)=>(x-ma)*(b[i]-mb)))/(sa*sb)}
+function fmt(x,d=2){if(Number.isNaN(x))return '—';if(x===Infinity)return '∞';if(x===-Infinity)return '−∞';return Number.isFinite(x)?x.toFixed(d):'—'}
+function pct(x,d=1){return Number.isFinite(x)?(100*x).toFixed(d)+'%':'—'}
+function pvalFmt(p){if(!Number.isFinite(p))return '—';return p<.001?'<0.001':p.toFixed(3)}
+function mulberry32(seed){let a=seed>>>0;return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function randn(r){let u=0,v=0;while(!u)u=r();while(!v)v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)}
+function normalCdf(x){const t=1/(1+.2316419*Math.abs(x)),d=.3989422804*Math.exp(-x*x/2),p=1-d*t*(.319381530+t*(-.356563782+t*(1.781477937+t*(-1.821255978+t*1.330274429))));return x>=0?p:1-p}
+function sx(x,lo,hi,L,R){return L+(x-lo)/(hi-lo)*(R-L)}
+function sy(y,lo,hi,T,B){return B-(y-lo)/(hi-lo)*(B-T)}
+function axisTicks(lo,hi,n=5){const a=[];for(let i=0;i<=n;i++)a.push(lo+(hi-lo)*i/n);return a}
+function svgText(x,y,t,attrs=''){return '<text x="'+x+'" y="'+y+'" '+attrs+'>'+escapeHtml(String(t))+'</text>'}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
+function showTip(e,html){const tip=$('tooltip');tip.innerHTML=html;tip.style.opacity=1;moveTip(e)}
+function moveTip(e){const tip=$('tooltip');tip.style.left=Math.min(innerWidth-305,e.clientX+14)+'px';tip.style.top=Math.min(innerHeight-175,e.clientY+14)+'px'}
+function hideTip(){$('tooltip').style.opacity=0}
+function download(content,type,name){const blob=new Blob([content],{type}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),800)}
+function saveSvg(id){const src=$(id),clone=src.cloneNode(true);clone.setAttribute('xmlns',NS);const vb=src.viewBox.baseVal;clone.setAttribute('width',vb.width);clone.setAttribute('height',vb.height);download(new XMLSerializer().serializeToString(clone),'image/svg+xml;charset=utf-8',id+'.svg')}
+
+function solveLinear(A,b){const n=A.length,M=A.map((r,i)=>r.slice().concat([b[i]]));for(let k=0;k<n;k++){let piv=k;for(let i=k+1;i<n;i++)if(Math.abs(M[i][k])>Math.abs(M[piv][k]))piv=i;if(Math.abs(M[piv][k])<1e-12)throw new Error('Singular matrix');[M[k],M[piv]]=[M[piv],M[k]];const d=M[k][k];for(let j=k;j<=n;j++)M[k][j]/=d;for(let i=0;i<n;i++){if(i===k)continue;const f=M[i][k];if(!f)continue;for(let j=k;j<=n;j++)M[i][j]-=f*M[k][j]}}return M.map(r=>r[n])}
+function invertMatrix(A){const n=A.length,out=Array.from({length:n},()=>Array(n).fill(0));for(let j=0;j<n;j++){const e=Array(n).fill(0);e[j]=1;const x=solveLinear(A,e);for(let i=0;i<n;i++)out[i][j]=x[i]}return out}
+function dot(a,b){let s=0;for(let i=0;i<a.length;i++)s+=a[i]*b[i];return s}
+function penalizedLogLik(X,y,beta,lambda){let ll=0;for(let i=0;i<X.length;i++){const eta=dot(X[i],beta),p=clamp(logistic(eta),1e-12,1-1e-12);ll+=y[i]*Math.log(p)+(1-y[i])*Math.log(1-p)}for(let j=1;j<beta.length;j++)ll-=.5*lambda*beta[j]*beta[j];return ll}
+function logisticFitCore(X,y,lambda){
+  const n=X.length,p=X[0].length,beta=Array(p).fill(0);beta[0]=logit(clamp(mean(y),.02,.98));let converged=false,iter=0,failed=false;
+  for(iter=0;iter<80;iter++){
+    const score=Array(p).fill(0),H=Array.from({length:p},()=>Array(p).fill(0));
+    for(let i=0;i<n;i++){const eta=dot(X[i],beta),pr=clamp(logistic(eta),1e-10,1-1e-10),w=pr*(1-pr),res=y[i]-pr;for(let j=0;j<p;j++){score[j]+=X[i][j]*res;for(let k=0;k<p;k++)H[j][k]+=w*X[i][j]*X[i][k]}}
+    for(let j=1;j<p;j++){score[j]-=lambda*beta[j];H[j][j]+=lambda}
+    let step;try{step=solveLinear(H,score)}catch(e){failed=true;break}
+    const maxStep=Math.max(...step.map(Math.abs));if(maxStep>4){const f=4/maxStep;step=step.map(x=>x*f)}
+    const old=penalizedLogLik(X,y,beta,lambda);let scale=1,cand=beta.slice();
+    for(let ls=0;ls<22;ls++){cand=beta.map((v,j)=>v+scale*step[j]);if(penalizedLogLik(X,y,cand,lambda)>=old-1e-10)break;scale*=.5}
+    for(let j=0;j<p;j++)beta[j]=cand[j];
+    if(Math.max(...step.map(x=>Math.abs(scale*x)))<1e-8){converged=true;break}
+  }
+  const probs=X.map(r=>clamp(logistic(dot(r,beta)),1e-10,1-1e-10)),H=Array.from({length:p},()=>Array(p).fill(0)),rawScore=Array(p).fill(0);
+  for(let i=0;i<n;i++){const pr=probs[i],w=pr*(1-pr),res=y[i]-pr;for(let j=0;j<p;j++){rawScore[j]+=X[i][j]*res;for(let k=0;k<p;k++)H[j][k]+=w*X[i][j]*X[i][k]}}
+  for(let j=1;j<p;j++)H[j][j]+=lambda;
+  let cov,covOk=true;try{cov=invertMatrix(H);covOk=cov.every(r=>r.every(Number.isFinite))}catch(e){covOk=false;cov=Array.from({length:p},()=>Array(p).fill(NaN))}
+  const inferenceAvailable=lambda===0&&converged&&covOk;
+  const se=beta.map((_,j)=>inferenceAvailable?Math.sqrt(Math.max(0,cov[j][j])):NaN),pval=beta.map((v,j)=>{const z=se[j]>0?v/se[j]:NaN;return Number.isFinite(z)?2*(1-normalCdf(Math.abs(z))):NaN});
+  return{beta,se,pval,probs,converged:converged&&!failed,iter:Math.min(iter+1,80),cov,lambda,penalized:lambda>0,covOk,inferenceAvailable,scoreMax:Math.max(...rawScore.map(Math.abs))/n};
+}
+function logisticFit(X,y){
+  let fit=logisticFitCore(X,y,0);
+  if(!fit.converged||!fit.covOk||Math.max(...fit.beta.map(Math.abs))>25)fit=logisticFitCore(X,y,1e-5);
+  return fit;
+}
+
+function modelSpec(model){
+  const lecture=['Intercept','zAge','Male','Race: Mexican American','Race: Other Hispanic','Race: NH Black','Race: NH Asian','Education: <9th','Education: 9–12 no diploma','Education: Some college/AA','Education: College graduate+','zIncome','zBMI'];
+  if(model==='expanded')return lecture.concat(['zAge²−1','zBMI²−1','zIncome²−1','zAge×zBMI']);
+  if(model==='sparse')return ['Intercept','zAge','Male','zBMI'];
+  return lecture;
+}
+function designRow(r,model){
+  const base=[1,r.zAge,r.male,r.race===0?1:0,r.race===1?1:0,r.race===3?1:0,r.race===4?1:0,r.edu===0?1:0,r.edu===1?1:0,r.edu===3?1:0,r.edu===4?1:0,r.zIncome,r.zBmi];
+  if(model==='expanded')return base.concat([r.zAge*r.zAge-1,r.zBmi*r.zBmi-1,r.zIncome*r.zIncome-1,r.zAge*r.zBmi]);
+  if(model==='sparse')return [1,r.zAge,r.male,r.zBmi];
+  return base;
+}
+function modelName(model){return model==='expanded'?'Expanded nonlinear logistic model':model==='sparse'?'Sparse model: age + gender + BMI':'Lecture main-effects logistic model'}
+function scoreOf(r){return state.source==='oracle'?r.trueE:r.ehat}
+function solveIntercept(lp,target){let lo=-14,hi=14;for(let k=0;k<80;k++){const mid=(lo+hi)/2,m=mean(lp.map(x=>logistic(mid+x)));if(m<target)lo=mid;else hi=mid}return(lo+hi)/2}
+
+function readControls(){state.n=+$('nRange').value;state.prev=+$('prevRange').value/100;state.selection=+$('selectionRange').value;state.nonlinear=+$('nonlinearRange').value;state.model=$('modelSelect').value;state.source=$('sourceSelect').value;state.seed=+$('seedInput').value||1;state.bandCenter=+$('bandCenter').value;state.bandWidth=+$('bandWidth').value;state.bandCov=$('bandCov').value;state.strataCov=$('strataCov').value}
+function updateControlLabels(){$('nValue').textContent=state.n;$('prevValue').textContent=Math.round(100*state.prev)+'%';$('selectionValue').textContent=state.selection.toFixed(2);$('nonlinearValue').textContent=state.nonlinear.toFixed(2);$('seedValue').textContent=state.seed;$('bandCenterValue').textContent=state.bandCenter.toFixed(2);$('bandWidthValue').textContent=state.bandWidth.toFixed(2)+' total (±'+(state.bandWidth/2).toFixed(2)+')';$('oracleNote').classList.toggle('show',state.source==='oracle')}
+
+function generateStudy(){readControls();updateControlLabels();const rng=mulberry32(state.seed),rows=[];const raceP=[.14,.11,.46,.18,.11];function cat(probs,u){let c=0;for(let i=0;i<probs.length;i++){c+=probs[i];if(u<c)return i}return probs.length-1}
+  for(let i=0;i<state.n;i++){
+    const age=clamp(51+14*randn(rng),20,84),male=rng()<.48?1:0,race=cat(raceP,rng()),raceSes=[-.35,-.18,.18,-.22,.20][race],ses=randn(rng)+raceSes,eduScore=.82*ses-.014*(age-50)+.72*randn(rng);let edu=eduScore<-1.1?0:eduScore<-.45?1:eduScore<.25?2:eduScore<.95?3:4;
+    const income=clamp(Math.exp(.55+.34*ses+.11*(edu-2)+.30*randn(rng)),.20,6.0),bmi=clamp(27.1+.055*(age-50)-.45*ses-.35*(income-2)+.65*(1-male)+[.15,.35,-.15,.55,-.55][race]+3.7*randn(rng),17,46);
+    rows.push({id:'S'+String(i+1).padStart(3,'0'),age,male,race,edu,income,bmi,uT:rng(),uY:rng()});
+  }
+  for(const key of ['age','income','bmi']){const vals=rows.map(r=>r[key]),m=mean(vals),s=sd(vals)||1;rows.forEach(r=>r['z'+key[0].toUpperCase()+key.slice(1)]=(r[key]-m)/s)}
+  const lp=rows.map(r=>{const raceEff=[-.14,.05,0,.23,-.18][r.race],eduEff=[.30,.22,0,-.08,-.26][r.edu],main=.60*r.zAge+.18*r.male+raceEff+eduEff-.45*r.zIncome+.38*r.zBmi,nl=.16*(r.zAge*r.zAge-1)+.18*(r.zBmi*r.zBmi-1)-.22*(r.zIncome*r.zIncome-1)+.30*r.zAge*r.zBmi;return state.selection*(main+state.nonlinear*nl)}),intercept=solveIntercept(lp,state.prev);
+  rows.forEach((r,i)=>{r.trueEta=intercept+lp[i];r.trueE=clamp(logistic(r.trueEta),.001,.999);r.T=r.uT<r.trueE?1:0;const raceY=[.10,.05,0,.18,-.08][r.race],eduY=[.22,.12,0,-.08,-.18][r.edu],lp0=-2.65+.58*r.zAge+.32*r.zBmi-.25*r.zIncome+.12*r.male+raceY+eduY;r.pY0=logistic(lp0);r.pY1=logistic(lp0+.52);r.Y=r.uY<(r.T?r.pY1:r.pY0)?1:0;r.white=r.race===2?1:0;r.college=r.edu===4?1:0;r.raceMex=r.race===0?1:0;r.raceOtherHisp=r.race===1?1:0;r.raceWhite=r.race===2?1:0;r.raceBlack=r.race===3?1:0;r.raceAsian=r.race===4?1:0;r.eduLt9=r.edu===0?1:0;r.eduNoDiploma=r.edu===1?1:0;r.eduHS=r.edu===2?1:0;r.eduSomeCollege=r.edu===3?1:0;r.eduCollege=r.edu===4?1:0});
+  if(!rows.some(r=>r.T===1)||!rows.some(r=>r.T===0)){state.seed=(state.seed+7919)%99999999||1;$('seedInput').value=state.seed;return generateStudy()}
+  state.data=rows;state.selected=clamp(state.selected,0,rows.length-1);fitPropensity();
+}
+function fitPropensity(){const X=state.data.map(r=>designRow(r,state.model)),y=state.data.map(r=>r.T),fit=logisticFit(X,y);fit.terms=modelSpec(state.model);fit.X=X;state.fit=fit;state.data.forEach((r,i)=>{r.ehat=fit.probs[i];r.fitEta=dot(X[i],fit.beta)});updateDerived();renderAll()}
+function updateDerived(){
+  state.data.forEach(r=>{r.score=clamp(scoreOf(r),1e-8,1-1e-8);r.weight=r.T?1/r.score:1/(1-r.score)});
+  const g1=state.data.filter(r=>r.T===1),g0=state.data.filter(r=>r.T===0),s1=g1.map(r=>r.score),s0=g0.map(r=>r.score),low=Math.max(Math.min(...s1),Math.min(...s0)),high=Math.min(Math.max(...s1),Math.max(...s0)),nonempty=low<=high;
+  const inside=r=>nonempty&&r.score>=low&&r.score<=high;
+  state.common={low,high,nonempty,fracAll:mean(state.data.map(r=>inside(r)?1:0)),frac1:mean(g1.map(r=>inside(r)?1:0)),frac0:mean(g0.map(r=>inside(r)?1:0))};
+  state.mass={treated:mean(state.data.map(r=>r.T/r.score)),control:mean(state.data.map(r=>(1-r.T)/(1-r.score)))};
+  assignQuintiles();state.balance=computeBalance();
+}
+function assignQuintiles(){
+  const vals=state.data.map(r=>r.score),lo=Math.min(...vals),hi=Math.max(...vals),n=state.data.length;
+  if(hi-lo<1e-10){state.quintileMode='constant';state.quintiles=[lo,hi];state.data.forEach(r=>r.quintile=1);return}
+  state.quintileMode='rank';const order=state.data.map((r,i)=>i).sort((a,b)=>state.data[a].score-state.data[b].score||a-b);
+  order.forEach((idx,rank)=>{state.data[idx].quintile=Math.min(5,Math.floor(5*rank/n)+1)});
+  state.quintiles=[0,.2,.4,.6,.8,1].map(p=>quantile(vals,p));
+}
+function group(t){return state.data.filter(r=>r.T===t)}
+function ess(rows){const w=rows.map(r=>r.weight),sw=sum(w),sw2=sum(w.map(x=>x*x));return sw2?sw*sw/sw2:0}
+function covValue(r,key){return r[key]}
+function smdReferenceScale(key,reference=state.data){
+  const a=reference.filter(r=>r.T===1),b=reference.filter(r=>r.T===0);if(!a.length||!b.length)return NaN;
+  const xa=a.map(r=>covValue(r,key)),xb=b.map(r=>covValue(r,key));
+  if(covMeta[key].type==='binary'){const p1=mean(xa),p0=mean(xb);return Math.sqrt(Math.max(0,(p1*(1-p1)+p0*(1-p0))/2))}
+  return Math.sqrt(Math.max(0,(variance(xa)+variance(xb))/2));
+}
+function smdFor(key,weighted=false,subset=state.data,referenceSubset=subset){
+  const a=subset.filter(r=>r.T===1),b=subset.filter(r=>r.T===0);if(!a.length||!b.length)return NaN;
+  const xa=a.map(r=>covValue(r,key)),xb=b.map(r=>covValue(r,key)),wa=weighted?a.map(r=>r.weight):a.map(()=>1),wb=weighted?b.map(r=>r.weight):b.map(()=>1),ma=weightedMean(xa,wa),mb=weightedMean(xb,wb),diff=ma-mb,den=smdReferenceScale(key,referenceSubset);
+  if(den>1e-12)return diff/den;
+  if(Math.abs(diff)<1e-12)return 0;
+  return diff>0?Infinity:-Infinity;
+}
+function computeBalance(){return balanceKeys.map(k=>({key:k,label:covMeta[k].short,before:Math.abs(smdFor(k,false,state.data,state.data)),after:Math.abs(smdFor(k,true,state.data,state.data))}))}
+function nearestOpposite(index){const a=state.data[index];let best=-1,d=Infinity;state.data.forEach((r,i)=>{if(i!==index&&r.T!==a.T){const x=Math.abs(r.score-a.score);if(x<d){d=x;best=i}}});if(best<0){state.data.forEach((r,i)=>{if(i!==index){const x=Math.abs(r.score-a.score);if(x<d){d=x;best=i}}})}return best}
+function activeScoreName(){return state.source==='oracle'?'true e(X)':'estimated ê(X)'}
+
+function renderMetrics(){
+  const scores=state.data.map(r=>r.score),practical=mean(scores.map(x=>x>=.05&&x<=.95?1:0)),maxAfter=Math.max(...state.balance.map(x=>x.after)),maxW=Math.max(...state.data.map(r=>r.weight)),supportText=state.common.nonempty?'['+fmt(state.common.low,2)+', '+fmt(state.common.high,2)+']':'empty',minSupport=Math.min(state.common.frac1,state.common.frac0),items=[
+    ['Participants',state.data.length,'synthetic analytic cohort',''],
+    ['Observed smokers',pct(mean(state.data.map(r=>r.T)),1),'target assignment prevalence '+pct(state.prev,0),''],
+    ['Active score range','['+fmt(Math.min(...scores),2)+', '+fmt(Math.max(...scores),2)+']',activeScoreName()+' · '+pct(practical,1)+' in [0.05,0.95]',practical<.85?'warn':''],
+    ['Empirical min–max support',supportText,'smokers '+pct(state.common.frac1,1)+' · non-smokers '+pct(state.common.frac0,1),!state.common.nonempty||minSupport<.8?'warn':'good'],
+    ['Max |SMD| after IPW',fmt(maxAfter,3),state.balance.length+' baseline features/indicators',maxAfter>.1?'bad':'good'],
+    ['Largest ATE weight',fmt(maxW,2),'unstabilized · ESS₁ '+fmt(ess(group(1)),0)+' · ESS₀ '+fmt(ess(group(0)),0),maxW>20?'bad':maxW>10?'warn':'good']
+  ];$('metricStrip').innerHTML=items.map(x=>'<div class="metric '+x[3]+'"><div class="k">'+x[0]+'</div><div class="v">'+x[1]+'</div><div class="sub">'+x[2]+'</div></div>').join('');
+}
+
+function renderMath(){
+  const r=state.data[state.selected],band=bandRows(),bandSmd=Math.abs(smdFor(state.bandCov,false,band,band)),maxAfter=Math.max(...state.balance.map(x=>x.after)),maxBefore=Math.max(...state.balance.map(x=>x.before)),nBad=state.balance.filter(x=>x.after>.1).length,practical=mean(state.data.map(r=>r.score>=.05&&r.score<=.95?1:0)),fitLabel=state.fit.penalized?'ridge-stabilized logistic fit':'unpenalized logistic MLE',bins=calibrationBins(),brier=mean(state.data.map(r=>(r.T-r.score)*(r.T-r.score))),mae=mean(bins.map(b=>Math.abs(b.obs-b.score)));
+  $('liveDefinition').innerHTML='<strong>Current treatment model</strong><div class="number-row"><span class="number-chip">'+modelName(state.model)+'</span><span class="number-chip">'+fitLabel+'</span><span class="number-chip">Subject '+r.id+': Zᵀγ̂ = '+fmt(r.fitEta,3)+'</span><span class="number-chip">ê = '+fmt(r.ehat,4)+'</span><span class="number-chip">active score = '+fmt(r.score,4)+'</span></div><div style="margin-top:7px">Outcome Y was not used to fit the treatment model. The true score is visible only in this simulation.</div>';
+  $('liveBalance').innerHTML='<strong>Current finite-width band</strong><div class="number-row"><span class="number-chip">center = '+fmt(state.bandCenter,2)+'</span><span class="number-chip">total width = '+fmt(state.bandWidth,2)+'</span><span class="number-chip">n₁ = '+band.filter(r=>r.T).length+'</span><span class="number-chip">n₀ = '+band.filter(r=>!r.T).length+'</span><span class="number-chip">|SMD('+covMeta[state.bandCov].short+')| = '+fmt(bandSmd,3)+'</span></div><div style="margin-top:7px">The nearest-score pair and the finite band are illustrations; neither is, by itself, a matched causal estimator.</div>';
+  $('liveCausal').innerHTML='<strong>Identification status in this teaching simulation</strong><div class="number-row"><span class="number-chip">consistency: encoded by the DGP</span><span class="number-chip">exchangeability given X: encoded, but not testable from observed data</span><span class="number-chip">formal positivity: enforced by 0.001 ≤ e(X) ≤ 0.999</span><span class="number-chip">practical overlap: empirical diagnostic</span></div><div style="margin-top:7px">In a real observational study, these design assumptions are not certified by this diagnostic display. Measured balance supports implementation, but cannot rule out unmeasured confounding.</div>';
+  $('livePositivity').innerHTML='<strong>Current overlap, mass, and weight diagnostics</strong><div class="number-row"><span class="number-chip">common support: '+(state.common.nonempty?pct(state.common.fracAll,1):'empty')+'</span><span class="number-chip">scores in [0.05,0.95] = '+pct(practical,1)+'</span><span class="number-chip">n⁻¹ΣT/e = '+fmt(state.mass.treated,3)+'</span><span class="number-chip">n⁻¹Σ(1−T)/(1−e) = '+fmt(state.mass.control,3)+'</span><span class="number-chip">max weight = '+fmt(Math.max(...state.data.map(r=>r.weight)),2)+'</span><span class="number-chip">ESS₁ = '+fmt(ess(group(1)),1)+'</span><span class="number-chip">ESS₀ = '+fmt(ess(group(0)),1)+'</span></div><div style="margin-top:7px">The two mass quantities equal 1 in population under the true score; finite-sample estimates need not equal 1 exactly.</div>';
+  $('liveDiagnostics').innerHTML='<strong>Current diagnostic summary</strong><div class="number-row"><span class="number-chip">max |SMD| before = '+fmt(maxBefore,3)+'</span><span class="number-chip">max |SMD| after = '+fmt(maxAfter,3)+'</span><span class="number-chip">features over 0.10 = '+nBad+'/'+state.balance.length+'</span><span class="number-chip">Brier = '+fmt(brier,3)+'</span><span class="number-chip">bin calibration error = '+fmt(mae,3)+'</span><span class="number-chip">fit '+(state.fit.converged?'converged':'did not fully converge')+'</span><span class="number-chip">max score-equation residual/n = '+fmt(state.fit.scoreMax,6)+'</span></div>';
+}
+function activateTab(name){document.querySelectorAll('.math-tab').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===name?'true':'false'));document.querySelectorAll('.math-panel').forEach(p=>{const on=p.id==='panel'+name[0].toUpperCase()+name.slice(1);p.classList.toggle('active',on);p.hidden=!on})}
+
+function renderProfile(){
+  const a=state.data[state.selected],bi=nearestOpposite(state.selected),b=state.data[bi],svg=$('profileSvg'),rows=[{r:a,name:'Subject A — selected',y:112},{r:b,name:'Subject B — nearest opposite-treatment score (illustration)',y:288}],xs=[145,255,365,475,585,695],labels=['Age','BMI','Income','Gender','Race','Education'];let s='<defs><marker id="profileArrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3z" fill="'+C.accent+'"/></marker></defs><style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="980" height="430" fill="#fff"/>';
+  rows.forEach((o,idx)=>{const r=o.r,col=r.T?C.smoke:C.control,y=o.y,vals=[fmt(r.age,0),fmt(r.bmi,1),fmt(r.income,2),r.male?'Male':'Female',raceLabels[r.race].replace('Non-Hispanic ','NH '),eduLabels[r.edu].replace('College graduate+','College+')];s+=svgText(32,y-47,o.name,'font-size="13" font-weight="900" fill="'+C.ink+'"')+'<rect x="24" y="'+(y-35)+'" width="748" height="92" rx="15" fill="'+(r.T?'#FFF8F3':'#F3F8FC')+'" stroke="'+col+'" stroke-width="1.8"/>';labels.forEach((lab,j)=>{const x=xs[j];s+='<rect x="'+(x-48)+'" y="'+(y-18)+'" width="96" height="49" rx="9" fill="#fff" stroke="#DDE3EB"/>'+svgText(x,y-2,lab,'text-anchor="middle" font-size="8.5" font-weight="850" fill="'+C.muted+'"')+svgText(x,y+17,vals[j],'text-anchor="middle" font-size="10.5" font-weight="850" fill="'+C.ink+'"')});s+='<path d="M755 '+(y+7)+' L815 '+(y+7)+'" stroke="'+C.accent+'" stroke-width="3" marker-end="url(#profileArrow)"/><circle class="profile-subject" data-index="'+(idx===0?state.selected:bi)+'" cx="875" cy="'+(y+7)+'" r="45" fill="'+(r.T?'#FFF1E8':'#EAF3FB')+'" stroke="'+col+'" stroke-width="3"/>'+svgText(875,y,'score','text-anchor="middle" font-size="9" font-weight="850" fill="'+C.muted+'"')+svgText(875,y+22,fmt(r.score,3),'text-anchor="middle" font-size="18" font-weight="900" fill="'+col+'"')});
+  s+=svgText(490,410,'Different measured profiles can map to nearly the same treatment-assignment probability.','text-anchor="middle" font-size="11" font-weight="750" fill="'+C.muted+'"');svg.innerHTML=s;svg.querySelectorAll('.profile-subject').forEach(el=>el.addEventListener('click',()=>selectSubject(+el.dataset.index)));
+  const gap=Math.abs(a.score-b.score),inSupport=state.common.nonempty&&a.score>=state.common.low&&a.score<=state.common.high&&b.score>=state.common.low&&b.score<=state.common.high;
+  $('profileNote').innerHTML='<strong>Score distance:</strong> |'+fmt(a.score,3)+' − '+fmt(b.score,3)+'| = '+fmt(gap,4)+'. '+(inSupport?'Both subjects fall inside the empirical min–max common-support interval.':'At least one subject is outside the empirical common-support interval, so this nearest neighbor should not be interpreted as a supported match.')+' Similar scores do not imply identical covariates; balance is a distributional property. This pair is illustrative and is not used to estimate an effect.';
+}
+function renderSubject(){const r=state.data[state.selected];$('subjectPanel').innerHTML='<div class="subject-title"><strong>'+r.id+'</strong><span class="status-pill '+(r.T?'status-t1':'status-t0')+'">'+(r.T?'SMOKER':'NON-SMOKER')+'</span></div><div class="kv"><div><span class="label">Age</span><span class="num">'+fmt(r.age,0)+'</span></div><div><span class="label">BMI</span><span class="num">'+fmt(r.bmi,1)+'</span></div><div><span class="label">Income ratio</span><span class="num">'+fmt(r.income,2)+'</span></div><div><span class="label">Gender</span><span class="num">'+(r.male?'Male':'Female')+'</span></div><div><span class="label">Race/ethnicity</span><span class="num">'+raceLabels[r.race]+'</span></div><div><span class="label">Education</span><span class="num">'+eduLabels[r.edu]+'</span></div></div><div class="score-box"><strong>Propensity-score calculation</strong><br>Estimated ê(X) = '+fmt(r.ehat,6)+'; true e(X) = '+fmt(r.trueE,6)+'.<br>Active '+activeScoreName()+' = <b>'+fmt(r.score,6)+'</b>.<br>Observed-treatment unstabilized ATE weight = <b>'+fmt(r.weight,3)+'</b>.<br>No weight capping or practical truncation is applied; only machine-safety bounds prevent exact division by zero.<br>Observed CVD outcome Y = '+r.Y+'; it was not used in the treatment model.</div><div class="subject-nav"><button id="prevSubject">← Previous</button><button id="nextSubject">Next →</button></div>';$('prevSubject').onclick=()=>selectSubject((state.selected-1+state.data.length)%state.data.length);$('nextSubject').onclick=()=>selectSubject((state.selected+1)%state.data.length)}
+function selectSubject(i){state.selected=clamp(i,0,state.data.length-1);renderProfile();renderSubject();renderOverlap();renderSpace();renderWeights();renderRiskVsScore();renderMath();renderTable()}
+
+function histogram(rows,key='score',bins=24,weighted=false){const a=Array(bins).fill(0);let sw=0;rows.forEach(r=>{const v=clamp(r[key],0,1),j=Math.min(bins-1,Math.floor(v*bins)),w=weighted?r.weight:1;a[j]+=w;sw+=w});return a.map(x=>sw?x/sw:0)}
+function renderOverlap(){
+  const svg=$('overlapSvg'),h1=histogram(group(1)),h0=histogram(group(0)),max=Math.max(...h1,...h0)*1.18,L=60,R=790,T=32,B=310,bins=h1.length,bw=(R-L)/bins;let s='<style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="820" height="405" fill="#fff"/>';const bandLo=clamp(state.bandCenter-state.bandWidth/2,0,1),bandHi=clamp(state.bandCenter+state.bandWidth/2,0,1),xb1=sx(bandLo,0,1,L,R),xb2=sx(bandHi,0,1,L,R);s+='<rect x="'+xb1+'" y="'+T+'" width="'+Math.max(1,xb2-xb1)+'" height="'+(B-T)+'" fill="#E9E4FF" fill-opacity=".70"/>';if(state.common.nonempty){const xc1=sx(state.common.low,0,1,L,R),xc2=sx(state.common.high,0,1,L,R);s+='<rect x="'+xc1+'" y="'+T+'" width="'+Math.max(1,xc2-xc1)+'" height="'+(B-T)+'" fill="#DFF4EA" fill-opacity=".36"/>'}
+  for(const v of axisTicks(0,max,4)){const y=sy(v,0,max,T,B);s+='<line x1="'+L+'" x2="'+R+'" y1="'+y+'" y2="'+y+'" stroke="'+C.grid+'"/>'+svgText(L-7,y+4,pct(v,0),'text-anchor="end" font-size="9" fill="'+C.muted+'"')}
+  const path=a=>a.map((v,i)=>(i?'L':'M')+' '+(L+(i+.5)*bw)+' '+sy(v,0,max,T,B)).join(' ');s+='<path d="'+path(h0)+'" fill="none" stroke="'+C.control+'" stroke-width="4"/><path d="'+path(h1)+'" fill="none" stroke="'+C.smoke+'" stroke-width="4"/>';for(let i=0;i<=5;i++){const v=i/5,x=sx(v,0,1,L,R);s+='<line x1="'+x+'" x2="'+x+'" y1="'+T+'" y2="'+B+'" stroke="'+C.grid+'" stroke-opacity=".55"/>'+svgText(x,B+22,fmt(v,1),'text-anchor="middle" font-size="9" fill="'+C.muted+'"')}
+  const sr=state.data[state.selected],xs=sx(sr.score,0,1,L,R);s+='<line x1="'+xs+'" x2="'+xs+'" y1="'+T+'" y2="'+B+'" stroke="'+C.accent+'" stroke-width="2.5" stroke-dasharray="6 4"/>'+svgText(xs+5,T+13,sr.id,'font-size="9" font-weight="850" fill="'+C.accent+'"');s+=svgText((L+R)/2,382,activeScoreName(),'text-anchor="middle" font-size="11" font-weight="800" fill="'+C.ink+'"');svg.innerHTML=s;
+  svg.addEventListener('click',e=>{const rect=svg.getBoundingClientRect(),x=(e.clientX-rect.left)/rect.width*820,score=clamp((x-L)/(R-L),0,1);let best=0,d=Infinity;state.data.forEach((r,i)=>{const q=Math.abs(r.score-score);if(q<d){d=q;best=i}});selectSubject(best)});
+  $('overlapNote').innerHTML=state.common.nonempty?'<strong>Empirical min–max common support:</strong> ['+fmt(state.common.low,3)+', '+fmt(state.common.high,3)+']. It contains '+pct(state.common.frac1,1)+' of smokers and '+pct(state.common.frac0,1)+' of non-smokers. Each curve is normalized within its treatment group. This is a finite-sample diagnostic, not proof of population positivity.':'<strong>Empirical min–max common support is empty.</strong> The observed score ranges do not overlap. Any cross-treatment comparison would require unsupported extrapolation or a change in target population/design.';
+}
+function calibrationBins(){const a=[...state.data].sort((x,y)=>x.score-y.score),K=10,out=[];for(let k=0;k<K;k++){const lo=Math.floor(k*a.length/K),hi=Math.floor((k+1)*a.length/K),g=a.slice(lo,Math.max(lo+1,hi));out.push({score:mean(g.map(r=>r.score)),obs:mean(g.map(r=>r.T)),n:g.length})}return out}
+function renderCalibration(){
+  const svg=$('calibrationSvg'),bins=calibrationBins(),L=68,R=775,T=30,B=325;let s='<style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="820" height="405" fill="#fff"/>';for(const v of axisTicks(0,1,5)){const x=sx(v,0,1,L,R),y=sy(v,0,1,T,B);s+='<line x1="'+x+'" x2="'+x+'" y1="'+T+'" y2="'+B+'" stroke="'+C.grid+'"/>'+svgText(x,B+22,fmt(v,1),'text-anchor="middle" font-size="9" fill="'+C.muted+'"')+'<line x1="'+L+'" x2="'+R+'" y1="'+y+'" y2="'+y+'" stroke="'+C.grid+'"/>'+svgText(L-8,y+4,fmt(v,1),'text-anchor="end" font-size="9" fill="'+C.muted+'"')}
+  s+='<line x1="'+L+'" y1="'+B+'" x2="'+R+'" y2="'+T+'" stroke="'+C.green+'" stroke-width="3"/>';bins.forEach((b,i)=>{const x=sx(b.score,0,1,L,R),y=sy(b.obs,0,1,T,B),rad=5+5*Math.sqrt(b.n/Math.max(...bins.map(z=>z.n)));s+='<circle class="cal-point" data-i="'+i+'" cx="'+x+'" cy="'+y+'" r="'+rad+'" fill="'+C.accent+'" fill-opacity=".82" stroke="#fff" stroke-width="2"/>'});s+=svgText((L+R)/2,386,'Mean active score within rank decile','text-anchor="middle" font-size="11" font-weight="800" fill="'+C.ink+'"')+'<g transform="translate(18,'+((T+B)/2)+') rotate(-90)">'+svgText(0,0,'Observed smoking proportion','text-anchor="middle" font-size="11" font-weight="800" fill="'+C.ink+'"')+'</g>';svg.innerHTML=s;svg.querySelectorAll('.cal-point').forEach(el=>{const b=bins[+el.dataset.i],tip='<b>Score decile '+(+el.dataset.i+1)+'</b><br>Mean score: '+fmt(b.score,3)+'<br>Observed smoking: '+pct(b.obs,1)+'<br>n = '+b.n;el.addEventListener('pointerenter',e=>showTip(e,tip));el.addEventListener('pointermove',moveTip);el.addEventListener('pointerleave',hideTip)});const brier=mean(state.data.map(r=>(r.T-r.score)*(r.T-r.score))),mae=mean(bins.map(b=>Math.abs(b.obs-b.score))),sourceNote=state.source==='oracle'?'This is a finite-sample check of the true-score calibration property.':'This is apparent, same-sample calibration of the fitted score and may look optimistic.';$('calibrationNote').innerHTML='<strong>Bin calibration error:</strong> mean |observed−predicted| = '+fmt(mae,3)+'; Brier score = '+fmt(brier,3)+'. '+sourceNote+' Calibration does not establish covariate balance or causal validity.';
+}
+
+function bandRows(){const lo=state.bandCenter-state.bandWidth/2,hi=state.bandCenter+state.bandWidth/2;return state.data.filter(r=>r.score>=lo&&r.score<=hi)}
+function renderBand(){
+  const svg=$('bandSvg'),rows=bandRows(),g1=rows.filter(r=>r.T),g0=rows.filter(r=>!r.T),key=state.bandCov,meta=covMeta[key],L=75,R=1015,T=30,B=440,scoreY1=85,scoreY0=145,bandLo=clamp(state.bandCenter-state.bandWidth/2,0,1),bandHi=clamp(state.bandCenter+state.bandWidth/2,0,1);let s='<style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="1060" height="505" fill="#fff"/>';const xscore=v=>sx(v,0,1,L,R),xb1=xscore(bandLo),xb2=xscore(bandHi);s+='<rect x="'+xb1+'" y="45" width="'+Math.max(1,xb2-xb1)+'" height="125" fill="#E9E4FF" stroke="#B9AAFF"/><line x1="'+L+'" x2="'+R+'" y1="'+scoreY1+'" y2="'+scoreY1+'" stroke="'+C.grid+'"/><line x1="'+L+'" x2="'+R+'" y1="'+scoreY0+'" y2="'+scoreY0+'" stroke="'+C.grid+'"/>'+svgText(L-12,scoreY1+4,'Smoker','text-anchor="end" font-size="10" font-weight="850" fill="'+C.smoke+'"')+svgText(L-12,scoreY0+4,'Non-smoker','text-anchor="end" font-size="10" font-weight="850" fill="'+C.control+'"');state.data.forEach((r,i)=>{const x=xscore(r.score),y=r.T?scoreY1:scoreY0,inBand=r.score>=bandLo&&r.score<=bandHi;s+='<circle class="band-person" data-index="'+i+'" cx="'+x+'" cy="'+(y+(i%5-2)*2.4)+'" r="'+(inBand?3.6:2.2)+'" fill="'+(r.T?C.smoke:C.control)+'" fill-opacity="'+(inBand?.88:.18)+'"/>'});for(let i=0;i<=5;i++){const v=i/5,x=xscore(v);s+=svgText(x,188,fmt(v,1),'text-anchor="middle" font-size="9" fill="'+C.muted+'"')}s+=svgText((L+R)/2,207,activeScoreName()+'; highlighted band ['+fmt(bandLo,2)+', '+fmt(bandHi,2)+']','text-anchor="middle" font-size="10" font-weight="800" fill="'+C.ink+'"');
+  const allVals=state.data.map(r=>r[key]);let vlo,vhi;if(meta.type==='binary'){vlo=-.15;vhi=1.15}else{vlo=Math.min(...allVals);vhi=Math.max(...allVals);const pad=.07*(vhi-vlo||1);vlo-=pad;vhi+=pad}const xv=v=>sx(v,vlo,vhi,L,R),y1=292,y0=374;for(const v of axisTicks(vlo,vhi,5)){const x=xv(v);s+='<line x1="'+x+'" x2="'+x+'" y1="250" y2="405" stroke="'+C.grid+'"/>'+svgText(x,425,meta.type==='binary'?fmt(v,1):meta.fmt(v),'text-anchor="middle" font-size="9" fill="'+C.muted+'"')}
+  s+=svgText(L-12,y1+4,'Smoker','text-anchor="end" font-size="10" font-weight="850" fill="'+C.smoke+'"')+svgText(L-12,y0+4,'Non-smoker','text-anchor="end" font-size="10" font-weight="850" fill="'+C.control+'"');rows.forEach((r,i)=>{const y=r.T?y1:y0,x=xv(r[key]),jit=((i*37)%13-6)*1.7;s+='<circle cx="'+x+'" cy="'+(y+jit)+'" r="4" fill="'+(r.T?C.smoke:C.control)+'" fill-opacity=".60"/>'});const m1=g1.length?mean(g1.map(r=>r[key])):NaN,m0=g0.length?mean(g0.map(r=>r[key])):NaN;if(Number.isFinite(m1)){const x=xv(m1);s+='<polygon points="'+x+','+(y1-12)+' '+(x+10)+','+y1+' '+x+','+(y1+12)+' '+(x-10)+','+y1+'" fill="'+C.smoke+'" stroke="#fff" stroke-width="2"/>'}if(Number.isFinite(m0)){const x=xv(m0);s+='<polygon points="'+x+','+(y0-12)+' '+(x+10)+','+y0+' '+x+','+(y0+12)+' '+(x-10)+','+y0+'" fill="'+C.control+'" stroke="#fff" stroke-width="2"/>'}s+=svgText((L+R)/2,483,meta.label+' within the selected propensity-score band','text-anchor="middle" font-size="11" font-weight="800" fill="'+C.ink+'"');svg.innerHTML=s;svg.querySelectorAll('.band-person').forEach(el=>el.addEventListener('click',()=>selectSubject(+el.dataset.index)));
+  const rawSmd=smdFor(key,false,rows,rows),smd=Math.abs(rawSmd),global=Math.abs(smdFor(key,false,state.data,state.data)),both=g1.length>0&&g0.length>0,cls=!both||!Number.isFinite(smd)?'bad':smd<=.1?'good':smd<=.2?'warn':'bad';let message;if(!both)message='The selected band does not contain both treatment groups, so a within-band comparison is unsupported.';else if(!Number.isFinite(smd))message='The reference variance is zero while the group means differ, so the standardized difference is infinite. This represents complete local separation for the selected covariate.';else if(smd<=.1)message='Measured balance for this covariate is close within the selected band. This does not establish balance for every covariate or rule out unmeasured confounding.';else message='Residual within-band imbalance remains for this covariate. Changing the band center or width changes both comparability and the number of supported participants; narrower is not automatically better.';$('bandStatus').innerHTML='<div class="status-grid"><div class="status-card"><div class="name">Smokers in band</div><div class="value">'+g1.length+'</div><div class="detail">mean score '+fmt(mean(g1.map(r=>r.score)),3)+'</div></div><div class="status-card"><div class="name">Non-smokers in band</div><div class="value">'+g0.length+'</div><div class="detail">mean score '+fmt(mean(g0.map(r=>r.score)),3)+'</div></div><div class="status-card"><div class="name">Within-band |SMD|</div><div class="value">'+fmt(smd,3)+'</div><div class="detail">'+meta.short+'</div></div><div class="status-card"><div class="name">Global |SMD|</div><div class="value">'+fmt(global,3)+'</div><div class="detail">before score restriction</div></div></div><div class="band-message '+cls+'">'+message+'</div>';
+}
+
+function renderSpace(){
+  const svg=$('spaceSvg'),L=70,R=785,T=28,B=335,ages=state.data.map(r=>r.age),bmis=state.data.map(r=>r.bmi),alo=Math.min(...ages),ahi=Math.max(...ages),blo=Math.min(...bmis),bhi=Math.max(...bmis);let s='<style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="820" height="420" fill="#fff"/>';for(const v of axisTicks(alo,ahi,5)){const x=sx(v,alo,ahi,L,R);s+='<line x1="'+x+'" x2="'+x+'" y1="'+T+'" y2="'+B+'" stroke="'+C.grid+'"/>'+svgText(x,B+22,fmt(v,0),'text-anchor="middle" font-size="9" fill="'+C.muted+'"')}for(const v of axisTicks(blo,bhi,5)){const y=sy(v,blo,bhi,T,B);s+='<line x1="'+L+'" x2="'+R+'" y1="'+y+'" y2="'+y+'" stroke="'+C.grid+'"/>'+svgText(L-8,y+4,fmt(v,0),'text-anchor="end" font-size="9" fill="'+C.muted+'"')}
+  state.data.forEach((r,i)=>{const x=sx(r.age,alo,ahi,L,R),y=sy(r.bmi,blo,bhi,T,B),outside=!(state.common.nonempty&&r.score>=state.common.low&&r.score<=state.common.high),sel=i===state.selected;s+='<circle class="space-point" data-index="'+i+'" cx="'+x+'" cy="'+y+'" r="'+(sel?7:outside?4.5:3.3)+'" fill="'+(r.T?C.smoke:C.control)+'" fill-opacity="'+(sel?1:.68)+'" stroke="'+(outside?C.danger:sel?'#111827':'#fff')+'" stroke-width="'+(outside||sel?2:1)+'"/>'});s+=svgText((L+R)/2,400,'Age (years)','text-anchor="middle" font-size="11" font-weight="800" fill="'+C.ink+'"')+'<g transform="translate(18,'+((T+B)/2)+') rotate(-90)">'+svgText(0,0,'BMI','text-anchor="middle" font-size="11" font-weight="800" fill="'+C.ink+'"')+'</g>';svg.innerHTML=s;svg.querySelectorAll('.space-point').forEach(el=>{const r=state.data[+el.dataset.index],tip='<b>'+r.id+'</b><br>'+(r.T?'Smoker':'Non-smoker')+'<br>Age '+fmt(r.age,0)+' · BMI '+fmt(r.bmi,1)+'<br>'+activeScoreName()+' '+fmt(r.score,3);el.addEventListener('pointerenter',e=>showTip(e,tip));el.addEventListener('pointermove',moveTip);el.addEventListener('pointerleave',hideTip);el.addEventListener('click',()=>selectSubject(+el.dataset.index))});
+}
+function renderWeights(){
+  const svg=$('weightSvg'),L=70,R=785,T=28,B=300,ymax=20;let s='<style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="820" height="390" fill="#fff"/>';for(const v of [1,2,5,10,15,20]){const y=sy(v,1,ymax,T,B);s+='<line x1="'+L+'" x2="'+R+'" y1="'+y+'" y2="'+y+'" stroke="'+C.grid+'"/>'+svgText(L-8,y+4,v,'text-anchor="end" font-size="9" fill="'+C.muted+'"')}for(const v of [0,.2,.4,.6,.8,1]){const x=sx(v,0,1,L,R);s+='<line x1="'+x+'" x2="'+x+'" y1="'+T+'" y2="'+B+'" stroke="'+C.grid+'"/>'+svgText(x,B+22,fmt(v,1),'text-anchor="middle" font-size="9" fill="'+C.muted+'"')}
+  let d1='',d0='';for(let i=1;i<200;i++){const e=i/200,w1=Math.min(ymax,1/e),w0=Math.min(ymax,1/(1-e)),x=sx(e,0,1,L,R);d1+=(i>1?'L':'M')+x+' '+sy(w1,1,ymax,T,B)+' ';d0+=(i>1?'L':'M')+x+' '+sy(w0,1,ymax,T,B)+' '}s+='<path d="'+d1+'" fill="none" stroke="'+C.smoke+'" stroke-width="4"/><path d="'+d0+'" fill="none" stroke="'+C.control+'" stroke-width="4"/><line x1="'+L+'" x2="'+R+'" y1="'+sy(10,1,ymax,T,B)+'" y2="'+sy(10,1,ymax,T,B)+'" stroke="'+C.danger+'" stroke-dasharray="6 4"/>'+svgText(R-4,sy(10,1,ymax,T,B)-6,'weight = 10','text-anchor="end" font-size="9" font-weight="850" fill="'+C.danger+'"');
+  state.data.filter((_,i)=>i%Math.max(1,Math.floor(state.data.length/160))===0||i===state.selected).forEach((r)=>{const i=state.data.indexOf(r),x=sx(r.score,0,1,L,R),w=Math.min(ymax,r.weight),y=sy(w,1,ymax,T,B),sel=i===state.selected;s+='<circle cx="'+x+'" cy="'+y+'" r="'+(sel?7:3)+'" fill="'+(r.T?C.smoke:C.control)+'" fill-opacity="'+(sel?1:.45)+'" stroke="'+(sel?'#111827':'#fff')+'" stroke-width="'+(sel?2:1)+'"/>'});s+=svgText((L+R)/2,370,activeScoreName(),'text-anchor="middle" font-size="11" font-weight="800" fill="'+C.ink+'"')+'<g transform="translate(18,'+((T+B)/2)+') rotate(-90)">'+svgText(0,0,'Unstabilized ATE weight (display capped at 20)','text-anchor="middle" font-size="11" font-weight="800" fill="'+C.ink+'"')+'</g>';svg.innerHTML=s;
+  const g1=group(1),g0=group(0),maxW=Math.max(...state.data.map(r=>r.weight)),pct10=mean(state.data.map(r=>r.weight>10?1:0));$('weightStatus').innerHTML='<div class="status-grid"><div class="status-card"><div class="name">Kish ESS smokers</div><div class="value">'+fmt(ess(g1),1)+'</div><div class="detail">observed n = '+g1.length+'</div></div><div class="status-card"><div class="name">Kish ESS non-smokers</div><div class="value">'+fmt(ess(g0),1)+'</div><div class="detail">observed n = '+g0.length+'</div></div><div class="status-card"><div class="name">Largest weight</div><div class="value">'+fmt(maxW,2)+'</div><div class="detail">unstabilized and not capped</div></div><div class="status-card"><div class="name">Weights &gt; 10</div><div class="value">'+pct(pct10,1)+'</div><div class="detail">practical instability flag</div></div></div>';
+}
+
+function renderLove(){
+  const svg=$('loveSvg'),data=[...state.balance].sort((a,b)=>a.before-b.before),L=225,R=775,T=35,B=590,finite=data.flatMap(d=>[d.before,d.after]).filter(Number.isFinite),max=Math.max(.12,...finite)*1.17,step=(B-T)/(data.length-1);let s='<style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="820" height="670" fill="#fff"/>';for(const v of axisTicks(0,max,5)){const x=sx(v,0,max,L,R);s+='<line x1="'+x+'" x2="'+x+'" y1="'+T+'" y2="'+B+'" stroke="'+C.grid+'"/>'+svgText(x,B+22,fmt(v,2),'text-anchor="middle" font-size="9" fill="'+C.muted+'"')}const xr=sx(.1,0,max,L,R);s+='<line x1="'+xr+'" x2="'+xr+'" y1="'+T+'" y2="'+B+'" stroke="'+C.danger+'" stroke-width="2" stroke-dasharray="6 4"/>';data.forEach((d,i)=>{const y=T+i*step,beforePlot=Number.isFinite(d.before)?d.before:max,afterPlot=Number.isFinite(d.after)?d.after:max,x1=sx(beforePlot,0,max,L,R),x2=sx(afterPlot,0,max,L,R);s+=svgText(L-12,y+4,d.label,'text-anchor="end" font-size="9.5" font-weight="800" fill="'+C.ink+'"')+'<line x1="'+x1+'" x2="'+x2+'" y1="'+y+'" y2="'+y+'" stroke="#C9D1DC" stroke-width="2"/><circle cx="'+x1+'" cy="'+y+'" r="5.5" fill="'+C.gray+'" stroke="#fff" stroke-width="2"/><circle cx="'+x2+'" cy="'+y+'" r="6.5" fill="'+C.accent+'" stroke="#fff" stroke-width="2"/>'+svgText(Math.min(R-3,x2+9),y-7,fmt(d.after,3),'font-size="8.5" font-weight="800" fill="'+C.accent+'"')});s+=svgText((L+R)/2,650,'Absolute standardized mean difference','text-anchor="middle" font-size="11" font-weight="800" fill="'+C.ink+'"');svg.innerHTML=s;const maxBefore=Math.max(...data.map(d=>d.before)),maxAfter=Math.max(...data.map(d=>d.after)),nBad=data.filter(d=>d.after>.1).length;$('loveNote').innerHTML='<strong>Before weighting:</strong> max |SMD| = '+fmt(maxBefore,3)+'. <strong>After weighting:</strong> max |SMD| = '+fmt(maxAfter,3)+'; '+nBad+' of '+data.length+' displayed baseline features/indicators exceed 0.10. All five race categories and all five education categories are checked. The 0.10 line is a conventional descriptive heuristic. Good measured balance is necessary for a successful implementation but does not prove no unmeasured confounding.';
+}
+function renderStrata(){
+  const svg=$('strataSvg'),key=state.strataCov,meta=covMeta[key],qValues=state.quintileMode==='constant'?[1]:[1,2,3,4,5],stats=[];qValues.forEach(q=>{const a=state.data.filter(r=>r.quintile===q&&r.T===1),b=state.data.filter(r=>r.quintile===q&&r.T===0);stats.push({q,n1:a.length,n0:b.length,m1:a.length?mean(a.map(r=>r[key])):NaN,m0:b.length?mean(b.map(r=>r[key])):NaN})});const vals=stats.flatMap(d=>[d.m1,d.m0]).filter(Number.isFinite),lo=meta.type==='binary'?0:(vals.length?Math.min(...vals):0),hi=meta.type==='binary'?1:(vals.length?Math.max(...vals):1),pad=meta.type==='binary'?0:.12*(hi-lo||1),vlo=lo-pad,vhi=hi+pad,L=80,R=775,T=35,B=315;let s='<style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="820" height="430" fill="#fff"/>';for(const v of axisTicks(vlo,vhi,5)){const y=sy(v,vlo,vhi,T,B);s+='<line x1="'+L+'" x2="'+R+'" y1="'+y+'" y2="'+y+'" stroke="'+C.grid+'"/>'+svgText(L-8,y+4,meta.type==='binary'?pct(v,0):meta.fmt(v),'text-anchor="end" font-size="9" fill="'+C.muted+'"')}stats.forEach((d,i)=>{const x=stats.length===1?(L+R)/2:sx(i+1,1,stats.length,L+45,R-45),label=state.quintileMode==='constant'?'Single score level':'Q'+d.q;s+='<line x1="'+x+'" x2="'+x+'" y1="'+T+'" y2="'+B+'" stroke="'+C.grid+'"/>'+svgText(x,B+22,label,'text-anchor="middle" font-size="10" font-weight="850" fill="'+C.ink+'"')+svgText(x,B+38,'n₁='+d.n1+', n₀='+d.n0,'text-anchor="middle" font-size="8.5" fill="'+C.muted+'"');if(Number.isFinite(d.m1)&&Number.isFinite(d.m0)){const y1=sy(d.m1,vlo,vhi,T,B),y0=sy(d.m0,vlo,vhi,T,B);s+='<line x1="'+x+'" x2="'+x+'" y1="'+y1+'" y2="'+y0+'" stroke="#B8C0CC" stroke-width="3"/><circle cx="'+x+'" cy="'+y1+'" r="7" fill="'+C.smoke+'" stroke="#fff" stroke-width="2"/><circle cx="'+x+'" cy="'+y0+'" r="7" fill="'+C.control+'" stroke="#fff" stroke-width="2"/>'}});s+=svgText((L+R)/2,414,state.quintileMode==='constant'?'Propensity score has essentially no variation':'Rank-based propensity-score quintile','text-anchor="middle" font-size="11" font-weight="800" fill="'+C.ink+'"')+'<g transform="translate(18,'+((T+B)/2)+') rotate(-90)">'+svgText(0,0,meta.type==='binary'?'Group proportion':meta.label,'text-anchor="middle" font-size="11" font-weight="800" fill="'+C.ink+'"')+'</g>';svg.innerHTML=s;const comparable=stats.filter(d=>Number.isFinite(d.m1)&&Number.isFinite(d.m0)),diffs=comparable.map(d=>Math.abs(d.m1-d.m0)),unsupported=stats.filter(d=>!d.n1||!d.n0).length;if(state.quintileMode==='constant')$('strataNote').innerHTML='<strong>Score essentially constant:</strong> quintile subclassification is not informative because every participant has nearly the same active score. The single displayed comparison is the overall treatment-group difference.';else $('strataNote').innerHTML='<strong>Within-quintile diagnostic:</strong> '+(diffs.length?'the maximum raw smoker–non-smoker difference for '+meta.label+' is '+(meta.type==='binary'?pct(Math.max(...diffs),1):meta.fmt(Math.max(...diffs)))+'.':'no quintile contains both treatment groups, so the within-stratum comparison is unavailable.')+' '+unsupported+' of '+stats.length+' quintiles lack at least one treatment group. Differences across quintiles are expected; the relevant comparison is within the same quintile.';
+}
+
+function renderRiskVsScore(){const svg=$('riskVsScoreSvg'),L=70,R=785,T=30,B=315,risks=state.data.map(r=>r.pY0),lo=Math.min(...risks),hi=Math.max(...risks);let s='<style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="820" height="400" fill="#fff"/>';for(const v of axisTicks(0,1,5)){const x=sx(v,0,1,L,R);s+='<line x1="'+x+'" x2="'+x+'" y1="'+T+'" y2="'+B+'" stroke="'+C.grid+'"/>'+svgText(x,B+22,fmt(v,1),'text-anchor="middle" font-size="9" fill="'+C.muted+'"')}for(const v of axisTicks(lo,hi,5)){const y=sy(v,lo,hi,T,B);s+='<line x1="'+L+'" x2="'+R+'" y1="'+y+'" y2="'+y+'" stroke="'+C.grid+'"/>'+svgText(L-8,y+4,pct(v,0),'text-anchor="end" font-size="9" fill="'+C.muted+'"')}state.data.forEach((r,i)=>{const x=sx(r.score,0,1,L,R),y=sy(r.pY0,lo,hi,T,B),sel=i===state.selected;s+='<circle class="risk-score-point" data-index="'+i+'" cx="'+x+'" cy="'+y+'" r="'+(sel?7:3.2)+'" fill="'+(r.T?C.smoke:C.control)+'" fill-opacity="'+(sel?1:.56)+'" stroke="'+(sel?'#111827':'#fff')+'" stroke-width="'+(sel?2:1)+'"/>'});s+=svgText((L+R)/2,383,activeScoreName()+': predicts smoking','text-anchor="middle" font-size="11" font-weight="800" fill="'+C.ink+'"')+'<g transform="translate(18,'+((T+B)/2)+') rotate(-90)">'+svgText(0,0,'P(CVD | T=0, X): outcome risk','text-anchor="middle" font-size="11" font-weight="800" fill="'+C.ink+'"')+'</g>';svg.innerHTML=s;svg.querySelectorAll('.risk-score-point').forEach(el=>el.addEventListener('click',()=>selectSubject(+el.dataset.index)));const cor=correlation(state.data.map(r=>r.score),risks);$('riskVsScoreNote').innerHTML='<strong>Correlation in this simulated cohort:</strong> '+fmt(cor,3)+'. The two quantities may be associated because they share predictors, but they answer different questions and are not interchangeable.'}
+
+function renderTable(){
+  const fit=state.fit;$('coefBody').innerHTML=fit.terms.map((t,j)=>'<tr><td>'+escapeHtml(t)+'</td><td>'+fmt(fit.beta[j],3)+'</td><td>'+fmt(Math.exp(fit.beta[j]),3)+'</td><td>'+fmt(fit.se[j],3)+'</td><td>'+pvalFmt(fit.pval[j])+'</td></tr>').join('');$('coefModelNote').innerHTML=fit.penalized?'<b>Ridge-stabilized treatment model.</b> Unpenalized logistic maximum likelihood was numerically unstable for this sample, so a very small ridge penalty was used. Coefficients and odds ratios are shown, but standard errors and Wald p-values are suppressed because ordinary MLE inference does not apply to the penalized fit. Balance and overlap remain the primary diagnostics.':'<b>Unpenalized logistic maximum-likelihood treatment model.</b> Coefficients, odds ratios, model-based standard errors, and Wald p-values are shown for transparency. They are secondary to balance and overlap diagnostics and do not determine which confounders should be included.';$('dataBody').innerHTML=state.data.map((r,i)=>'<tr data-index="'+i+'" class="'+(i===state.selected?'selected':'')+'"><td>'+r.id+'</td><td>'+r.T+'</td><td>'+r.Y+'</td><td>'+fmt(r.age,0)+'</td><td>'+(r.male?'Male':'Female')+'</td><td>'+raceLabels[r.race]+'</td><td>'+eduLabels[r.edu]+'</td><td>'+fmt(r.income,2)+'</td><td>'+fmt(r.bmi,1)+'</td><td>'+fmt(r.trueE,4)+'</td><td>'+fmt(r.ehat,4)+'</td><td>'+fmt(r.score,4)+'</td><td>'+fmt(r.weight,3)+'</td><td>'+(state.quintileMode==='constant'?'single':('Q'+r.quintile))+'</td></tr>').join('');$('dataBody').querySelectorAll('tr').forEach(tr=>tr.addEventListener('click',()=>selectSubject(+tr.dataset.index)));
+}
+function exportCsv(){const h=['id','smoker_T','cvd_Y','age','male','race','education','income_to_poverty','bmi','true_propensity','estimated_propensity','active_score','ate_weight','ps_quintile'],lines=[h.join(',')];state.data.forEach(r=>lines.push([r.id,r.T,r.Y,r.age,r.male,'"'+raceLabels[r.race]+'"','"'+eduLabels[r.edu]+'"',r.income,r.bmi,r.trueE,r.ehat,r.score,r.weight,r.quintile].join(',')));download(lines.join('\n'),'text/csv;charset=utf-8','propensity_score_teaching_cohort.csv')}
+
+function renderAll(){renderMetrics();renderMath();renderProfile();renderSubject();renderOverlap();renderCalibration();renderBand();renderSpace();renderWeights();renderLove();renderStrata();renderRiskVsScore();renderTable()}
+function reset(){Object.assign(state,defaults,{data:[],fit:null,selected:0,preset:'lecture',common:{low:0,high:1,nonempty:true,fracAll:1,frac1:1,frac0:1},balance:[],quintiles:[],quintileMode:'rank',mass:{treated:1,control:1}});$('nRange').value=defaults.n;$('prevRange').value=100*defaults.prev;$('selectionRange').value=defaults.selection;$('nonlinearRange').value=defaults.nonlinear;$('modelSelect').value=defaults.model;$('sourceSelect').value=defaults.source;$('seedInput').value=defaults.seed;$('bandCenter').value=defaults.bandCenter;$('bandWidth').value=defaults.bandWidth;$('bandCov').value=defaults.bandCov;$('strataCov').value=defaults.strataCov;document.querySelectorAll('.preset').forEach(b=>b.classList.toggle('active',b.dataset.preset==='lecture'));generateStudy()}
+function applyPreset(name){const p={lecture:{n:420,prev:35,selection:.90,nonlinear:0,model:'lecture',source:'fitted'},strong:{n:420,prev:35,selection:1.75,nonlinear:0,model:'lecture',source:'fitted'},poor:{n:420,prev:28,selection:2.55,nonlinear:.35,model:'expanded',source:'fitted'},omit:{n:420,prev:35,selection:1.40,nonlinear:0,model:'sparse',source:'fitted'},nonlinear:{n:420,prev:35,selection:1.35,nonlinear:1.25,model:'lecture',source:'fitted'},random:{n:420,prev:50,selection:.05,nonlinear:0,model:'lecture',source:'fitted'}}[name];state.preset=name;$('nRange').value=p.n;$('prevRange').value=p.prev;$('selectionRange').value=p.selection;$('nonlinearRange').value=p.nonlinear;$('modelSelect').value=p.model;$('sourceSelect').value=p.source;document.querySelectorAll('.preset').forEach(b=>b.classList.toggle('active',b.dataset.preset===name));generateStudy()}
+
+['nRange','prevRange','selectionRange','nonlinearRange'].forEach(id=>$(id).addEventListener('input',()=>{state.preset='custom';document.querySelectorAll('.preset').forEach(b=>b.classList.remove('active'));generateStudy()}));$('seedInput').addEventListener('change',generateStudy);$('modelSelect').addEventListener('change',()=>{readControls();updateControlLabels();fitPropensity()});$('sourceSelect').addEventListener('change',()=>{readControls();updateControlLabels();updateDerived();renderAll()});['bandCenter','bandWidth'].forEach(id=>$(id).addEventListener('input',()=>{readControls();updateControlLabels();renderOverlap();renderBand();renderMath()}));$('bandCov').addEventListener('change',()=>{state.bandCov=$('bandCov').value;renderBand();renderMath()});$('strataCov').addEventListener('change',()=>{state.strataCov=$('strataCov').value;renderStrata()});$('newCohort').onclick=()=>{$('seedInput').value=(+$('seedInput').value+104729)%99999999||1;generateStudy()};$('resetControls').onclick=reset;$('exportCsv').onclick=exportCsv;document.querySelectorAll('.preset').forEach(b=>b.onclick=()=>applyPreset(b.dataset.preset));document.querySelectorAll('.math-tab').forEach(b=>b.onclick=()=>activateTab(b.dataset.tab));document.querySelectorAll('[data-svg]').forEach(b=>b.onclick=()=>saveSvg(b.dataset.svg));window.addEventListener('resize',hideTip);
+reset();
+})();
+</script>
+</body>
+</html>
