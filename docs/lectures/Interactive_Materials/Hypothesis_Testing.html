@@ -1,0 +1,441 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hypothesis Testing for Causal Effects — Se Yoon Lee, Ph.D.</title>
+<style>
+:root{
+  color-scheme:light;
+  --ink:#162033;--muted:#667085;--line:#D7DEE8;--panel:#fff;--bg:#F4F7FB;
+  --accent:#7057E8;--accent-dark:#5840C8;--orange:#E56B2F;--blue:#2F6EA5;
+  --green:#208A62;--danger:#C23B3B;--amber:#B66A00;--teal:#167C86;
+  --gray:#7B8495;--soft-purple:#F3EFFF;--soft-blue:#EDF5FB;--soft-orange:#FFF2E9;
+  --soft-green:#EDF9F4;--soft-red:#FFF1F1;--soft-amber:#FFF8E8;
+  --shadow:0 6px 20px rgba(20,32,55,.055);
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif}
+body{min-width:320px}
+button,select,input{font:inherit}button{cursor:pointer}
+.hero{padding:28px clamp(18px,4vw,58px) 22px;background:linear-gradient(135deg,#fff 0%,#F7F3FF 52%,#EDF6FC 100%);border-bottom:1px solid var(--line)}
+.hero-inner{max-width:1780px;margin:0 auto;display:flex;gap:26px;align-items:flex-start;justify-content:space-between}
+.hero h1{margin:0 0 8px;font-size:clamp(29px,3.05vw,49px);line-height:1.05;letter-spacing:-.75px}
+.hero .author{font-weight:600;white-space:nowrap}
+.hero p{margin:0;max-width:1120px;color:var(--muted);font-size:clamp(15px,1.38vw,19px);line-height:1.55}
+.hero-callout{margin-top:13px;display:inline-flex;align-items:center;gap:9px;max-width:100%;padding:9px 13px;border:1px solid #C4CDDA;border-left:4px solid var(--accent);border-radius:12px;background:rgba(255,255,255,.88);font-size:14px;line-height:1.5;font-weight:640}
+.hero-callout b{color:var(--accent-dark)}
+.hero-badge{flex:0 0 auto;padding:11px 15px;border-radius:999px;border:1px solid #CFC5FF;background:#fff;color:#5B45C8;font-weight:850;font-size:12px;letter-spacing:.42px;white-space:nowrap}
+.app{max-width:1780px;margin:0 auto;padding:18px;display:grid;grid-template-columns:350px minmax(0,1fr);gap:18px;align-items:start}
+.controls{position:sticky;top:12px;max-height:calc(100vh - 24px);overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:20px;box-shadow:0 10px 28px rgba(20,32,55,.08)}
+.controls-head{padding:18px 18px 14px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#fff,#FAFBFD)}
+.controls-head h2{margin:0 0 5px;font-size:19px}.controls-head p{margin:0;color:var(--muted);font-size:13px;line-height:1.45}
+.control-section{padding:15px 18px;border-bottom:1px solid #E7EBF1}.control-section:last-child{border-bottom:0}
+.section-label{font-size:11px;letter-spacing:.8px;text-transform:uppercase;color:#7B8495;font-weight:900;margin-bottom:10px}
+.preset-row{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.preset{border:1px solid var(--line);background:#fff;border-radius:11px;padding:8px 9px;font-size:11px;font-weight:780;color:#344054;line-height:1.3}
+.preset:hover,.preset.active{border-color:var(--accent);color:#5B45C8;background:#FAF8FF}
+.control{margin:0 0 14px}.control:last-child{margin-bottom:0}
+.control-top{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:6px}.control label{font-size:13px;font-weight:730}
+.value{font-size:12px;color:#5B45C8;font-weight:850;font-variant-numeric:tabular-nums}
+input[type="range"]{width:100%;accent-color:var(--accent)}
+input[type="number"]{width:100%;border:1px solid var(--line);border-radius:10px;padding:8px 9px;background:#fff;color:var(--ink);font-variant-numeric:tabular-nums}
+.range-ends{display:flex;justify-content:space-between;gap:8px;color:#98A2B3;font-size:10px;margin-top:2px}
+select{width:100%;border:1px solid var(--line);border-radius:10px;background:#fff;padding:9px 10px;color:var(--ink)}
+.checkrow{display:flex;gap:9px;align-items:flex-start;font-size:12px;color:#475467;line-height:1.42}.checkrow input{margin-top:2px;accent-color:var(--accent)}
+.primary-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}.primary,.secondary,.mini-button{border-radius:11px;padding:9px 10px;font-weight:790;font-size:12px}
+.primary,.mini-button.primary{border:1px solid var(--accent);background:var(--accent);color:#fff}.secondary,.mini-button{border:1px solid var(--line);background:#fff;color:#344054}
+.primary:hover,.mini-button.primary:hover{filter:brightness(.96)}.secondary:hover,.mini-button:hover{border-color:var(--accent);color:#5B45C8}
+.teaching-note{font-size:11px;line-height:1.5;color:#667085;background:#F7F8FB;border-radius:10px;padding:9px 10px;margin-top:10px}
+.workspace{min-width:0}
+.metrics{display:grid;grid-template-columns:repeat(6,minmax(116px,1fr));gap:10px;margin-bottom:12px}
+.metric{background:#fff;border:1px solid var(--line);border-radius:15px;padding:11px 13px;min-width:0;box-shadow:0 3px 12px rgba(20,32,55,.04)}
+.metric .k{font-size:9px;color:#7B8495;text-transform:uppercase;font-weight:900;letter-spacing:.55px;white-space:nowrap}.metric .v{margin-top:4px;font-size:19px;font-weight:880;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.metric .sub{font-size:9px;color:#7B8495;margin-top:2px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.metric.reject{border-color:#F0BBBB;background:#FFF7F7}.metric.keep{border-color:#B8E5D2;background:#F4FCF8}
+.card{background:#fff;border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);min-width:0;overflow:hidden}
+.card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:15px 16px 10px}.card-head h3{margin:0 0 4px;font-size:17px;line-height:1.25}.card-head p{margin:0;color:var(--muted);font-size:12px;line-height:1.45}
+.grid-two{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}.grid-top{display:grid;grid-template-columns:minmax(0,1.38fr) minmax(330px,.82fr);gap:12px;margin-bottom:12px}.full-card{margin-bottom:12px}
+.mini-controls{display:flex;gap:7px;align-items:center;flex-wrap:wrap;justify-content:flex-end}.mini-controls label{font-size:10px;font-weight:800;color:#667085}.mini-controls select{width:auto;min-width:120px;padding:6px 8px;font-size:11px}.mini-button{padding:7px 9px;font-size:11px;white-space:nowrap}
+.legend{display:flex;flex-wrap:wrap;gap:12px;padding:0 16px 8px;color:#667085;font-size:11px}.legend span{display:inline-flex;align-items:center;gap:5px}.dot{width:10px;height:10px;border-radius:50%;display:inline-block}.line-key{width:17px;height:0;border-top:3px solid;display:inline-block}.dash-key{width:18px;height:0;border-top:2px dashed #111827;display:inline-block}
+.chart-wrap{position:relative;padding:0 8px 10px}svg.chart{display:block;width:100%;height:auto;overflow:visible;touch-action:none}.chart-note{padding:0 16px 13px;color:#667085;font-size:11px;line-height:1.5}.chart-note strong{color:var(--ink)}
+.tooltip{position:fixed;z-index:50;pointer-events:none;background:#111827;color:#fff;border-radius:10px;padding:9px 10px;box-shadow:0 8px 24px rgba(0,0,0,.24);font-size:11px;line-height:1.45;opacity:0;transform:translate(10px,10px);max-width:285px}
+math{font-family:"Cambria Math","STIX Two Math","Times New Roman",serif;color:var(--ink)}
+.math-card{margin-bottom:12px;border-top:3px solid var(--accent)}.math-tabs{display:flex;gap:7px;flex-wrap:wrap;padding:0 16px 12px;border-bottom:1px solid #E7EBF1}.math-tab{border:1px solid var(--line);background:#fff;color:#475467;border-radius:10px;padding:8px 11px;font-size:11px;font-weight:830}.math-tab:hover{border-color:#B7A9FF;color:#5B45C8;background:#FAF8FF}.math-tab[aria-selected="true"]{border-color:var(--accent);background:var(--accent);color:#fff}
+.math-panel{display:none;padding:16px}.math-panel.active{display:block}.math-scroll{overflow:auto;padding:4px 2px 7px}math[display="block"]{display:block;width:max-content;min-width:min-content;margin:0 auto;font-size:clamp(17px,1.45vw,24px);line-height:1.35}
+.math-chain{border:1px solid #D9D2FF;background:linear-gradient(135deg,#F7F4FF,#F8FBFF);border-radius:15px;padding:14px 12px;margin-bottom:12px}.math-chain .label{font-size:10px;color:#5B45C8;font-weight:900;letter-spacing:.65px;text-transform:uppercase;margin-bottom:7px}
+.math-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.math-box{border:1px solid #DEE4EC;border-radius:13px;background:#FCFCFD;padding:11px 12px;min-width:0}.math-box h4{margin:0 0 7px;font-size:12px}.math-box p{margin:7px 0 0;color:#667085;font-size:10px;line-height:1.52}.math-box math[display="block"]{font-size:clamp(15px,1.1vw,19px);margin-left:0}
+.live-math{margin-top:11px;border:1px solid #CFC5FF;background:#F8F6FF;border-radius:12px;padding:10px 12px;font-size:10px;line-height:1.52;color:#536075}.live-math strong{color:#5B45C8}.chip-row{display:flex;gap:7px;flex-wrap:wrap;margin-top:7px}.chip{border:1px solid #D9D2FF;background:#fff;border-radius:999px;padding:5px 8px;font-weight:850;color:#344054;font-variant-numeric:tabular-nums}
+.warning{margin-top:10px;border-left:4px solid var(--amber);background:#FFF9EB;border-radius:9px;padding:9px 11px;color:#6F4B08;font-size:10px;line-height:1.5}.good-note{margin-top:10px;border-left:4px solid var(--green);background:#F2FBF7;border-radius:9px;padding:9px 11px;color:#21694E;font-size:10px;line-height:1.5}
+.interpret-body{padding:1px 16px 16px}.decision-banner{border-radius:14px;padding:12px 13px;font-size:12px;line-height:1.58}.decision-banner.reject{border:1px solid #F0BBBB;background:#FFF5F5;color:#8D2727}.decision-banner.keep{border:1px solid #A9DCC8;background:#F2FBF7;color:#176A4C}.decision-banner .headline{font-size:16px;font-weight:900;margin-bottom:5px}.decision-banner b{color:inherit}
+.result-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}.result-box{border:1px solid #E1E6ED;border-radius:12px;padding:10px 11px;background:#FCFCFD}.result-box .name{font-size:9px;color:#667085;text-transform:uppercase;font-weight:900;letter-spacing:.45px}.result-box .number{font-size:18px;font-weight:880;margin:4px 0 2px;font-variant-numeric:tabular-nums}.result-box .detail{font-size:9px;color:#7B8495;line-height:1.4}
+.report-box{margin-top:10px;border:1px solid #D9D2FF;background:#F8F6FF;border-radius:13px;padding:11px 12px;color:#4B4569;font-size:11px;line-height:1.6}.report-box button{margin-top:8px;border:1px solid #CFC5FF;background:#fff;color:#5B45C8;border-radius:8px;padding:6px 8px;font-size:10px;font-weight:800}
+.workflow{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;padding:0 16px 15px;align-items:stretch}.workflow-step{position:relative;border:1px solid #DEE4EC;border-radius:13px;background:#FCFCFD;padding:11px 10px;min-width:0}.workflow-step:not(:last-child)::after{content:"→";position:absolute;right:-12px;top:50%;transform:translateY(-50%);font-size:20px;color:#98A2B3;font-weight:900;z-index:2}.workflow-step .num{display:grid;place-items:center;width:24px;height:24px;border-radius:50%;background:#EEE9FF;color:#5B45C8;font-size:10px;font-weight:900;margin-bottom:7px}.workflow-step b{display:block;font-size:11px;margin-bottom:4px}.workflow-step span{display:block;color:#667085;font-size:9px;line-height:1.45}
+.sim-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:0 16px 10px}.sim-stat{border:1px solid #E1E6ED;border-radius:11px;background:#FCFCFD;padding:9px 10px}.sim-stat .name{font-size:9px;text-transform:uppercase;color:#667085;font-weight:900;letter-spacing:.4px}.sim-stat .value{font-size:18px;font-weight:880;margin-top:3px;font-variant-numeric:tabular-nums}.sim-stat .detail{font-size:9px;color:#7B8495;margin-top:2px;line-height:1.35}.simulation-status{margin:0 16px 9px;border:1px solid #E1E6ED;background:#F8FAFC;border-radius:11px;padding:9px 10px;color:#667085;font-size:10px;line-height:1.45}
+.method-table{padding:0 16px 14px;overflow:auto}table{border-collapse:collapse;width:100%;font-size:11px;white-space:nowrap}th,td{padding:8px 9px;border-bottom:1px solid #EDF0F4;text-align:right;font-variant-numeric:tabular-nums}th:first-child,td:first-child{text-align:left}th{background:#F8FAFC;color:#667085;text-transform:uppercase;font-size:9px;letter-spacing:.45px}tbody tr{cursor:pointer}tbody tr:hover{background:#F7F5FF}tbody tr.selected{background:#EEE9FF}
+.layers{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:0 16px 15px}.layer{border:1px solid #E1E6ED;border-radius:13px;padding:11px;background:#FCFCFD}.layer h4{margin:0 0 5px;font-size:12px}.layer p{margin:0;color:#667085;font-size:10px;line-height:1.48}.layer.causal{border-color:#F1D49F;background:#FFF9EC}.layer.ident{border-color:#B8E5D2;background:#F2FBF7}.layer.stat{border-color:#BDD5EA;background:#F3F8FC}.layer.sens{border-color:#D3C9FF;background:#F8F6FF}
+.checklist{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:0 16px 15px}.check{border:1px solid #E1E6ED;border-radius:12px;padding:10px 11px;background:#FCFCFD}.check b{display:block;font-size:11px;margin-bottom:4px}.check span{display:block;color:#667085;font-size:10px;line-height:1.45}
+.export-tools{display:flex;gap:8px;flex-wrap:wrap;padding:13px 16px}.export-tools button{border:1px solid var(--line);background:#fff;border-radius:9px;padding:7px 9px;font-size:11px;font-weight:760}
+.footer{max-width:1780px;margin:0 auto;padding:0 18px 28px;color:#667085;font-size:11px;line-height:1.55}
+@media(max-width:1220px){.app{grid-template-columns:1fr}.controls{position:relative;top:auto;max-height:none}.metrics{grid-template-columns:repeat(3,1fr)}.grid-two,.grid-top{grid-template-columns:1fr}}
+@media(max-width:780px){.hero-inner{display:block}.hero-badge{display:inline-block;margin-top:14px}.hero .author{display:block;font-size:.58em;margin-top:7px;white-space:normal}.app{padding:10px}.metrics{grid-template-columns:repeat(2,1fr)}.math-grid,.layers,.checklist{grid-template-columns:1fr}.workflow{grid-template-columns:1fr}.workflow-step:not(:last-child)::after{content:"↓";right:auto;left:50%;top:auto;bottom:-18px;transform:translateX(-50%)}.sim-summary{grid-template-columns:1fr 1fr}.card-head{display:block}.mini-controls{justify-content:flex-start;margin-top:9px}.math-tabs{display:grid;grid-template-columns:1fr 1fr}.result-grid{grid-template-columns:1fr}}
+@media(max-width:480px){.preset-row,.primary-row,.sim-summary{grid-template-columns:1fr}.hero-callout{display:block}.metrics{grid-template-columns:1fr}}
+@media print{.controls,.hero-badge,.export-card,.footer,.preset-row,.primary-row{display:none!important}.app{display:block;max-width:none}.card{break-inside:avoid;box-shadow:none}.metrics{grid-template-columns:repeat(6,1fr)}}
+</style>
+</head>
+<body>
+<header class="hero">
+  <div class="hero-inner">
+    <div>
+      <h1>Hypothesis Testing for Causal Effects <span class="author">— Se Yoon Lee, Ph.D.</span></h1>
+      <p>Choose an estimand, estimator, null value, alternative, and significance level. Then connect the estimate to its standard error, reference distribution, confidence interval, p-value, Type I error, and power—without confusing statistical evidence with causal validity.</p>
+      <div class="hero-callout"><b>Central question:</b> If the target risk difference equaled the chosen null value, would the observed estimate be unusually far from that value relative to its estimated sampling uncertainty?</div>
+    </div>
+    <div class="hero-badge">GRADUATE-LEVEL • NATIVE MATHML • INLINE SVG</div>
+  </div>
+</header>
+
+<main class="app">
+<aside class="controls" aria-label="Hypothesis-testing controls">
+  <div class="controls-head"><h2>Define the test</h2><p>Load a lecture result or construct a custom Wald test on the risk-difference scale.</p></div>
+
+  <div class="control-section">
+    <div class="section-label">Lecture result</div>
+    <div class="preset-row">
+      <button class="preset" data-preset="crude">Observed comparison</button>
+      <button class="preset" data-preset="ipw">IPW</button>
+      <button class="preset" data-preset="or">Outcome regression</button>
+      <button class="preset active" data-preset="dr">Doubly robust</button>
+    </div>
+    <div class="teaching-note">The observed comparison is an association test. The adjusted tests target a causal risk difference only under consistency, conditional exchangeability, positivity, and adequate estimation.</div>
+  </div>
+
+  <div class="control-section">
+    <div class="section-label">Estimate and uncertainty</div>
+    <div class="control"><div class="control-top"><label for="estimateRange">Estimated risk difference</label><span class="value" id="estimateValue"></span></div><input id="estimateRange" type="range" min="-6" max="12" step="0.01" value="3.25"><div class="range-ends"><span>−6 pp</span><span>12 pp</span></div></div>
+    <div class="control"><div class="control-top"><label for="seRange">Estimated standard error</label><span class="value" id="seValue"></span></div><input id="seRange" type="range" min="0.20" max="4.00" step="0.01" value="0.78"><div class="range-ends"><span>0.20 pp</span><span>4.00 pp</span></div></div>
+    <div class="checkrow"><input id="showLectureCI" type="checkbox" checked><label for="showLectureCI">Show the lecture’s stored 95% interval when a lecture preset is active.</label></div>
+  </div>
+
+  <div class="control-section">
+    <div class="section-label">Hypothesis</div>
+    <div class="control"><div class="control-top"><label for="nullRange">Null risk difference</label><span class="value" id="nullValue"></span></div><input id="nullRange" type="range" min="-6" max="10" step="0.01" value="0"><div class="range-ends"><span>−6 pp</span><span>10 pp</span></div></div>
+    <div class="control"><label for="alternativeSelect" style="display:block;margin-bottom:6px">Alternative hypothesis</label><select id="alternativeSelect"><option value="two" selected>Two-sided: RD ≠ RD₀</option><option value="greater">One-sided: RD &gt; RD₀</option><option value="less">One-sided: RD &lt; RD₀</option></select></div>
+    <div class="control"><div class="control-top"><label for="alphaRange">Significance level α</label><span class="value" id="alphaValue"></span></div><input id="alphaRange" type="range" min="0.01" max="0.10" step="0.005" value="0.05"><div class="range-ends"><span>0.01</span><span>0.10</span></div></div>
+    <div class="teaching-note">The test direction and α should be chosen before examining the result. Switching to a favorable one-sided test afterward is not valid.</div>
+  </div>
+
+  <div class="control-section">
+    <div class="section-label">Operating characteristics</div>
+    <div class="control"><div class="control-top"><label for="trueRange">Assumed true RD for power</label><span class="value" id="trueValue"></span></div><input id="trueRange" type="range" min="-6" max="12" step="0.05" value="3.25"><div class="range-ends"><span>−6 pp</span><span>12 pp</span></div></div>
+    <div class="control"><label for="simM" style="display:block;margin-bottom:6px">Repeated samples</label><select id="simM"><option value="250">250</option><option value="1000" selected>1,000</option><option value="5000">5,000</option><option value="10000">10,000</option></select></div>
+    <div class="control"><div class="control-top"><label for="seedInput">Simulation seed</label><span class="value" id="seedValue"></span></div><input id="seedInput" type="number" min="1" max="99999999" value="20260711"></div>
+    <div class="primary-row"><button class="primary" id="runSimulation">Run repeated samples</button><button class="secondary" id="setNullTruth">Set truth = null</button></div>
+  </div>
+
+  <div class="control-section">
+    <div class="section-label">Actions</div>
+    <div class="primary-row"><button class="primary" id="resetAll">Restore DR lecture result</button><button class="secondary" onclick="window.print()">Print dashboard</button></div>
+  </div>
+</aside>
+
+<section class="workspace">
+  <div class="metrics" id="metricStrip" aria-live="polite"></div>
+
+  <article class="card math-card">
+    <div class="card-head"><div><h3>Mathematical formulation</h3><p>Estimand, null hypothesis, Wald statistic, p-values, matching confidence sets, Type I error, and power.</p></div><span class="hero-badge" style="padding:7px 10px;font-size:10px">RISK-DIFFERENCE SCALE</span></div>
+    <div class="math-tabs" role="tablist">
+      <button class="math-tab" data-tab="estimand" aria-selected="true">Estimand &amp; null</button>
+      <button class="math-tab" data-tab="wald" aria-selected="false">Wald test</button>
+      <button class="math-tab" data-tab="duality" aria-selected="false">CI–test duality</button>
+      <button class="math-tab" data-tab="power" aria-selected="false">Errors &amp; power</button>
+      <button class="math-tab" data-tab="causal" aria-selected="false">Causal interpretation</button>
+    </div>
+
+    <section class="math-panel active" id="panelEstimand">
+      <div class="math-chain"><div class="label">Potential outcomes → marginal causal risk difference → point null</div><div class="math-scroll"><math display="block"><mrow><msub><mi>RD</mi><mtext>ATE</mtext></msub><mo>=</mo><mi>E</mi><mo>{</mo><mi>Y</mi><mo>(</mo><mn>1</mn><mo>)</mo><mo>}</mo><mo>−</mo><mi>E</mi><mo>{</mo><mi>Y</mi><mo>(</mo><mn>0</mn><mo>)</mo><mo>}</mo><mspace width="1em"/><mo>;</mo><mspace width="1em"/><msub><mi>H</mi><mn>0</mn></msub><mo>:</mo><mi>RD</mi><mo>=</mo><msub><mi>RD</mi><mn>0</mn></msub></mrow></math></div></div>
+      <div class="math-grid">
+        <div class="math-box"><h4>Two-sided alternative</h4><div class="math-scroll"><math display="block"><mrow><msub><mi>H</mi><mi>A</mi></msub><mo>:</mo><mi>RD</mi><mo>≠</mo><msub><mi>RD</mi><mn>0</mn></msub></mrow></math></div><p>Evidence can arise from either a sufficiently positive or sufficiently negative departure from the null.</p></div>
+        <div class="math-box"><h4>Directional alternatives</h4><div class="math-scroll"><math display="block"><mrow><msub><mi>H</mi><mi>A</mi></msub><mo>:</mo><mi>RD</mi><mo>&gt;</mo><msub><mi>RD</mi><mn>0</mn></msub><mspace width=".8em"/><mtext>or</mtext><mspace width=".8em"/><mi>RD</mi><mo>&lt;</mo><msub><mi>RD</mi><mn>0</mn></msub></mrow></math></div><p>A one-sided direction should be scientifically justified and specified before seeing the estimate.</p></div>
+        <div class="math-box"><h4>Observed versus causal contrast</h4><div class="math-scroll"><math display="block"><mrow><mi>E</mi><mo>(</mo><mi>Y</mi><mo>|</mo><mi>T</mi><mo>=</mo><mn>1</mn><mo>)</mo><mo>−</mo><mi>E</mi><mo>(</mo><mi>Y</mi><mo>|</mo><mi>T</mi><mo>=</mo><mn>0</mn><mo>)</mo><mo>≠</mo><mi>RD</mi></mrow></math></div><p>The crude comparison generally targets an association rather than the adjusted causal estimand.</p></div>
+      </div>
+      <div class="live-math" id="liveEstimand"></div>
+    </section>
+
+    <section class="math-panel" id="panelWald" hidden>
+      <div class="math-chain"><div class="label">Estimate standardized relative to the null</div><div class="math-scroll"><math display="block"><mrow><mi>Z</mi><mo>=</mo><mfrac><mrow><mover accent="true"><mi>RD</mi><mo>^</mo></mover><mo>−</mo><msub><mi>RD</mi><mn>0</mn></msub></mrow><mrow><mover accent="true"><mi>SE</mi><mo>^</mo></mover><mo>(</mo><mover accent="true"><mi>RD</mi><mo>^</mo></mover><mo>)</mo></mrow></mfrac><mspace width="1em"/><mo>≈</mo><mspace width=".4em"/><mi>N</mi><mo>(</mo><mn>0</mn><mo>,</mo><mn>1</mn><mo>)</mo><mspace width=".4em"/><mtext>under</mtext><mspace width=".4em"/><msub><mi>H</mi><mn>0</mn></msub></mrow></math></div></div>
+      <div class="math-grid">
+        <div class="math-box"><h4>Two-sided p-value</h4><div class="math-scroll"><math display="block"><mrow><mi>p</mi><mo>=</mo><mn>2</mn><mo>{</mo><mn>1</mn><mo>−</mo><mi>Φ</mi><mo>(</mo><mo>|</mo><msub><mi>Z</mi><mtext>obs</mtext></msub><mo>|</mo><mo>)</mo><mo>}</mo></mrow></math></div><p>Probability under the null reference model of a statistic at least as extreme in either direction.</p></div>
+        <div class="math-box"><h4>Greater-than p-value</h4><div class="math-scroll"><math display="block"><mrow><mi>p</mi><mo>=</mo><mn>1</mn><mo>−</mo><mi>Φ</mi><mo>(</mo><msub><mi>Z</mi><mtext>obs</mtext></msub><mo>)</mo></mrow></math></div><p>Large positive values count against the null.</p></div>
+        <div class="math-box"><h4>Less-than p-value</h4><div class="math-scroll"><math display="block"><mrow><mi>p</mi><mo>=</mo><mi>Φ</mi><mo>(</mo><msub><mi>Z</mi><mtext>obs</mtext></msub><mo>)</mo></mrow></math></div><p>Large negative values count against the null.</p></div>
+      </div>
+      <div class="live-math" id="liveWald"></div>
+      <div class="warning"><b>Interpretation:</b> a p-value is not P(H₀ | data), not the probability the result occurred “by chance,” and not the probability that the causal effect is real.</div>
+    </section>
+
+    <section class="math-panel" id="panelDuality" hidden>
+      <div class="math-chain"><div class="label">Matching Wald confidence set</div><div class="math-scroll"><math display="block"><mrow><mtext>Two-sided:</mtext><mspace width=".5em"/><mover accent="true"><mi>RD</mi><mo>^</mo></mover><mo>±</mo><msub><mi>z</mi><mrow><mn>1</mn><mo>−</mo><mi>α</mi><mo>/</mo><mn>2</mn></mrow></msub><mover accent="true"><mi>SE</mi><mo>^</mo></mover><mspace width="1.2em"/><mtext>Greater:</mtext><mspace width=".5em"/><mfenced open="[" close=")"><mrow><mover accent="true"><mi>RD</mi><mo>^</mo></mover><mo>−</mo><msub><mi>z</mi><mrow><mn>1</mn><mo>−</mo><mi>α</mi></mrow></msub><mover accent="true"><mi>SE</mi><mo>^</mo></mover></mrow><mo>,</mo><mo>∞</mo></mfenced></mrow></math></div></div>
+      <div class="math-grid">
+        <div class="math-box"><h4>Exact procedural duality</h4><p>A level-α Wald test rejects a null value exactly when that value lies outside the matching Wald confidence set.</p></div>
+        <div class="math-box"><h4>Lecture percentile interval</h4><p>The adjusted lecture analyses display percentile bootstrap intervals but compute p-values from a Wald z-statistic using the bootstrap SE.</p></div>
+        <div class="math-box"><h4>Important consequence</h4><p>A percentile bootstrap interval and a bootstrap-SE Wald p-value are not mathematically exact duals, even when their conclusions happen to agree.</p></div>
+      </div>
+      <div class="live-math" id="liveDuality"></div>
+    </section>
+
+    <section class="math-panel" id="panelPower" hidden>
+      <div class="math-chain"><div class="label">Repeated-sampling operating characteristics</div><div class="math-scroll"><math display="block"><mrow><mi>α</mi><mo>=</mo><mi>P</mi><mo>(</mo><mtext>reject</mtext><mspace width=".3em"/><msub><mi>H</mi><mn>0</mn></msub><mo>|</mo><msub><mi>H</mi><mn>0</mn></msub><mspace width=".3em"/><mtext>true</mtext><mo>)</mo><mspace width="1.3em"/><mi>β</mi><mo>(</mo><mi>θ</mi><mo>)</mo><mo>=</mo><mi>P</mi><mo>(</mo><mtext>do not reject</mtext><mo>|</mo><mi>θ</mi><mo>)</mo><mspace width="1.3em"/><mtext>Power</mtext><mo>=</mo><mn>1</mn><mo>−</mo><mi>β</mi><mo>(</mo><mi>θ</mi><mo>)</mo></mrow></math></div></div>
+      <div class="math-grid">
+        <div class="math-box"><h4>Type I error</h4><p>Rejecting the chosen point null when it is true. Nominal α is achieved only when the reference approximation and standard error are adequately calibrated.</p></div>
+        <div class="math-box"><h4>Type II error</h4><p>Failing to reject the null at a particular non-null effect. It depends on effect size, standard error, α, and test direction.</p></div>
+        <div class="math-box"><h4>Power is not evidence magnitude</h4><p>Power is a design/operating characteristic, not the posterior probability that the alternative is true after observing data.</p></div>
+      </div>
+      <div class="live-math" id="livePower"></div>
+    </section>
+
+    <section class="math-panel" id="panelCausal" hidden>
+      <div class="math-grid">
+        <div class="math-box"><h4>Consistency</h4><div class="math-scroll"><math display="block"><mrow><mi>Y</mi><mo>=</mo><mi>T</mi><mi>Y</mi><mo>(</mo><mn>1</mn><mo>)</mo><mo>+</mo><mo>(</mo><mn>1</mn><mo>−</mo><mi>T</mi><mo>)</mo><mi>Y</mi><mo>(</mo><mn>0</mn><mo>)</mo></mrow></math></div><p>Observed treatment versions must correspond to the potential outcomes being compared.</p></div>
+        <div class="math-box"><h4>Exchangeability</h4><div class="math-scroll"><math display="block"><mrow><mo>{</mo><mi>Y</mi><mo>(</mo><mn>1</mn><mo>)</mo><mo>,</mo><mi>Y</mi><mo>(</mo><mn>0</mn><mo>)</mo><mo>}</mo><mo>⊥</mo><mi>T</mi><mo>|</mo><mi>X</mi></mrow></math></div><p>Measured adjustment must adequately block confounding paths for a causal interpretation.</p></div>
+        <div class="math-box"><h4>Positivity and estimation</h4><div class="math-scroll"><math display="block"><mrow><mn>0</mn><mo>&lt;</mo><mi>P</mi><mo>(</mo><mi>T</mi><mo>=</mo><mn>1</mn><mo>|</mo><mi>X</mi><mo>)</mo><mo>&lt;</mo><mn>1</mn></mrow></math></div><p>The estimator and uncertainty procedure must also be appropriate for the target population.</p></div>
+      </div>
+      <div class="warning"><b>Separation of questions:</b> a small p-value addresses sampling compatibility with a null under the fitted analysis. It does not establish exchangeability, repair model misspecification, or quantify unmeasured confounding.</div>
+    </section>
+  </article>
+
+  <div class="grid-top">
+    <article class="card">
+      <div class="card-head"><div><h3>1. Null reference distribution and observed test statistic</h3><p>The shaded region is the rejection region for the selected alternative and α.</p></div></div>
+      <div class="legend"><span><i class="line-key" style="border-color:var(--blue)"></i>standard-normal density under H₀</span><span><i class="dot" style="background:var(--danger)"></i>observed z</span><span><i class="dash-key"></i>critical value</span></div>
+      <div class="chart-wrap"><svg id="nullSvg" class="chart" viewBox="0 0 900 420" role="img" aria-label="Null reference distribution with rejection regions and observed test statistic"></svg></div>
+      <div class="chart-note">The reference curve is an approximation for the Wald statistic. It is not the distribution of the causal effect itself.</div>
+    </article>
+
+    <article class="card">
+      <div class="card-head"><div><h3>2. Interpretation of the current test</h3><p>Statistical conclusion, effect magnitude, interval, estimand, and assumptions.</p></div></div>
+      <div class="interpret-body" id="interpretPanel"></div>
+    </article>
+  </div>
+
+  <div class="grid-two">
+    <article class="card">
+      <div class="card-head"><div><h3>3. Effect estimate, null value, and confidence intervals</h3><p>The matching Wald interval is shown separately from the lecture’s stored interval.</p></div></div>
+      <div class="legend"><span><i class="line-key" style="border-color:var(--accent)"></i>matching Wald interval</span><span><i class="line-key" style="border-color:var(--green)"></i>lecture interval</span><span><i class="dot" style="background:var(--orange)"></i>estimate</span><span><i class="dash-key"></i>null value</span></div>
+      <div class="chart-wrap"><svg id="effectSvg" class="chart" viewBox="0 0 850 360" role="img" aria-label="Effect estimate, null value, and confidence intervals"></svg></div>
+      <div class="chart-note" id="effectNote"></div>
+    </article>
+
+    <article class="card">
+      <div class="card-head"><div><h3>4. Confidence curve: p-value versus the hypothesized null</h3><p>Move the null slider or inspect every possible point null on the same scale.</p></div></div>
+      <div class="legend"><span><i class="line-key" style="border-color:var(--accent)"></i>Wald p-value function</span><span><i class="line-key" style="border-color:var(--danger)"></i>α threshold</span><span><i class="dot" style="background:var(--orange)"></i>current null</span></div>
+      <div class="chart-wrap"><svg id="confidenceSvg" class="chart" viewBox="0 0 850 380" role="img" aria-label="P-value function over hypothesized risk-difference null values"></svg></div>
+      <div class="chart-note">For the matching Wald procedure, point-null values with p ≥ α form the corresponding confidence set.</div>
+    </article>
+  </div>
+
+  <div class="grid-two">
+    <article class="card">
+      <div class="card-head"><div><h3>5. Power curve under the selected standard error</h3><p>Power is computed under the normal approximation while varying the true risk difference.</p></div></div>
+      <div class="legend"><span><i class="line-key" style="border-color:var(--accent)"></i>power</span><span><i class="line-key" style="border-color:var(--danger)"></i>α</span><span><i class="dot" style="background:var(--orange)"></i>assumed true RD</span></div>
+      <div class="chart-wrap"><svg id="powerSvg" class="chart" viewBox="0 0 850 380" role="img" aria-label="Power curve for the current hypothesis test"></svg></div>
+      <div class="chart-note">At the null, rejection probability is approximately α. Power rises when the true effect moves into the direction detected by the chosen test.</div>
+    </article>
+
+    <article class="card">
+      <div class="card-head"><div><h3>6. Repeated-sampling experiment</h3><p>Simulate estimates from the working model \(\widehat{RD}\sim N(RD_{true},SE^2)\).</p></div><div class="mini-controls"><label for="simPlotSelect">Plot</label><select id="simPlotSelect"><option value="estimate">Estimate distribution</option><option value="pvalue">P-value distribution</option></select></div></div>
+      <div class="simulation-status" id="simulationStatus">The simulation uses the currently selected standard error and test rule.</div>
+      <div class="sim-summary" id="simulationSummary"></div>
+      <div class="chart-wrap"><svg id="simulationSvg" class="chart" viewBox="0 0 850 390" role="img" aria-label="Repeated-sampling simulation of estimates or p-values"></svg></div>
+      <div class="chart-note">This simulation illustrates the working reference model. It does not diagnose confounding, poor overlap, model failure, or bootstrap validity.</div>
+    </article>
+  </div>
+
+  <article class="card full-card">
+    <div class="card-head"><div><h3>7. Lecture results: crude and adjusted tests</h3><p>Click a method to load its estimate, standard error, stored interval, and inferential interpretation.</p></div></div>
+    <div class="chart-wrap"><svg id="methodsSvg" class="chart" viewBox="0 0 980 410" role="img" aria-label="Risk-difference estimates and confidence intervals for lecture methods"></svg></div>
+    <div class="method-table"><table><thead><tr><th>Method</th><th>Estimate (pp)</th><th>SE (pp)</th><th>z for H₀: RD=0</th><th>two-sided p</th><th>lecture 95% interval</th><th>SE source</th></tr></thead><tbody id="methodBody"></tbody></table></div>
+  </article>
+
+  <div class="grid-two">
+    <article class="card">
+      <div class="card-head"><div><h3>8. Full-estimator bootstrap workflow for adjusted methods</h3><p>The lecture’s adjusted p-values use a bootstrap standard error inside a normal/Wald test.</p></div></div>
+      <div class="workflow">
+        <div class="workflow-step"><div class="num">1</div><b>Resample units</b><span>Draw n observed rows with replacement.</span></div>
+        <div class="workflow-step"><div class="num">2</div><b>Refit nuisance models</b><span>Refit the treatment and/or outcome model.</span></div>
+        <div class="workflow-step"><div class="num">3</div><b>Recompute estimator</b><span>Rebuild IPW, OR, or DR risk difference.</span></div>
+        <div class="workflow-step"><div class="num">4</div><b>Estimate SE</b><span>Use the standard deviation of successful bootstrap estimates.</span></div>
+        <div class="workflow-step"><div class="num">5</div><b>Form Wald z</b><span>z = (estimate − null)/bootstrap SE.</span></div>
+      </div>
+      <div class="chart-note"><strong>Important:</strong> refitting only the final arithmetic while holding nuisance fits fixed understates full-procedure uncertainty.</div>
+    </article>
+
+    <article class="card">
+      <div class="card-head"><div><h3>9. Four layers that must remain separate</h3><p>Hypothesis testing occupies only one layer of a causal analysis.</p></div></div>
+      <div class="layers">
+        <div class="layer causal"><h4>Causal question</h4><p>What would happen to the target population under smoking versus non-smoking?</p></div>
+        <div class="layer ident"><h4>Identification &amp; estimation</h4><p>Which assumptions and estimator connect observed data to the causal risk difference?</p></div>
+        <div class="layer stat"><h4>Statistical uncertainty</h4><p>How far is the estimate from the null relative to sampling uncertainty?</p></div>
+        <div class="layer sens"><h4>Causal-validity uncertainty</h4><p>How sensitive is the result to unmeasured confounding and other violations?</p></div>
+      </div>
+      <div class="chart-note">A small p-value in the statistical layer cannot repair a failure in the identification layer.</div>
+    </article>
+  </div>
+
+  <article class="card full-card">
+    <div class="card-head"><div><h3>10. Hypothesis-testing checklist</h3><p>Use this checklist before interpreting “significance” causally.</p></div></div>
+    <div class="checklist">
+      <div class="check"><b>1. Estimand</b><span>Is the test about a crude association or an adjusted causal estimand?</span></div>
+      <div class="check"><b>2. Null value and scale</b><span>Is the null defined on the RD, RR, log-RR, odds-ratio, or another scale?</span></div>
+      <div class="check"><b>3. Standard error</b><span>Does uncertainty include all fitted nuisance components and estimation steps?</span></div>
+      <div class="check"><b>4. Reference approximation</b><span>Is the Wald/normal approximation adequate, or is another procedure needed?</span></div>
+      <div class="check"><b>5. Identification</b><span>Are consistency, exchangeability, and positivity plausible?</span></div>
+      <div class="check"><b>6. Magnitude</b><span>Is the estimated difference scientifically meaningful, not merely detectable?</span></div>
+      <div class="check"><b>7. Direction</b><span>Was a one-sided alternative justified and specified in advance?</span></div>
+      <div class="check"><b>8. Sensitivity</b><span>What happens under unmeasured confounding, poor overlap, or modeling changes?</span></div>
+      <div class="check"><b>9. Reporting</b><span>Report estimate, interval, p-value, method, target, and assumptions together.</span></div>
+    </div>
+  </article>
+
+  <article class="card export-card full-card">
+    <div class="card-head"><div><h3>Export and inspect</h3><p>All plots use resolution-independent inline SVG.</p></div></div>
+    <div class="export-tools"><button id="exportSummary">Export current test CSV</button><button data-svg="nullSvg">Save null plot as SVG</button><button data-svg="effectSvg">Save interval plot as SVG</button><button data-svg="confidenceSvg">Save confidence curve as SVG</button><button data-svg="powerSvg">Save power curve as SVG</button><button data-svg="methodsSvg">Save methods plot as SVG</button></div>
+  </article>
+</section>
+</main>
+<div class="tooltip" id="tooltip"></div>
+<footer class="footer"><b>Se Yoon Lee, Ph.D.</b> • This self-contained teaching application follows the uploaded “Hypothesis Testing for Causal Effects” lecture. The classroom NHANES results are treated as fixed lecture presets; the operating-characteristic simulation is a separate normal-approximation teaching experiment.</footer>
+
+<script>
+(function(){
+'use strict';
+const $=id=>document.getElementById(id);
+const NS='http://www.w3.org/2000/svg';
+const C={ink:'#162033',muted:'#667085',grid:'#E7ECF2',accent:'#7057E8',orange:'#E56B2F',blue:'#2F6EA5',green:'#208A62',danger:'#C23B3B',amber:'#B66A00',teal:'#167C86',gray:'#7B8495'};
+const METHODS={
+  crude:{label:'Observed comparison',short:'Observed',estimate:8.20,se:.8211,lo:6.59,hi:9.81,seSource:'Two-sample proportion formula',target:'Observed association',risk0:6.93,risk1:15.12,n:6299,n0:3740,n1:2559},
+  ipw:{label:'IPW',short:'IPW',estimate:2.99,se:.7907,lo:1.36,hi:4.55,seSource:'Nonparametric bootstrap',target:'Adjusted causal RD under assumptions',risk0:8.71,risk1:11.70,n:6299},
+  or:{label:'Outcome regression',short:'OR',estimate:3.45,se:.7788,lo:1.84,hi:4.98,seSource:'Nonparametric bootstrap',target:'Adjusted causal RD under assumptions',risk0:8.53,risk1:11.98,n:6299},
+  dr:{label:'Doubly robust',short:'DR',estimate:3.25,se:.7794,lo:1.69,hi:4.78,seSource:'Nonparametric bootstrap',target:'Adjusted causal RD under assumptions',risk0:8.56,risk1:11.82,n:6299}
+};
+const defaults={preset:'dr',estimate:3.25,se:.7794,nullValue:0,alternative:'two',alpha:.05,trueEffect:3.25,seed:20260711,simM:1000,showLectureCI:true,simPlot:'estimate'};
+const state={...defaults,simulation:null,reportText:''};
+
+function clamp(x,a,b){return Math.max(a,Math.min(b,x))}
+function fmt(x,d=2){return Number.isFinite(x)?x.toFixed(d):'—'}
+function signed(x,d=2){return Number.isFinite(x)?(x>0?'+':'')+x.toFixed(d):'—'}
+function pp(x,d=2){return signed(x,d)+' pp'}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
+function normalPdf(x){return Math.exp(-.5*x*x)/Math.sqrt(2*Math.PI)}
+function erf(x){const sign=x<0?-1:1,a=Math.abs(x),t=1/(1+.3275911*a),y=1-(((((1.061405429*t-1.453152027)*t+1.421413741)*t-.284496736)*t+.254829592)*t)*Math.exp(-a*a);return sign*y}
+function normalCdf(x){return .5*(1+erf(x/Math.SQRT2))}
+function invNorm(p){
+  p=clamp(p,1e-12,1-1e-12);
+  const a=[-39.69683028665376,220.9460984245205,-275.9285104469687,138.357751867269,-30.66479806614716,2.506628277459239];
+  const b=[-54.47609879822406,161.5858368580409,-155.6989798598866,66.80131188771972,-13.28068155288572];
+  const c=[-.007784894002430293,-.3223964580411365,-2.400758277161838,-2.549732539343734,4.374664141464968,2.938163982698783];
+  const d=[.007784695709041462,.3224671290700398,2.445134137142996,3.754408661907416];
+  const pl=.02425,ph=1-pl;let q,r;
+  if(p<pl){q=Math.sqrt(-2*Math.log(p));return (((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1)}
+  if(p>ph){q=Math.sqrt(-2*Math.log(1-p));return -(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1)}
+  q=p-.5;r=q*q;return (((((a[0]*r+a[1])*r+a[2])*r+a[3])*r+a[4])*r+a[5])*q/(((((b[0]*r+b[1])*r+b[2])*r+b[3])*r+b[4])*r+1)
+}
+function pValue(z,alt){if(alt==='greater')return clamp(1-normalCdf(z),0,1);if(alt==='less')return clamp(normalCdf(z),0,1);return clamp(2*(1-normalCdf(Math.abs(z))),0,1)}
+function critical(alpha,alt){return alt==='two'?invNorm(1-alpha/2):invNorm(1-alpha)}
+function testDecision(est,se,nullValue,alt,alpha){const z=(est-nullValue)/se,p=pValue(z,alt),reject=p<alpha;return{z,p,reject}}
+function waldSet(est,se,alt,alpha){const c=critical(alpha,alt);if(alt==='greater')return{lo:est-c*se,hi:Infinity};if(alt==='less')return{lo:-Infinity,hi:est+c*se};return{lo:est-c*se,hi:est+c*se}}
+function contains(set,x){return x>=set.lo&&x<=set.hi}
+function formatP(p){if(!Number.isFinite(p))return'—';if(p<1e-6)return p.toExponential(2);if(p<.001)return p.toExponential(2);return p.toFixed(4)}
+function altLabel(a){return a==='greater'?'RD > RD₀':a==='less'?'RD < RD₀':'RD ≠ RD₀'}
+function testRuleText(alt,alpha){const c=critical(alpha,alt);return alt==='two'?'Reject when |Z| > '+fmt(c,3):alt==='greater'?'Reject when Z > '+fmt(c,3):'Reject when Z < −'+fmt(c,3)}
+function powerAt(theta){
+  const se=state.se,n0=state.nullValue,a=state.alpha,alt=state.alternative,c=critical(a,alt),mu=(theta-n0)/se;
+  if(alt==='greater')return 1-normalCdf(c-mu);
+  if(alt==='less')return normalCdf(-c-mu);
+  return normalCdf(-c-mu)+1-normalCdf(c-mu)
+}
+function sx(x,lo,hi,L,R){return L+(x-lo)/(hi-lo)*(R-L)}
+function sy(y,lo,hi,T,B){return B-(y-lo)/(hi-lo)*(B-T)}
+function svgText(x,y,t,attrs=''){return '<text x="'+x+'" y="'+y+'" '+attrs+'>'+escapeHtml(t)+'</text>'}
+function axisTicks(lo,hi,n=5){const out=[];for(let i=0;i<=n;i++)out.push(lo+(hi-lo)*i/n);return out}
+function mulberry32(seed){let a=seed>>>0;return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function randn(r){let u=0,v=0;while(!u)u=r();while(!v)v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)}
+function quantile(a,p){if(!a.length)return NaN;const b=[...a].sort((x,y)=>x-y),h=(b.length-1)*p,l=Math.floor(h),u=Math.ceil(h);return l===u?b[l]:b[l]+(h-l)*(b[u]-b[l])}
+function download(content,type,name){const blob=new Blob([content],{type}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),700)}
+function saveSvg(id){const svg=$(id).cloneNode(true);svg.setAttribute('xmlns',NS);download(new XMLSerializer().serializeToString(svg),'image/svg+xml;charset=utf-8',id+'.svg')}
+function showTip(e,html){const tip=$('tooltip');tip.innerHTML=html;tip.style.opacity=1;moveTip(e)}
+function moveTip(e){const tip=$('tooltip');tip.style.left=Math.min(innerWidth-300,e.clientX+14)+'px';tip.style.top=Math.min(innerHeight-175,e.clientY+14)+'px'}
+function hideTip(){$('tooltip').style.opacity=0}
+
+function selectedMethod(){return METHODS[state.preset]||null}
+function markCustom(){state.preset='custom';document.querySelectorAll('[data-preset]').forEach(b=>b.classList.remove('active'))}
+function setPreset(k){const m=METHODS[k];if(!m)return;state.preset=k;state.estimate=m.estimate;state.se=m.se;state.trueEffect=m.estimate;document.querySelectorAll('[data-preset]').forEach(b=>b.classList.toggle('active',b.dataset.preset===k));syncControls();state.simulation=null;runSimulation()}
+function readControls(){state.estimate=+$('estimateRange').value;state.se=+$('seRange').value;state.nullValue=+$('nullRange').value;state.alternative=$('alternativeSelect').value;state.alpha=+$('alphaRange').value;state.trueEffect=+$('trueRange').value;state.seed=+$('seedInput').value||1;state.simM=+$('simM').value;state.showLectureCI=$('showLectureCI').checked;state.simPlot=$('simPlotSelect').value}
+function syncControls(){$('estimateRange').value=state.estimate;$('seRange').value=state.se;$('nullRange').value=state.nullValue;$('alternativeSelect').value=state.alternative;$('alphaRange').value=state.alpha;$('trueRange').value=state.trueEffect;$('seedInput').value=state.seed;$('simM').value=state.simM;$('showLectureCI').checked=state.showLectureCI;$('simPlotSelect').value=state.simPlot;updateLabels()}
+function updateLabels(){$('estimateValue').textContent=signed(state.estimate,2)+' pp';$('seValue').textContent=fmt(state.se,2)+' pp';$('nullValue').textContent=signed(state.nullValue,2)+' pp';$('alphaValue').textContent=fmt(state.alpha,3);$('trueValue').textContent=signed(state.trueEffect,2)+' pp';$('seedValue').textContent=state.seed}
+
+function renderMetrics(){const r=testDecision(state.estimate,state.se,state.nullValue,state.alternative,state.alpha),ci=waldSet(state.estimate,state.se,state.alternative,state.alpha),power=powerAt(state.trueEffect),items=[['Estimate',signed(state.estimate,2)+' pp',selectedMethod()?selectedMethod().label:'Custom analysis',''],['Null RD₀',signed(state.nullValue,2)+' pp',altLabel(state.alternative),''],['SE',fmt(state.se,2)+' pp',selectedMethod()?selectedMethod().seSource:'User-specified',''],['Wald z',signed(r.z,2),testRuleText(state.alternative,state.alpha),''],['p-value',formatP(r.p),'α = '+fmt(state.alpha,3),''],['Decision',r.reject?'Reject H₀':'Do not reject H₀','Power at selected truth = '+(100*power).toFixed(1)+'%',r.reject?'reject':'keep']];$('metricStrip').innerHTML=items.map(x=>'<div class="metric '+x[3]+'"><div class="k">'+x[0]+'</div><div class="v">'+x[1]+'</div><div class="sub">'+x[2]+'</div></div>').join('')}
+
+function renderMath(){const r=testDecision(state.estimate,state.se,state.nullValue,state.alternative,state.alpha),ci=waldSet(state.estimate,state.se,state.alternative,state.alpha),pwr=powerAt(state.trueEffect),m=selectedMethod();
+  $('liveEstimand').innerHTML='<strong>Current hypothesis</strong><div class="chip-row"><span class="chip">RD̂ = '+signed(state.estimate,2)+' pp</span><span class="chip">RD₀ = '+signed(state.nullValue,2)+' pp</span><span class="chip">Hₐ: '+altLabel(state.alternative)+'</span><span class="chip">Target: '+(m?m.target:'Custom risk-difference estimand')+'</span></div>';
+  $('liveWald').innerHTML='<strong>Current substitution</strong><div class="chip-row"><span class="chip">Z = ('+signed(state.estimate,2)+' − '+signed(state.nullValue,2)+') / '+fmt(state.se,2)+' = '+signed(r.z,3)+'</span><span class="chip">p = '+formatP(r.p)+'</span><span class="chip">'+(r.reject?'Reject H₀':'Do not reject H₀')+'</span></div>';
+  const ciText=Number.isFinite(ci.lo)&&Number.isFinite(ci.hi)?'['+signed(ci.lo,2)+', '+signed(ci.hi,2)+'] pp':Number.isFinite(ci.lo)?'['+signed(ci.lo,2)+', ∞) pp':'(−∞, '+signed(ci.hi,2)+'] pp';
+  $('liveDuality').innerHTML='<strong>Matching Wald confidence set</strong><div class="chip-row"><span class="chip">'+ciText+'</span><span class="chip">RD₀ '+(contains(ci,state.nullValue)?'is inside':'is outside')+'</span><span class="chip">Test decision: '+(r.reject?'reject':'do not reject')+'</span></div>';
+  $('livePower').innerHTML='<strong>Current operating point</strong><div class="chip-row"><span class="chip">True RD = '+signed(state.trueEffect,2)+' pp</span><span class="chip">Power = '+(100*pwr).toFixed(1)+'%</span><span class="chip">Type II error β = '+(100*(1-pwr)).toFixed(1)+'%</span><span class="chip">At RD = RD₀, rejection ≈ '+(100*state.alpha).toFixed(1)+'%</span></div>';
+}
+function activateTab(name){document.querySelectorAll('.math-tab').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===name?'true':'false'));document.querySelectorAll('.math-panel').forEach(p=>{const on=p.id==='panel'+name[0].toUpperCase()+name.slice(1);p.classList.toggle('active',on);p.hidden=!on})}
+
+function renderNull(){const svg=$('nullSvg'),r=testDecision(state.estimate,state.se,state.nullValue,state.alternative,state.alpha),c=critical(state.alpha,state.alternative),lim=Math.max(4.3,Math.min(11,Math.abs(r.z)+.8)),L=70,Rx=865,T=34,B=330,x=v=>sx(v,-lim,lim,L,Rx),y=v=>sy(v,0,.42,T,B);let s='<style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="900" height="420" fill="#fff"/>';
+  for(const t of axisTicks(-lim,lim,8)){const xx=x(t);s+='<line x1="'+xx+'" x2="'+xx+'" y1="'+T+'" y2="'+B+'" stroke="'+C.grid+'"/>'+svgText(xx,B+21,fmt(t,1),'text-anchor="middle" font-size="9" fill="'+C.muted+'"')}
+  for(const d of [0,.1,.2,.3,.4]){const yy=y(d);s+='<line x1="'+L+'" x2="'+Rx+'" y1="'+yy+'" y2="'+yy+'" stroke="'+C.grid+'"/>'+svgText(L-8,yy+4,fmt(d,1),'text-anchor="end" font-size="9" fill="'+C.muted+'"')}
+  const density=[];for(let i=0;i<=500;i++){const z=-lim+2*lim*i/500;density.push([z,normalPdf(z)])}
+  function shade(test){let d='';const pts=density.filter(q=>test(q[0]));if(!pts.length)return'';d+='M '+x(pts[0][0])+' '+y(0)+' ';pts.forEach(q=>d+='L '+x(q[0])+' '+y(q[1])+' ');d+='L '+x(pts[pts.length-1][0])+' '+y(0)+' Z';return'<path d="'+d+'" fill="'+C.danger+'" fill-opacity=".22" stroke="none"/>'}
+  if(state.alternative==='two'){s+=shade(z=>z<=-c)+shade(z=>z>=c)}else if(state.alternative==='greater'){s+=shade(z=>z>=c)}else{s+=shade(z=>z<=-c)}
+  let d='';density.forEach((q,i)=>d+=(i?'L':'M')+x(q[0])+' '+y(q[1])+' ');s+='<path d="'+d+'" fill="none" stroke="'+C.blue+'" stroke-width="3.5"/>';
+  const crits=state.alternative==='two'?[-c,c]:state.alternative==='greater'?[c]:[-c];crits.forEach(v=>{const xx=x(v);s+='<line x1="'+xx+'" x2="'+xx+'" y1="'+T+'" y2="'+B+'" stroke="#111827" stroke-width="2" stroke-dasharray="6 5"/>'+svgText(xx,22,(v<0?'−':'')+fmt(Math.abs(v),2),'text-anchor="middle" font-size="9" font-weight="850" fill="#111827"')});
+  const zo=clamp(r.z,-lim,lim),xo=x(zo);s+='<line x1="'+xo+'" x2="'+xo+'" y1="'+T+'" y2="'+B+'" stroke="'+C.danger+'" stroke-width="3"/>'+'<circle cx="'+xo+'" cy="'+y(normalPdf(zo))+'" r="7" fill="'+C.danger+'" stroke="#fff" stroke-width="2"/>';
+  const anchor=r.z>=0?'end':'start',tx=r.z>=0?xo-8:xo+8;s+=svgText(tx,58,'Observed z = '+signed(r.z,2),'text-anchor="'+anchor+'" font-size="11" font-weight="900" fill="'+C.danger+'"')+svgText(tx,75,'p = '+formatP(r.p),'text-anchor="'+anchor+'" font-size="10" font-weight="800" fill="'+C.danger+'"');
+  if(Math.abs(r.z)>lim)s+=svgText(tx,92,'position clipped at plot boundary','text-anchor="'+anchor+'" font-size="9" fill="'+C.muted+'"');
+  s+=svgText((L+Rx)/2,402,'Wald z statistic under H₀','text-anchor="middle" font-size="11" font-weight="800" fill="'+C.ink+'"');svg.innerHTML=s}
+
+function renderInterpretation(){const r=testDecision(state.estimate,state.se,state.nullValue,state.alternative,state.alpha),ci=waldSet(state.estimate,state.se,state.alternative,state.alpha),m=selectedMethod(),direction=state.estimate>state.nullValue?'above':state.estimate<state.nullValue?'below':'equal to',ciText=Number.isFinite(ci.lo)&&Number.isFinite(ci.hi)?'['+signed(ci.lo,2)+', '+signed(ci.hi,2)+'] pp':Number.isFinite(ci.lo)?'['+signed(ci.lo,2)+', ∞) pp':'(−∞, '+signed(ci.hi,2)+'] pp';
+  const headline=r.reject?'Reject the selected point null':'Do not reject the selected point null';
+  const main=r.reject?'The estimate is sufficiently far from the null relative to its estimated sampling uncertainty under the selected Wald reference model.':'The estimate is not sufficiently far from the null, in the direction specified by the alternative, to cross the selected α threshold.';
+  const estimand=m&&state.preset==='crude'?'This is a test of the raw smoker-versus-non-smoker association. It is not automatically a causal test.':'For a causal interpretation, the adjusted risk difference must identify E{Y(1)}−E{Y(0)} under consistency, conditional exchangeability, positivity, and an adequate estimation strategy.';
+  state.reportText=(m?m.label:'Custom analysis')+': the estimated risk difference was '+signed(state.estimate,2)+' percentage points (SE '+fmt(state.se,2)+' pp). Testing H0: RD = '+signed(state.nullValue,2)+' pp against '+altLabel(state.alternative)+' gave z = '+signed(r.z,2)+' and p = '+formatP(r.p)+'. The matching Wald confidence set was '+ciText+'. '+(r.reject?'The null was rejected':'The null was not rejected')+' at α = '+fmt(state.alpha,3)+'.';
+  $('interpretPanel').innerHTML='<div class="decision-banner '+(r.reject?'reject':'keep')+'"><div class="headline">'+headline+'</div><div>'+main+'</div></div><div class="result-grid"><div class="result-box"><div class="name">Estimate relative to null</div><div class="number">'+fmt(Math.abs(state.estimate-state.nullValue),2)+' pp '+direction+'</div><div class="detail">Standardized distance |z| = '+fmt(Math.abs(r.z),2)+'</div></div><div class="result-box"><div class="name">Matching Wald set</div><div class="number">'+ciText+'</div><div class="detail">Null is '+(contains(ci,state.nullValue)?'inside':'outside')+'</div></div><div class="result-box"><div class="name">Target</div><div class="number">'+(m?m.target:'Custom RD target')+'</div><div class="detail">Method: '+(m?m.label:'custom')+'</div></div><div class="result-box"><div class="name">Power at selected truth</div><div class="number">'+(100*powerAt(state.trueEffect)).toFixed(1)+'%</div><div class="detail">Working normal model only</div></div></div><div class="report-box"><b>Interpretation boundary:</b> '+estimand+'<br><br><b>Report-ready sentence:</b> '+state.reportText+'<br><button id="copyReport">Copy report sentence</button></div>';
+  $('copyReport').onclick=()=>navigator.clipboard&&navigator.clipboard.writeText(state.reportText)
+}
+
+function effectRange(){const ci=waldSet(state.estimate,state.se,state.alternative,state.alpha),m=selectedMethod(),vals=[state.estimate,state.nullValue,state.trueEffect];if(Number.isFinite(ci.lo))vals.push(ci.lo);if(Number.isFinite(ci.hi))vals.push(ci.hi);if(m&&state.showLectureCI){vals.push(m.lo,m.hi)}let lo=Math.min(...vals),hi=Math.max(...vals),span=Math.max(4,hi-lo);return[lo-.18*span,hi+.18*span]}
+function renderEffect(){const svg=$('effectSvg'),ci=waldSet(state.estimate,state.se,state.alternative,state.alpha),m=selectedMethod(),[lo,hi]=effectRange(),L=95,Rx=815,T=38,B=275,x=v=>sx(v,lo,hi,L,Rx),rows=[{name:'Matching Wald set',y:105,color:C.accent,lo:ci.lo,hi:ci.hi},{name:'Lecture 95% interval',y:190,color:C.green,lo:m&&state.showLectureCI?m.lo:NaN,hi:m&&state.showLectureCI?m.hi:NaN}];let s='<style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="850" height="360" fill="#fff"/>';axisTicks(lo,hi,6).forEach(v=>{const xx=x(v);s+='<line x1="'+xx+'" x2="'+xx+'" y1="'+T+'" y2="'+B+'" stroke="'+C.grid+'"/>'+svgText(xx,B+21,signed(v,1),'text-anchor="middle" font-size="9" fill="'+C.muted+'"')});const xn=x(state.nullValue);s+='<line x1="'+xn+'" x2="'+xn+'" y1="'+T+'" y2="'+B+'" stroke="#111827" stroke-width="2.3" stroke-dasharray="7 5"/>'+svgText(xn,T-10,'RD₀ '+signed(state.nullValue,2)+' pp','text-anchor="middle" font-size="9" font-weight="850" fill="#111827"');
+  rows.forEach((r,i)=>{s+=svgText(L-12,r.y+4,r.name,'text-anchor="end" font-size="10" font-weight="850" fill="'+C.ink+'"');if(Number.isFinite(r.lo)||Number.isFinite(r.hi)){const a=Number.isFinite(r.lo)?x(r.lo):L,b=Number.isFinite(r.hi)?x(r.hi):Rx;s+='<line x1="'+a+'" x2="'+b+'" y1="'+r.y+'" y2="'+r.y+'" stroke="'+r.color+'" stroke-width="5" stroke-linecap="round"/>';if(Number.isFinite(r.lo))s+='<line x1="'+a+'" x2="'+a+'" y1="'+(r.y-9)+'" y2="'+(r.y+9)+'" stroke="'+r.color+'" stroke-width="2"/>';if(Number.isFinite(r.hi))s+='<line x1="'+b+'" x2="'+b+'" y1="'+(r.y-9)+'" y2="'+(r.y+9)+'" stroke="'+r.color+'" stroke-width="2"/>';s+=svgText((a+b)/2,r.y-14,(Number.isFinite(r.lo)?signed(r.lo,2):'−∞')+' to '+(Number.isFinite(r.hi)?signed(r.hi,2):'∞')+' pp','text-anchor="middle" font-size="9" font-weight="800" fill="'+r.color+'"')}else{s+=svgText((L+Rx)/2,r.y+4,'Not available for custom/current modified values','text-anchor="middle" font-size="9" fill="'+C.muted+'"')}});
+  const xe=x(state.estimate);s+='<circle cx="'+xe+'" cy="105" r="8" fill="'+C.orange+'" stroke="#fff" stroke-width="2.5"/>'+svgText(xe,82,'RD̂ '+signed(state.estimate,2)+' pp','text-anchor="middle" font-size="10" font-weight="900" fill="'+C.orange+'"');if(m&&state.showLectureCI)s+='<circle cx="'+xe+'" cy="190" r="8" fill="'+C.orange+'" stroke="#fff" stroke-width="2.5"/>';s+=svgText((L+Rx)/2,342,'Risk difference (percentage points)','text-anchor="middle" font-size="11" font-weight="800" fill="'+C.ink+'"');svg.innerHTML=s;
+  const lectureAvail=!!(m&&state.showLectureCI),r=testDecision(state.estimate,state.se,state.nullValue,state.alternative,state.alpha);$('effectNote').innerHTML=lectureAvail?'<strong>Two procedures are shown.</strong> The Wald test and matching Wald set are exact procedural duals. The lecture interval for adjusted methods is a percentile bootstrap interval and therefore is not exactly dual to the bootstrap-SE Wald p-value.':'Only the matching Wald confidence set is available because the current values are custom or the lecture interval is hidden.'}
+
+function renderConfidence(){const svg=$('confidenceSvg'),[lo,hi]=effectRange(),L=72,Rx=815,T=32,B=305,x=v=>sx(v,lo,hi,L,Rx),y=v=>sy(v,0,1,T,B);let s='<style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="850" height="380" fill="#fff"/>';axisTicks(lo,hi,6).forEach(v=>{const xx=x(v);s+='<line x1="'+xx+'" x2="'+xx+'" y1="'+T+'" y2="'+B+'" stroke="'+C.grid+'"/>'+svgText(xx,B+21,signed(v,1),'text-anchor="middle" font-size="9" fill="'+C.muted+'"')});[0,.2,.4,.6,.8,1].forEach(v=>{const yy=y(v);s+='<line x1="'+L+'" x2="'+Rx+'" y1="'+yy+'" y2="'+yy+'" stroke="'+C.grid+'"/>'+svgText(L-8,yy+4,fmt(v,1),'text-anchor="end" font-size="9" fill="'+C.muted+'"')});const ya=y(state.alpha);s+='<line x1="'+L+'" x2="'+Rx+'" y1="'+ya+'" y2="'+ya+'" stroke="'+C.danger+'" stroke-width="2" stroke-dasharray="7 5"/>'+svgText(Rx-4,ya-6,'α = '+fmt(state.alpha,3),'text-anchor="end" font-size="9" font-weight="850" fill="'+C.danger+'"');let d='';for(let i=0;i<=400;i++){const n0=lo+(hi-lo)*i/400,z=(state.estimate-n0)/state.se,p=pValue(z,state.alternative);d+=(i?'L':'M')+x(n0)+' '+y(p)+' '}s+='<path d="'+d+'" fill="none" stroke="'+C.accent+'" stroke-width="4"/>';const pc=pValue((state.estimate-state.nullValue)/state.se,state.alternative),xc=x(state.nullValue),yc=y(pc);s+='<circle cx="'+xc+'" cy="'+yc+'" r="8" fill="'+C.orange+'" stroke="#fff" stroke-width="2.5"/>'+svgText(xc+9,yc-9,'current p = '+formatP(pc),'font-size="9" font-weight="850" fill="'+C.orange+'"');s+=svgText((L+Rx)/2,366,'Hypothesized null RD₀ (percentage points)','text-anchor="middle" font-size="11" font-weight="800" fill="'+C.ink+'"')+'<g transform="translate(19,'+((T+B)/2)+') rotate(-90)">'+svgText(0,0,'Wald p-value','text-anchor="middle" font-size="11" font-weight="800" fill="'+C.ink+'"')+'</g>';svg.innerHTML=s}
+
+function renderPower(){const svg=$('powerSvg'),[lo,hi]=effectRange(),L=72,Rx=815,T=32,B=305,x=v=>sx(v,lo,hi,L,Rx),y=v=>sy(v,0,1,T,B);let s='<style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="850" height="380" fill="#fff"/>';axisTicks(lo,hi,6).forEach(v=>{const xx=x(v);s+='<line x1="'+xx+'" x2="'+xx+'" y1="'+T+'" y2="'+B+'" stroke="'+C.grid+'"/>'+svgText(xx,B+21,signed(v,1),'text-anchor="middle" font-size="9" fill="'+C.muted+'"')});[0,.2,.4,.6,.8,1].forEach(v=>{const yy=y(v);s+='<line x1="'+L+'" x2="'+Rx+'" y1="'+yy+'" y2="'+yy+'" stroke="'+C.grid+'"/>'+svgText(L-8,yy+4,(100*v).toFixed(0)+'%','text-anchor="end" font-size="9" fill="'+C.muted+'"')});const ya=y(state.alpha);s+='<line x1="'+L+'" x2="'+Rx+'" y1="'+ya+'" y2="'+ya+'" stroke="'+C.danger+'" stroke-width="2" stroke-dasharray="7 5"/>'+svgText(Rx-4,ya-6,'α','text-anchor="end" font-size="9" font-weight="850" fill="'+C.danger+'"');let d='';for(let i=0;i<=400;i++){const theta=lo+(hi-lo)*i/400,p=powerAt(theta);d+=(i?'L':'M')+x(theta)+' '+y(p)+' '}s+='<path d="'+d+'" fill="none" stroke="'+C.accent+'" stroke-width="4"/>';const pwr=powerAt(state.trueEffect),xc=x(state.trueEffect),yc=y(pwr);s+='<circle cx="'+xc+'" cy="'+yc+'" r="8" fill="'+C.orange+'" stroke="#fff" stroke-width="2.5"/>'+svgText(xc+9,yc-9,'power '+(100*pwr).toFixed(1)+'%','font-size="9" font-weight="850" fill="'+C.orange+'"');const xn=x(state.nullValue);s+='<line x1="'+xn+'" x2="'+xn+'" y1="'+T+'" y2="'+B+'" stroke="#111827" stroke-width="1.7" stroke-dasharray="5 5"/>';s+=svgText((L+Rx)/2,366,'True risk difference (percentage points)','text-anchor="middle" font-size="11" font-weight="800" fill="'+C.ink+'"')+'<g transform="translate(19,'+((T+B)/2)+') rotate(-90)">'+svgText(0,0,'Rejection probability','text-anchor="middle" font-size="11" font-weight="800" fill="'+C.ink+'"')+'</g>';svg.innerHTML=s}
+
+function runSimulation(){readControls();const rng=mulberry32(state.seed),M=state.simM,vals=[],pvals=[],rejects=[],covers=[],setAlpha=state.alpha;for(let i=0;i<M;i++){const est=state.trueEffect+state.se*randn(rng),r=testDecision(est,state.se,state.nullValue,state.alternative,state.alpha),ci=waldSet(est,state.se,state.alternative,state.alpha);vals.push(est);pvals.push(r.p);rejects.push(r.reject?1:0);covers.push(contains(ci,state.trueEffect)?1:0)}state.simulation={vals,pvals,rejection:rejects.reduce((a,b)=>a+b,0)/M,coverage:covers.reduce((a,b)=>a+b,0)/M,mean:vals.reduce((a,b)=>a+b,0)/M,sd:Math.sqrt(vals.reduce((a,b)=>a+(b-(vals.reduce((x,y)=>x+y,0)/M))**2,0)/(M-1)),M};renderAll(false)}
+function renderSimulation(){const ex=state.simulation;if(!ex){$('simulationStatus').textContent='Run the repeated-sampling experiment for the current settings.';$('simulationSummary').innerHTML='';$('simulationSvg').innerHTML='';return}$('simulationStatus').innerHTML='<b>'+ex.M.toLocaleString()+' simulated studies</b> with true RD '+signed(state.trueEffect,2)+' pp and SE '+fmt(state.se,2)+' pp.';$('simulationSummary').innerHTML='<div class="sim-stat"><div class="name">Mean estimate</div><div class="value">'+signed(ex.mean,2)+' pp</div><div class="detail">target '+signed(state.trueEffect,2)+' pp</div></div><div class="sim-stat"><div class="name">Empirical SD</div><div class="value">'+fmt(ex.sd,2)+' pp</div><div class="detail">input SE '+fmt(state.se,2)+' pp</div></div><div class="sim-stat"><div class="name">Rejection rate</div><div class="value">'+(100*ex.rejection).toFixed(1)+'%</div><div class="detail">theory '+(100*powerAt(state.trueEffect)).toFixed(1)+'%</div></div><div class="sim-stat"><div class="name">Wald-set coverage</div><div class="value">'+(100*ex.coverage).toFixed(1)+'%</div><div class="detail">nominal '+(100*(1-state.alpha)).toFixed(1)+'%</div></div>';
+  const svg=$('simulationSvg'),arr=state.simPlot==='pvalue'?ex.pvals:ex.vals,L=68,Rx=815,T=30,B=305,bins=28,lo=state.simPlot==='pvalue'?0:Math.min(...arr),hi=state.simPlot==='pvalue'?1:Math.max(...arr),counts=Array(bins).fill(0);arr.forEach(v=>{const j=Math.min(bins-1,Math.max(0,Math.floor((v-lo)/(hi-lo+1e-12)*bins)));counts[j]++});const ymax=Math.max(...counts)*1.12,x=v=>sx(v,lo,hi,L,Rx),y=v=>sy(v,0,ymax,T,B),bw=(Rx-L)/bins;let s='<style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}</style><rect width="850" height="390" fill="#fff"/>';for(const v of axisTicks(0,ymax,4)){const yy=y(v);s+='<line x1="'+L+'" x2="'+Rx+'" y1="'+yy+'" y2="'+yy+'" stroke="'+C.grid+'"/>'+svgText(L-8,yy+4,Math.round(v),'text-anchor="end" font-size="9" fill="'+C.muted+'"')}counts.forEach((c,i)=>{const xx=L+i*bw,yy=y(c);s+='<rect x="'+(xx+1)+'" y="'+yy+'" width="'+Math.max(1,bw-2)+'" height="'+(B-yy)+'" fill="'+C.accent+'" fill-opacity=".72"/>'});if(state.simPlot==='pvalue'){const xa=x(state.alpha);s+='<line x1="'+xa+'" x2="'+xa+'" y1="'+T+'" y2="'+B+'" stroke="'+C.danger+'" stroke-width="2.5" stroke-dasharray="7 5"/>'+svgText(xa+5,T+14,'α','font-size="10" font-weight="850" fill="'+C.danger+'"');for(const v of [0,.2,.4,.6,.8,1])s+=svgText(x(v),B+21,fmt(v,1),'text-anchor="middle" font-size="9" fill="'+C.muted+'"');s+=svgText((L+Rx)/2,374,'Wald p-value','text-anchor="middle" font-size="11" font-weight="800" fill="'+C.ink+'"')}else{const xt=x(state.trueEffect);s+='<line x1="'+xt+'" x2="'+xt+'" y1="'+T+'" y2="'+B+'" stroke="'+C.green+'" stroke-width="2.5" stroke-dasharray="7 5"/>'+svgText(xt+5,T+14,'true RD','font-size="10" font-weight="850" fill="'+C.green+'"');axisTicks(lo,hi,6).forEach(v=>s+=svgText(x(v),B+21,signed(v,1),'text-anchor="middle" font-size="9" fill="'+C.muted+'"'));s+=svgText((L+Rx)/2,374,'Simulated RD estimate (percentage points)','text-anchor="middle" font-size="11" font-weight="800" fill="'+C.ink+'"')}svg.innerHTML=s}
+
+function renderMethods(){const svg=$('methodsSvg'),keys=['crude','ipw','or','dr'],L=160,Rx=935,T=38,B=318,vals=keys.flatMap(k=>[METHODS[k].lo,METHODS[k].hi,0]),lo=Math.min(...vals)-1,hi=Math.max(...vals)+1,x=v=>sx(v,lo,hi,L,Rx),ys=[80,150,220,290],colors={crude:C.gray,ipw:C.orange,or:C.green,dr:C.teal};let s='<style>text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}.method-row,.method-point{cursor:pointer}</style><rect width="980" height="410" fill="#fff"/>';axisTicks(lo,hi,7).forEach(v=>{const xx=x(v);s+='<line x1="'+xx+'" x2="'+xx+'" y1="'+T+'" y2="'+B+'" stroke="'+C.grid+'"/>'+svgText(xx,B+22,signed(v,1),'text-anchor="middle" font-size="9" fill="'+C.muted+'"')});const x0=x(0);s+='<line x1="'+x0+'" x2="'+x0+'" y1="'+T+'" y2="'+B+'" stroke="#111827" stroke-width="2" stroke-dasharray="7 5"/>'+svgText(x0,T-10,'RD = 0','text-anchor="middle" font-size="9" font-weight="850" fill="#111827"');keys.forEach((k,i)=>{const m=METHODS[k],y=ys[i],col=colors[k],sel=state.preset===k,x1=x(m.lo),x2=x(m.hi),xp=x(m.estimate);if(sel)s+='<rect x="12" y="'+(y-25)+'" width="950" height="48" rx="10" fill="#F5F1FF" stroke="#CFC5FF"/>';s+=svgText(L-13,y+4,m.label,'text-anchor="end" font-size="11" font-weight="850" fill="'+C.ink+'"')+'<line class="method-row" data-method="'+k+'" x1="'+x1+'" x2="'+x2+'" y1="'+y+'" y2="'+y+'" stroke="'+col+'" stroke-width="5" stroke-linecap="round"/><line x1="'+x1+'" x2="'+x1+'" y1="'+(y-9)+'" y2="'+(y+9)+'" stroke="'+col+'" stroke-width="2"/><line x1="'+x2+'" x2="'+x2+'" y1="'+(y-9)+'" y2="'+(y+9)+'" stroke="'+col+'" stroke-width="2"/><circle class="method-point" data-method="'+k+'" cx="'+xp+'" cy="'+y+'" r="8" fill="'+col+'" stroke="#fff" stroke-width="2.5"/>'+svgText(Rx-2,y-5,'RD '+signed(m.estimate,2)+' pp','text-anchor="end" font-size="9" font-weight="850" fill="'+C.ink+'"')+svgText(Rx-2,y+11,'p '+formatP(pValue(m.estimate/m.se,'two')),'text-anchor="end" font-size="9" fill="'+C.muted+'"')});s+=svgText((L+Rx)/2,394,'Lecture 95% interval for risk difference (percentage points)','text-anchor="middle" font-size="11" font-weight="800" fill="'+C.ink+'"');svg.innerHTML=s;svg.querySelectorAll('[data-method]').forEach(el=>el.addEventListener('click',()=>setPreset(el.dataset.method)));
+  $('methodBody').innerHTML=keys.map(k=>{const m=METHODS[k],z=m.estimate/m.se,p=pValue(z,'two');return'<tr data-method="'+k+'" class="'+(state.preset===k?'selected':'')+'"><td>'+m.label+'</td><td>'+fmt(m.estimate,2)+'</td><td>'+fmt(m.se,2)+'</td><td>'+fmt(z,2)+'</td><td>'+formatP(p)+'</td><td>['+fmt(m.lo,2)+', '+fmt(m.hi,2)+']</td><td>'+m.seSource+'</td></tr>'}).join('');$('methodBody').querySelectorAll('tr').forEach(tr=>tr.addEventListener('click',()=>setPreset(tr.dataset.method)));}
+
+function renderAll(updateSim=true){readControls();updateLabels();renderMetrics();renderMath();renderNull();renderInterpretation();renderEffect();renderConfidence();renderPower();renderSimulation();renderMethods()}
+function exportSummary(){const r=testDecision(state.estimate,state.se,state.nullValue,state.alternative,state.alpha),ci=waldSet(state.estimate,state.se,state.alternative,state.alpha),m=selectedMethod(),rows=[['field','value'],['method',m?m.label:'Custom'],['target',m?m.target:'Custom'],['estimate_pp',state.estimate],['se_pp',state.se],['null_pp',state.nullValue],['alternative',state.alternative],['alpha',state.alpha],['z',r.z],['p_value',r.p],['reject_h0',r.reject],['wald_lower_pp',ci.lo],['wald_upper_pp',ci.hi],['assumed_true_pp',state.trueEffect],['theoretical_power',powerAt(state.trueEffect)],['report',state.reportText.replaceAll(',',';')]];download(rows.map(r=>r.join(',')).join('\n'),'text/csv;charset=utf-8','hypothesis_testing_summary.csv')}
+
+// events
+['estimateRange','seRange'].forEach(id=>$(id).addEventListener('input',()=>{markCustom();state.simulation=null;renderAll()}));
+['nullRange','alternativeSelect','alphaRange','trueRange'].forEach(id=>$(id).addEventListener('input',()=>{state.simulation=null;renderAll()}));
+$('showLectureCI').addEventListener('change',renderAll);$('simPlotSelect').addEventListener('change',()=>{readControls();renderSimulation()});$('seedInput').addEventListener('change',()=>{state.simulation=null;renderAll()});$('simM').addEventListener('change',()=>{state.simulation=null;renderAll()});
+document.querySelectorAll('[data-preset]').forEach(b=>b.addEventListener('click',()=>setPreset(b.dataset.preset)));
+document.querySelectorAll('.math-tab').forEach(b=>b.addEventListener('click',()=>activateTab(b.dataset.tab)));
+$('runSimulation').addEventListener('click',runSimulation);$('setNullTruth').addEventListener('click',()=>{$('trueRange').value=state.nullValue;state.trueEffect=state.nullValue;state.simulation=null;runSimulation()});
+$('resetAll').addEventListener('click',()=>{Object.assign(state,defaults);document.querySelectorAll('[data-preset]').forEach(b=>b.classList.toggle('active',b.dataset.preset==='dr'));syncControls();runSimulation()});
+$('exportSummary').addEventListener('click',exportSummary);document.querySelectorAll('[data-svg]').forEach(b=>b.addEventListener('click',()=>saveSvg(b.dataset.svg)));window.addEventListener('resize',hideTip);
+syncControls();runSimulation();
+})();
+</script>
+</body>
+</html>
