@@ -1,0 +1,3430 @@
+---
+title: "Prediction Performance and Outcome Regression"
+author: "Se Yoon Lee"
+date: "2026-07-17"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    number_sections: true
+    theme: readable
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = FALSE,
+  warning = FALSE,
+  fig.align = "center"
+)
+
+required_packages <- c(
+  "glmnet", "rpart", "randomForest", "xgboost", "torch", "kableExtra"
+)
+missing_packages <- required_packages[
+  !vapply(required_packages, requireNamespace, logical(1), quietly = TRUE)
+]
+
+if (length(missing_packages) > 0) {
+  stop(
+    "Install the following packages before knitting: ",
+    paste(missing_packages, collapse = ", ")
+  )
+}
+
+suppressPackageStartupMessages({
+  library(glmnet)
+  library(rpart)
+  library(randomForest)
+  library(xgboost)
+  library(torch)
+  library(kableExtra)
+})
+```
+
+<style type="text/css">
+.tutorial-box {
+  margin: 1.3em 0 1.5em 0;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #eeeeee;
+  box-shadow: 8px 8px 12px rgba(0, 0, 0, 0.18);
+}
+.tutorial-title {
+  background: #cfcfcf;
+  padding: 0.55em 0.9em;
+  font-weight: 700;
+  font-size: 1.05em;
+}
+.tutorial-title p { margin: 0; }
+.tutorial-body { padding: 1.0em 1.25em 1.1em 1.25em; }
+.tutorial-body > p:first-child { margin-top: 0; }
+.performance-note {
+  background: #DDFBE1;
+  border-left: 6px solid #59A14F;
+  padding: 0.8em 1.0em;
+  margin: 1.1em 0;
+}
+.causal-note {
+  background: #FFF6C7;
+  border-left: 6px solid #E3B341;
+  padding: 0.8em 1.0em;
+  margin: 1.1em 0;
+}
+.warning-note {
+  background: #FFE0E0;
+  border-left: 6px solid #E15759;
+  padding: 0.8em 1.0em;
+  margin: 1.1em 0;
+}
+.role-color-key {
+  margin: 0.75em 0 1.15em 0;
+  padding: 0.55em 0.8em;
+  border: 1px solid #D7D7D7;
+  border-radius: 6px;
+  background: #FAFAFA;
+}
+.training-text {
+  color: #2F6B9A;
+  font-weight: 700;
+}
+.testing-text {
+  color: #A64B00;
+  font-weight: 700;
+}
+</style>
+
+```{r helper-functions, include=FALSE}
+start_picture <- function() {
+  par(mar = c(0, 0, 0, 0), xaxs = "i", yaxs = "i")
+  plot.new()
+  plot.window(xlim = c(0, 1), ylim = c(0, 1))
+}
+
+draw_text <- function(x, y, label, cex = 1, font = 1, col = "#222222") {
+  lines <- strsplit(label, "\n", fixed = TRUE)[[1]]
+  offsets <- seq((length(lines) - 1) / 2, -(length(lines) - 1) / 2) *
+    0.058 * cex
+  text(rep(x, length(lines)), y + offsets, labels = lines,
+       cex = cex, font = font, col = col)
+}
+
+draw_box <- function(x, y, w, h, label, fill = "#FFFFFF",
+                     border = "#333333", lwd = 2, lty = 1,
+                     cex = 1, font = 1, text_col = "#222222") {
+  rect(x - w / 2, y - h / 2, x + w / 2, y + h / 2,
+       col = fill, border = border, lwd = lwd, lty = lty)
+  draw_text(x, y, label, cex = cex, font = font, col = text_col)
+}
+
+draw_arrow <- function(x0, y0, x1, y1, col = "#333333",
+                       lwd = 2, lty = 1) {
+  arrows(x0, y0, x1, y1, length = 0.08, lwd = lwd,
+         col = col, lty = lty)
+}
+
+probability_epsilon <- 1e-7
+
+bound_probability <- function(p, eps = probability_epsilon) {
+  pmin(pmax(as.numeric(p), eps), 1 - eps)
+}
+
+validate_binary_inputs <- function(y, p) {
+  y <- as.integer(y)
+  p <- as.numeric(p)
+
+  if (length(y) != length(p) || length(y) == 0) {
+    stop("y and p must be nonempty vectors of the same length.")
+  }
+  if (anyNA(y) || anyNA(p) || any(!is.finite(p))) {
+    stop("y and p must not contain missing or non-finite values.")
+  }
+  if (any(!y %in% c(0L, 1L))) {
+    stop("y must contain only 0 and 1.")
+  }
+  if (any(p < 0 | p > 1)) {
+    stop("Predicted probabilities must lie in [0, 1].")
+  }
+
+  invisible(TRUE)
+}
+
+auc_rank <- function(y, p) {
+  y <- as.integer(y)
+  p <- as.numeric(p)
+  validate_binary_inputs(y, p)
+  n1 <- sum(y == 1)
+  n0 <- sum(y == 0)
+  if (n1 == 0 || n0 == 0) return(NA_real_)
+
+  # Average ranks assign half credit to every case-control score tie.
+  (sum(rank(p, ties.method = "average")[y == 1]) -
+     n1 * (n1 + 1) / 2) / (n1 * n0)
+}
+
+binary_log_loss <- function(y, p, eps = probability_epsilon) {
+  y <- as.integer(y)
+  p <- as.numeric(p)
+  validate_binary_inputs(y, p)
+
+  # Clipping is only a numerical convention for the logarithms. The value of
+  # eps is fixed before examining the test outcomes.
+  p_log <- bound_probability(p, eps = eps)
+  -mean(y * log(p_log) + (1 - y) * log1p(-p_log))
+}
+
+probability_metrics <- function(y, p) {
+  y <- as.integer(y)
+  p <- as.numeric(p)
+  validate_binary_inputs(y, p)
+  error <- y - p
+  c(
+    RMSE = sqrt(mean(error^2)),
+    Brier = mean(error^2),
+    MAE = mean(abs(error)),
+    Log_loss = binary_log_loss(y, p),
+    AUC = auc_rank(y, p),
+    Mean_error = mean(error),
+    Error_variance = var(error),
+    Prediction_variance = var(p)
+  )
+}
+
+safe_ratio <- function(numerator, denominator) {
+  if (!is.finite(denominator) || denominator == 0) {
+    return(NA_real_)
+  }
+  numerator / denominator
+}
+
+classification_metrics <- function(y, p, threshold) {
+  y <- as.integer(y)
+  p <- as.numeric(p)
+  validate_binary_inputs(y, p)
+
+  if (length(threshold) != 1 || !is.finite(threshold) ||
+      threshold < 0 || threshold > 1) {
+    stop("threshold must be one finite number in [0, 1].")
+  }
+
+  predicted_class <- as.integer(p >= threshold)
+  tp <- sum(predicted_class == 1 & y == 1)
+  tn <- sum(predicted_class == 0 & y == 0)
+  fp <- sum(predicted_class == 1 & y == 0)
+  fn <- sum(predicted_class == 0 & y == 1)
+
+  sensitivity <- safe_ratio(tp, tp + fn)
+  specificity <- safe_ratio(tn, tn + fp)
+
+  c(
+    True_positives = tp,
+    False_positives = fp,
+    True_negatives = tn,
+    False_negatives = fn,
+    Sensitivity = sensitivity,
+    Specificity = specificity,
+    False_positive_rate = safe_ratio(fp, fp + tn),
+    False_negative_rate = safe_ratio(fn, fn + tp),
+    Positive_predictive_value = safe_ratio(tp, tp + fp),
+    Negative_predictive_value = safe_ratio(tn, tn + fn),
+    Accuracy = safe_ratio(tp + tn, length(y)),
+    Balanced_accuracy = if (all(is.finite(c(sensitivity, specificity)))) {
+      mean(c(sensitivity, specificity))
+    } else {
+      NA_real_
+    },
+    F1 = safe_ratio(2 * tp, 2 * tp + fp + fn),
+    Predicted_positive_fraction = mean(predicted_class)
+  )
+}
+
+calibration_coefficients <- function(y, p) {
+  y <- as.integer(y)
+  p <- as.numeric(p)
+  validate_binary_inputs(y, p)
+  lp <- qlogis(bound_probability(p))
+
+  citl_fit <- tryCatch(
+    suppressWarnings(
+      glm(y ~ 1, offset = lp, family = binomial())
+    ),
+    error = function(e) NULL
+  )
+
+  joint_fit <- tryCatch(
+    suppressWarnings(
+      glm(y ~ lp, family = binomial())
+    ),
+    error = function(e) NULL
+  )
+
+  citl <- if (!is.null(citl_fit) && isTRUE(citl_fit$converged)) {
+    unname(coef(citl_fit)[1])
+  } else {
+    NA_real_
+  }
+
+  joint_coefficients <- if (!is.null(joint_fit) &&
+                            isTRUE(joint_fit$converged) &&
+                            length(coef(joint_fit)) == 2) {
+    unname(coef(joint_fit))
+  } else {
+    c(NA_real_, NA_real_)
+  }
+
+  c(
+    Event_rate = mean(y),
+    Mean_prediction = mean(p),
+    CITL_offset_intercept = citl,
+    Joint_intercept = joint_coefficients[1],
+    Calibration_slope = joint_coefficients[2]
+  )
+}
+
+make_calibration_groups <- function(y, p, groups = 10) {
+  y <- as.integer(y)
+  p <- as.numeric(p)
+  validate_binary_inputs(y, p)
+
+  if (length(groups) != 1 || !is.finite(groups) || groups < 1) {
+    stop("groups must be a positive integer.")
+  }
+  groups <- as.integer(groups)
+
+  breaks <- unique(as.numeric(quantile(
+    p,
+    probs = seq(0, 1, length.out = groups + 1),
+    names = FALSE,
+    type = 8
+  )))
+
+  if (length(breaks) < 2) {
+    group <- rep(1L, length(p))
+  } else {
+    group <- cut(
+      p,
+      breaks = breaks,
+      include.lowest = TRUE,
+      labels = FALSE
+    )
+  }
+
+  group_ids <- sort(unique(group))
+  do.call(
+    rbind,
+    lapply(seq_along(group_ids), function(j) {
+      rows <- group == group_ids[j]
+      observed <- mean(y[rows])
+      data.frame(
+        Group = j,
+        N = sum(rows),
+        Events = sum(y[rows]),
+        predicted = mean(p[rows]),
+        observed = observed,
+        Observed_SE = sqrt(observed * (1 - observed) / sum(rows)),
+        Min_prediction = min(p[rows]),
+        Max_prediction = max(p[rows])
+      )
+    })
+  )
+}
+
+roc_coordinates <- function(y, p) {
+  y <- as.integer(y)
+  p <- as.numeric(p)
+  validate_binary_inputs(y, p)
+
+  positives <- sum(y == 1)
+  negatives <- sum(y == 0)
+  if (positives == 0 || negatives == 0) {
+    return(data.frame(
+      Threshold = numeric(0),
+      FPR = numeric(0),
+      TPR = numeric(0)
+    ))
+  }
+
+  # Aggregate equal scores before moving the threshold. A valid threshold
+  # cannot classify observations with exactly the same score differently.
+  scores <- sort(unique(p), decreasing = TRUE)
+  score_id <- match(p, scores)
+  cases_at_score <- tabulate(score_id[y == 1], nbins = length(scores))
+  controls_at_score <- tabulate(score_id[y == 0], nbins = length(scores))
+
+  data.frame(
+    Threshold = c(Inf, scores),
+    FPR = c(0, cumsum(controls_at_score) / negatives),
+    TPR = c(0, cumsum(cases_at_score) / positives)
+  )
+}
+
+feature_formula <- ~ smoker_indicator + age_yr + gender + race +
+  educ_lvl + inc_to_pov_ratio + bmi
+
+model_order <- c(
+  "Logistic regression",
+  "Gaussian RFF logistic",
+  "Classification tree",
+  "Random forest",
+  "Gradient boosting",
+  "Deep neural network"
+)
+
+deep_epochs_spec <- 140L
+full_fit_seed <- 20260721L
+
+method_colors <- c(
+  "Logistic regression" = "#4E79A7",
+  "Gaussian RFF logistic" = "#9C755F",
+  "Classification tree" = "#F28E2B",
+  "Random forest" = "#59A14F",
+  "Gradient boosting" = "#E15759",
+  "Deep neural network" = "#B07AA1"
+)
+
+method_fill_colors <- c(
+  "Logistic regression" = "#DCE9F5",
+  "Gaussian RFF logistic" = "#EADFD8",
+  "Classification tree" = "#FCE8D1",
+  "Random forest" = "#DDEFD9",
+  "Gradient boosting" = "#F8D9D8",
+  "Deep neural network" = "#EADDEA"
+)
+
+method_kable <- function(
+  data,
+  ...,
+  font_size = NULL,
+  best_rules = NULL,
+  best_within = NULL
+) {
+  if ("Method" %in% names(data)) {
+    method_rank <- match(as.character(data$Method), model_order)
+    data <- data[
+      order(is.na(method_rank), method_rank, seq_len(nrow(data))),
+      ,
+      drop = FALSE
+    ]
+  }
+
+  original_numeric <- vapply(data, is.numeric, logical(1))
+  has_best_rules <- !is.null(best_rules) && length(best_rules) > 0
+  best_replacements <- list()
+
+  if (has_best_rules) {
+    if (is.null(names(best_rules)) || any(names(best_rules) == "")) {
+      stop("best_rules must be a named character vector.")
+    }
+    if (!all(names(best_rules) %in% names(data))) {
+      stop("Every column named in best_rules must occur in data.")
+    }
+    if (!is.null(best_within) &&
+        !all(best_within %in% names(data))) {
+      stop("Every best_within grouping column must occur in data.")
+    }
+
+    comparison_groups <- if (is.null(best_within)) {
+      list(All_rows = seq_len(nrow(data)))
+    } else {
+      split(
+        seq_len(nrow(data)),
+        interaction(
+          data[best_within],
+          drop = TRUE,
+          lex.order = TRUE
+        )
+      )
+    }
+
+    best_cells <- matrix(
+      FALSE,
+      nrow = nrow(data),
+      ncol = ncol(data),
+      dimnames = list(NULL, names(data))
+    )
+
+    for (column in names(best_rules)) {
+      rule <- unname(best_rules[column])
+      values <- suppressWarnings(as.numeric(data[[column]]))
+
+      for (group_rows in comparison_groups) {
+        group_values <- values[group_rows]
+        finite <- is.finite(group_values)
+        if (!any(finite)) {
+          next
+        }
+
+        scores <- switch(
+          rule,
+          min = group_values,
+          max = -group_values,
+          min_abs = abs(group_values),
+          closest_1 = abs(group_values - 1),
+          {
+            if (startsWith(rule, "closest_to:")) {
+              target_column <- sub("^closest_to:", "", rule)
+              if (!target_column %in% names(data)) {
+                stop(
+                  "The target column in a closest_to rule must occur in data."
+                )
+              }
+              target_values <- suppressWarnings(
+                as.numeric(data[[target_column]][group_rows])
+              )
+              abs(group_values - target_values)
+            } else {
+              stop(paste("Unknown best-value rule:", rule))
+            }
+          }
+        )
+
+        finite_scores <- is.finite(scores)
+        if (!any(finite_scores)) {
+          next
+        }
+        best_score <- min(scores[finite_scores])
+        tolerance <- sqrt(.Machine$double.eps) *
+          max(1, abs(best_score))
+        group_winners <- finite_scores &
+          abs(scores - best_score) <= tolerance
+        best_cells[group_rows[group_winners], column] <- TRUE
+      }
+    }
+
+    for (column in names(best_rules)) {
+      winning_rows <- which(best_cells[, column])
+      if (length(winning_rows) > 0) {
+        replacement_tokens <- sprintf(
+          "__BEST_CELL_%03d_%03d__",
+          winning_rows,
+          match(column, names(data))
+        )
+        replacement_html <- kableExtra::cell_spec(
+          data[[column]][winning_rows],
+          format = "html",
+          bold = TRUE,
+          underline = TRUE,
+          escape = TRUE
+        )
+        best_replacements[[length(best_replacements) + 1L]] <- data.frame(
+          Token = replacement_tokens,
+          Html = as.character(replacement_html),
+          stringsAsFactors = FALSE
+        )
+        data[[column]][winning_rows] <- replacement_tokens
+      }
+    }
+
+    table_out <- knitr::kable(
+      data,
+      ...,
+      align = ifelse(original_numeric, "r", "l")
+    )
+  } else {
+    table_out <- knitr::kable(data, ...)
+  }
+
+  if ("Method" %in% names(data)) {
+    for (row in seq_len(nrow(data))) {
+      method <- as.character(data$Method[row])
+      if (method %in% names(method_fill_colors)) {
+        table_out <- kableExtra::row_spec(
+          table_out,
+          row,
+          background = unname(method_fill_colors[method])
+        )
+      }
+    }
+  }
+
+  table_out <- kableExtra::kable_styling(
+    table_out,
+    full_width = TRUE,
+    position = "left"
+  )
+
+  if (!is.null(font_size)) {
+    table_out <- kableExtra::kable_styling(
+      table_out,
+      font_size = font_size
+    )
+  }
+
+  if (length(best_replacements) > 0) {
+    table_class <- class(table_out)
+    for (replacement_set in best_replacements) {
+      for (replacement_row in seq_len(nrow(replacement_set))) {
+        table_out <- gsub(
+          replacement_set$Token[replacement_row],
+          replacement_set$Html[replacement_row],
+          table_out,
+          fixed = TRUE
+        )
+      }
+    }
+    class(table_out) <- table_class
+  }
+
+  table_out
+}
+
+outcome_formula <- cvd_indicator ~ smoker_indicator + age_yr + gender +
+  race + educ_lvl + inc_to_pov_ratio + bmi
+
+learner_formula <- outcome_factor ~ smoker_indicator + age_yr + gender +
+  race + educ_lvl + inc_to_pov_ratio + bmi
+
+design_matrix <- function(data) {
+  model.matrix(feature_formula, data = data)[, -1, drop = FALSE]
+}
+
+fit_scaler <- function(x) {
+  center <- colMeans(x)
+  scale <- apply(x, 2, sd)
+  scale[!is.finite(scale) | scale == 0] <- 1
+  list(center = center, scale = scale)
+}
+
+apply_scaler <- function(x, scaler) {
+  x <- sweep(x, 2, scaler$center, FUN = "-")
+  sweep(x, 2, scaler$scale, FUN = "/")
+}
+
+deep_binary_net <- nn_module(
+  "deep_binary_net",
+  initialize = function(input_dimension, hidden_1 = 32, hidden_2 = 16) {
+    self$network <- nn_sequential(
+      nn_linear(input_dimension, hidden_1),
+      nn_relu(),
+      nn_linear(hidden_1, hidden_2),
+      nn_relu(),
+      nn_linear(hidden_2, 1)
+    )
+  },
+  forward = function(x) {
+    self$network(x)
+  }
+)
+
+fit_deep_classifier <- function(x, y, epochs = 140, learning_rate = 0.01,
+                                weight_decay = 1e-4, seed = 20260717) {
+  torch_manual_seed(seed)
+  model <- deep_binary_net(ncol(x))
+  optimizer <- optim_adam(
+    model$parameters,
+    lr = learning_rate,
+    weight_decay = weight_decay
+  )
+
+  x_tensor <- torch_tensor(x, dtype = torch_float())
+  y_tensor <- torch_tensor(
+    matrix(as.numeric(y), ncol = 1),
+    dtype = torch_float()
+  )
+
+  loss_history <- numeric(epochs)
+  model$train()
+
+  for (epoch in seq_len(epochs)) {
+    optimizer$zero_grad()
+    logits <- model(x_tensor)
+    loss <- nnf_binary_cross_entropy_with_logits(logits, y_tensor)
+    loss$backward()
+    optimizer$step()
+    loss_history[epoch] <- loss$item()
+  }
+
+  if (any(!is.finite(loss_history))) {
+    stop("The neural-network loss became non-finite.")
+  }
+
+  list(model = model, loss_history = loss_history)
+}
+
+predict_deep_classifier <- function(fit, x) {
+  fit$model$eval()
+  x_tensor <- torch_tensor(x, dtype = torch_float())
+  with_no_grad({
+    probability <- torch_sigmoid(fit$model(x_tensor))
+    as.numeric(probability$squeeze()$cpu())
+  })
+}
+
+make_gaussian_rff_map <- function(input_dimension,
+                                  output_dimension = 256L,
+                                  sigma = 1 / input_dimension,
+                                  seed = 20260718L) {
+  if (input_dimension < 1 || output_dimension < 1 || sigma <= 0) {
+    stop("RFF dimensions and sigma must be positive.")
+  }
+
+  # For K_sigma(x, x') = exp{-sigma ||x - x'||^2}, Bochner's theorem
+  # gives omega ~ N(0, 2 sigma I). The random map is a prespecified
+  # algorithmic component and therefore uses the same seed in every fit.
+  set.seed(seed)
+  list(
+    omega = matrix(
+      rnorm(
+        input_dimension * output_dimension,
+        mean = 0,
+        sd = sqrt(2 * sigma)
+      ),
+      nrow = input_dimension,
+      ncol = output_dimension
+    ),
+    phase = runif(output_dimension, min = 0, max = 2 * pi),
+    output_dimension = as.integer(output_dimension),
+    sigma = sigma,
+    seed = as.integer(seed)
+  )
+}
+
+apply_gaussian_rff_map <- function(x, map) {
+  if (ncol(x) != nrow(map$omega)) {
+    stop("The RFF map and prediction matrix have incompatible dimensions.")
+  }
+
+  projected <- sweep(x %*% map$omega, 2, map$phase, FUN = "+")
+  sqrt(2 / map$output_dimension) * cos(projected)
+}
+
+fit_gaussian_rff_classifier <- function(x, y,
+                                        output_dimension = 256L,
+                                        sigma = 1 / ncol(x),
+                                        lambda = 0.001,
+                                        map_seed = 20260718L) {
+  rff_map <- make_gaussian_rff_map(
+    input_dimension = ncol(x),
+    output_dimension = output_dimension,
+    sigma = sigma,
+    seed = map_seed
+  )
+  z <- apply_gaussian_rff_map(x, rff_map)
+
+  model <- glmnet::glmnet(
+    x = z,
+    y = as.integer(y),
+    family = "binomial",
+    alpha = 0,
+    lambda = lambda,
+    standardize = FALSE,
+    intercept = TRUE,
+    thresh = 1e-7,
+    maxit = 100000
+  )
+
+  if (!is.null(model$jerr) && as.integer(model$jerr) != 0L) {
+    stop("glmnet reported a nonzero error code for the RFF fit.")
+  }
+
+  list(
+    model = model,
+    map = rff_map,
+    lambda = lambda
+  )
+}
+
+predict_gaussian_rff_classifier <- function(fit, x) {
+  z <- apply_gaussian_rff_map(x, fit$map)
+  as.numeric(
+    predict(
+      fit$model,
+      newx = z,
+      s = fit$lambda,
+      type = "response"
+    )
+  )
+}
+
+fit_prediction_learners <- function(data, x_raw, x_scaled,
+                                    deep_epochs = deep_epochs_spec,
+                                    seed = 20260717) {
+  set.seed(seed)
+
+  logistic_fit <- glm(
+    outcome_formula,
+    data = data,
+    family = binomial()
+  )
+
+  if (!isTRUE(logistic_fit$converged)) {
+    stop("Logistic regression did not converge.")
+  }
+
+  # Approximate a Gaussian RBF kernel with a fixed finite random-feature
+  # map, then fit a fast ridge-logistic model in that feature space.
+  rff_fit <- fit_gaussian_rff_classifier(
+    x = x_scaled,
+    y = data$cvd_indicator,
+    output_dimension = 256L,
+    sigma = 1 / ncol(x_scaled),
+    lambda = 0.001,
+    map_seed = 20260718L
+  )
+
+  # Restore the prespecified learner seed so constructing the fixed RFF map
+  # does not alter later stochastic learners through RNG carryover.
+  set.seed(seed)
+
+  tree_fit <- rpart(
+    learner_formula,
+    data = data,
+    method = "class",
+    control = rpart.control(
+      cp = 0,
+      minsplit = 30,
+      minbucket = 15,
+      maxdepth = 6
+    )
+  )
+
+  forest_fit <- randomForest(
+    learner_formula,
+    data = data,
+    ntree = 400,
+    mtry = max(2, floor(sqrt(ncol(x_raw)))),
+    nodesize = 15,
+    importance = TRUE
+  )
+
+  xgb_fit <- xgb.train(
+    params = list(
+      objective = "binary:logistic",
+      eval_metric = "logloss",
+      max_depth = 3,
+      eta = 0.05,
+      subsample = 0.80,
+      colsample_bytree = 0.80,
+      min_child_weight = 5,
+      nthread = 1
+    ),
+    data = xgb.DMatrix(
+      data = x_raw,
+      label = data$cvd_indicator
+    ),
+    nrounds = 140,
+    verbose = 0
+  )
+
+  deep_fit <- fit_deep_classifier(
+    x_scaled,
+    data$cvd_indicator,
+    epochs = deep_epochs,
+    seed = seed
+  )
+
+  list(
+    logistic = logistic_fit,
+    rff = rff_fit,
+    tree = tree_fit,
+    forest = forest_fit,
+    boosted = xgb_fit,
+    deep = deep_fit
+  )
+}
+
+predict_prediction_learners <- function(fits, new_data, x_raw, x_scaled) {
+  out <- data.frame(
+    "Logistic regression" = predict(
+      fits$logistic,
+      newdata = new_data,
+      type = "response"
+    ),
+    "Gaussian RFF logistic" = predict_gaussian_rff_classifier(
+      fits$rff,
+      x_scaled
+    ),
+    "Classification tree" = predict(
+      fits$tree,
+      newdata = new_data,
+      type = "prob"
+    )[, "1"],
+    "Random forest" = predict(
+      fits$forest,
+      newdata = new_data,
+      type = "prob"
+    )[, "1"],
+    "Gradient boosting" = as.numeric(
+      predict(fits$boosted, xgb.DMatrix(x_raw))
+    ),
+    "Deep neural network" = predict_deep_classifier(
+      fits$deep,
+      x_scaled
+    ),
+    check.names = FALSE
+  )
+
+  for (method in names(out)) {
+    probabilities <- as.numeric(out[[method]])
+    if (anyNA(probabilities) || any(!is.finite(probabilities))) {
+      stop(paste("Non-finite predictions from", method))
+    }
+    if (any(probabilities < 0 | probabilities > 1)) {
+      stop(paste("Predictions outside [0, 1] from", method))
+    }
+    out[[method]] <- probabilities
+  }
+
+  out
+}
+```
+
+# What Does Prediction Performance Mean?
+
+Prediction performance asks how well a fitted rule predicts outcomes for observations that were not used to fit that rule.
+
+## Data, Learning Algorithm, and Fitted Rule
+
+<div class="role-color-key">
+<span class="training-text">Blue = training and fitting</span>;
+<span class="testing-text">dark orange = held-out testing and evaluation</span>.
+Population targets and genuinely new observations remain black.
+</div>
+
+Let
+
+$$
+Z_i=(W_i,Y_i),
+\qquad i=1,\ldots,n,
+$$
+
+be independent and identically distributed observations from a target distribution \(P\). Here:
+
+- \(W_i\in\mathcal W\) is the vector of predictors available when prediction is made;
+- \(Y_i\in\mathcal Y\) is the outcome;
+- \(\mathcal D_n=\{Z_1,\ldots,Z_n\}\) is the observed dataset.
+
+Partition the observation indices into disjoint <span class="training-text">training</span> and <span class="testing-text">test</span> sets,
+
+$$
+{\color{#2F6B9A}{\mathcal I_{\mathrm{tr}}}}
+\cap
+{\color{#A64B00}{\mathcal I_{\mathrm{te}}}}
+=
+\varnothing,
+$$
+
+with sizes \({\color{#2F6B9A}{n_{\mathrm{tr}}}}\) and \({\color{#A64B00}{n_{\mathrm{te}}}}\). The corresponding datasets are
+
+$$
+{\color{#2F6B9A}{\mathcal D_{\mathrm{tr}}}}
+=
+\{Z_i:i\in{\color{#2F6B9A}{\mathcal I_{\mathrm{tr}}}}\},
+\qquad
+{\color{#A64B00}{\mathcal D_{\mathrm{te}}}}
+=
+\{Z_i:i\in{\color{#A64B00}{\mathcal I_{\mathrm{te}}}}\}.
+$$
+
+A learning algorithm \(\mathcal A\) is a map from a <span class="training-text">training dataset</span> to a fitted prediction function:
+
+$$
+\mathcal A:
+{\color{#2F6B9A}{\mathcal D_{\mathrm{tr}}}}
+\longmapsto
+{\color{#2F6B9A}{\hat f_{\mathcal D_{\mathrm{tr}}}}}.
+$$
+
+Thus,
+
+$$
+{\color{#2F6B9A}{\hat f_{\mathcal D_{\mathrm{tr}}}}}
+=
+\mathcal A({\color{#2F6B9A}{\mathcal D_{\mathrm{tr}}}})
+$$
+
+denotes the <span class="training-text">fitted prediction rule learned from the particular training sample</span> \({\color{#2F6B9A}{\mathcal D_{\mathrm{tr}}}}\). For a new predictor value \(w\), the prediction is \({\color{#2F6B9A}{\hat f_{\mathcal D_{\mathrm{tr}}}}}(w)\). The hat emphasizes estimation, and the subscript emphasizes that a different <span class="training-text">training sample</span> would generally produce a different fitted rule.
+
+For a randomized algorithm, one may write \({\color{#2F6B9A}{\hat f_{\mathcal D_{\mathrm{tr}},U}}}\), where \(U\) denotes random initialization, bootstrap draws, or stochastic optimization. The fixed random seeds in the example condition on one realized \(U\); a repeated-<span class="training-text">training</span> analysis would also average over that algorithmic randomness. In particular, the Gaussian RFF learner uses one prespecified random feature map in every <span class="training-text">training and bootstrap fit</span>, so its reported uncertainty is conditional on that finite map.
+
+## Population Generalization Risk
+
+Let
+
+$$
+Z_{\mathrm{new}}
+=
+(W_{\mathrm{new}},Y_{\mathrm{new}})
+\sim P
+$$
+
+be a new observation independent of \({\color{#2F6B9A}{\mathcal D_{\mathrm{tr}}}}\). Let
+
+$$
+L:\mathcal Y\times\mathcal A_Y\longrightarrow[0,\infty)
+$$
+
+be a loss function, where \(\mathcal A_Y\) is the space of allowed predictions. Conditional on the <span class="training-text">fitted training sample</span>, the population generalization risk is
+
+$$
+R_P\!\left(
+{\color{#2F6B9A}{\hat f_{\mathcal D_{\mathrm{tr}}}}}
+\mid
+{\color{#2F6B9A}{\mathcal D_{\mathrm{tr}}}}
+\right)
+=
+E_P
+\left[
+L\left\{
+Y_{\mathrm{new}},
+{\color{#2F6B9A}{\hat f_{\mathcal D_{\mathrm{tr}}}}}(W_{\mathrm{new}})
+\right\}
+\;\middle|\;
+{\color{#2F6B9A}{\mathcal D_{\mathrm{tr}}}}
+\right].
+$$
+
+Equivalently, writing the expectation as an integral with respect to the joint target distribution \(P\),
+
+$$
+R_P\!\left(
+{\color{#2F6B9A}{\hat f_{\mathcal D_{\mathrm{tr}}}}}
+\mid
+{\color{#2F6B9A}{\mathcal D_{\mathrm{tr}}}}
+\right)
+=
+\int_{\mathcal W\times\mathcal Y}
+L\left\{
+y,
+{\color{#2F6B9A}{\hat f_{\mathcal D_{\mathrm{tr}}}}}(w)
+\right\}
+\,dP(w,y).
+$$
+
+If \(P\) has joint density or mass function \(p(w,y)\), the same quantity can be written
+
+$$
+R_P\!\left(
+{\color{#2F6B9A}{\hat f_{\mathcal D_{\mathrm{tr}}}}}
+\mid
+{\color{#2F6B9A}{\mathcal D_{\mathrm{tr}}}}
+\right)
+=
+\int_{\mathcal W}
+\int_{\mathcal Y}
+L\left\{
+y,
+{\color{#2F6B9A}{\hat f_{\mathcal D_{\mathrm{tr}}}}}(w)
+\right\}
+p(w,y)
+\,d\mu_{\mathcal Y}(y)
+\,d\mu_{\mathcal W}(w),
+$$
+
+where \(\mu_{\mathcal W}\) and \(\mu_{\mathcal Y}\) are appropriate dominating measures. For discrete variables, the corresponding integrals become sums.
+
+This is the prediction risk of the <span class="training-text">**already fitted rule**, conditional on its training data</span>. For training size \(n_{\mathrm{tr}}\), define the algorithm-level risk of a possibly randomized learning algorithm by
+
+$$
+\mathcal R_{P,n_{\mathrm{tr}}}(\mathcal A)
+=
+E_{{\color{#2F6B9A}{\mathcal D_{\mathrm{tr}}}},U}
+\left[
+R_P\!\left(
+{\color{#2F6B9A}{\hat f_{\mathcal D_{\mathrm{tr}},U}}}
+\mid
+{\color{#2F6B9A}{\mathcal D_{\mathrm{tr}}}},U
+\right)
+\right].
+$$
+
+Here \(U\) represents algorithmic randomization and is omitted for a deterministic learner. If the entire learning procedure is prespecified and the <span class="testing-text">test sample</span> is independent and identically distributed from \(P\), the tower property gives
+
+$$
+\begin{aligned}
+&E_{{\color{#2F6B9A}{\mathcal D_{\mathrm{tr}}}},U,
+{\color{#A64B00}{\mathcal D_{\mathrm{te}}}}}
+\left[
+{\color{#A64B00}{\widehat R_{\mathrm{te}}}}
+\left(
+{\color{#2F6B9A}{\hat f_{\mathcal D_{\mathrm{tr}},U}}}
+\right)
+\right]
+\\[4pt]
+&\qquad=
+E_{{\color{#2F6B9A}{\mathcal D_{\mathrm{tr}}}},U}
+\left[
+R_P\!\left(
+{\color{#2F6B9A}{\hat f_{\mathcal D_{\mathrm{tr}},U}}}
+\mid
+{\color{#2F6B9A}{\mathcal D_{\mathrm{tr}}}},U
+\right)
+\right]
+=
+\mathcal R_{P,n_{\mathrm{tr}}}(\mathcal A).
+\end{aligned}
+$$
+
+Thus, one split is conditionally unbiased for the risk of its realized fitted rule and, under these stronger prespecification and independence conditions, is also one noisy unconditionally unbiased realization for algorithm-level risk. One split does **not** reveal how much performance varies across new training samples; repeated training/evaluation or an appropriate resampling design is needed for that variance component.
+
+Different loss functions emphasize different mistakes. No single metric is best for every prediction problem.
+
+## Empirical Test Risk
+
+After the <span class="training-text">training sample</span> \({\color{#2F6B9A}{\mathcal D_{\mathrm{tr}}}}\) has been used to fit and fix \({\color{#2F6B9A}{\hat f_{\mathcal D_{\mathrm{tr}}}}}\), use the independent <span class="testing-text">held-out test sample</span> to estimate that fitted rule's population risk. For a randomized learner, the following statements also condition on its realized \(U\), which is suppressed to simplify notation:
+
+$$
+{\color{#A64B00}{\widehat R_{\mathrm{te}}}}
+\left(
+{\color{#2F6B9A}{\hat f_{\mathcal D_{\mathrm{tr}}}}}
+\right)
+=
+\frac{1}{{\color{#A64B00}{n_{\mathrm{te}}}}}
+\sum_{i\in{\color{#A64B00}{\mathcal I_{\mathrm{te}}}}}
+L\left\{
+{\color{#A64B00}{Y_i}},
+{\color{#2F6B9A}{\hat f_{\mathcal D_{\mathrm{tr}}}}}({\color{#A64B00}{W_i}})
+\right\}.
+$$
+
+If the <span class="testing-text">test observations</span> are independent draws from \(P\) and were not used for <span class="training-text">fitting, tuning, preprocessing estimation, or model selection</span>, then
+
+$$
+E\!\left[
+{\color{#A64B00}{\widehat R_{\mathrm{te}}}}
+\left(
+{\color{#2F6B9A}{\hat f_{\mathcal D_{\mathrm{tr}}}}}
+\right)
+\;\middle|\;
+{\color{#2F6B9A}{\mathcal D_{\mathrm{tr}}}}
+\right]
+=
+R_P\!\left(
+{\color{#2F6B9A}{\hat f_{\mathcal D_{\mathrm{tr}}}}}
+\mid
+{\color{#2F6B9A}{\mathcal D_{\mathrm{tr}}}}
+\right).
+$$
+
+### Derivation of Conditional Unbiasedness
+
+Define the <span class="testing-text">test loss</span> for observation \(i\) by
+
+$$
+U_i
+=
+L\left\{
+{\color{#A64B00}{Y_i}},
+{\color{#2F6B9A}{\hat f_{\mathcal D_{\mathrm{tr}}}}}({\color{#A64B00}{W_i}})
+\right\}.
+$$
+
+Conditional on the <span class="training-text">training data</span> \({\color{#2F6B9A}{\mathcal D_{\mathrm{tr}}}}\), the fitted function \({\color{#2F6B9A}{\hat f_{\mathcal D_{\mathrm{tr}}}}}\) is fixed. Moreover, because the <span class="testing-text">test observation</span> \(({\color{#A64B00}{W_i,Y_i}})\sim P\) is independent of \({\color{#2F6B9A}{\mathcal D_{\mathrm{tr}}}}\),
+
+$$
+\begin{aligned}
+E(U_i\mid{\color{#2F6B9A}{\mathcal D_{\mathrm{tr}}}})
+&=
+E\!\left[
+L\left\{
+{\color{#A64B00}{Y_i}},
+{\color{#2F6B9A}{\hat f_{\mathcal D_{\mathrm{tr}}}}}({\color{#A64B00}{W_i}})
+\right\}
+\;\middle|\;
+{\color{#2F6B9A}{\mathcal D_{\mathrm{tr}}}}
+\right]
+\\[4pt]
+&=
+\int_{\mathcal W\times\mathcal Y}
+L\left\{
+y,
+{\color{#2F6B9A}{\hat f_{\mathcal D_{\mathrm{tr}}}}}(w)
+\right\}
+\,dP(w,y)
+\\[4pt]
+&=
+R_P\!\left(
+{\color{#2F6B9A}{\hat f_{\mathcal D_{\mathrm{tr}}}}}
+\mid
+{\color{#2F6B9A}{\mathcal D_{\mathrm{tr}}}}
+\right).
+\end{aligned}
+$$
+
+Therefore,
+
+$$
+\begin{aligned}
+E\!\left[
+{\color{#A64B00}{\widehat R_{\mathrm{te}}}}
+\left({\color{#2F6B9A}{\hat f_{\mathcal D_{\mathrm{tr}}}}}\right)
+\;\middle|\;
+{\color{#2F6B9A}{\mathcal D_{\mathrm{tr}}}}
+\right]
+&=
+E\!\left[
+\frac{1}{{\color{#A64B00}{n_{\mathrm{te}}}}}
+\sum_{i\in{\color{#A64B00}{\mathcal I_{\mathrm{te}}}}}U_i
+\;\middle|\;
+{\color{#2F6B9A}{\mathcal D_{\mathrm{tr}}}}
+\right]
+\\[4pt]
+&=
+\frac{1}{{\color{#A64B00}{n_{\mathrm{te}}}}}
+\sum_{i\in{\color{#A64B00}{\mathcal I_{\mathrm{te}}}}}
+E(U_i\mid{\color{#2F6B9A}{\mathcal D_{\mathrm{tr}}}})
+\qquad\text{(linearity of conditional expectation)}
+\\[4pt]
+&=
+\frac{1}{{\color{#A64B00}{n_{\mathrm{te}}}}}
+\sum_{i\in{\color{#A64B00}{\mathcal I_{\mathrm{te}}}}}
+R_P\!\left(
+{\color{#2F6B9A}{\hat f_{\mathcal D_{\mathrm{tr}}}}}
+\mid
+{\color{#2F6B9A}{\mathcal D_{\mathrm{tr}}}}
+\right)
+\\[4pt]
+&=
+R_P\!\left(
+{\color{#2F6B9A}{\hat f_{\mathcal D_{\mathrm{tr}}}}}
+\mid
+{\color{#2F6B9A}{\mathcal D_{\mathrm{tr}}}}
+\right).
+\end{aligned}
+$$
+
+Thus, the <span class="testing-text">empirical test risk</span> is **conditionally unbiased** for the population risk of the particular <span class="training-text">fitted rule</span>. The result does not require the loss to be bounded by 1; it requires the relevant expectation to exist.
+
+### Conditional Variance and Consistency
+
+If the <span class="testing-text">test observations</span> are conditionally independent and
+
+$$
+\sigma_L^2({\color{#2F6B9A}{\mathcal D_{\mathrm{tr}}}})
+=
+\operatorname{Var}_P\!\left[
+L\left\{
+Y,
+{\color{#2F6B9A}{\hat f_{\mathcal D_{\mathrm{tr}}}}}(W)
+\right\}
+\;\middle|\;
+{\color{#2F6B9A}{\mathcal D_{\mathrm{tr}}}}
+\right]
+<\infty,
+$$
+
+then
+
+$$
+\begin{aligned}
+\operatorname{Var}\!\left[
+{\color{#A64B00}{\widehat R_{\mathrm{te}}}}
+\left({\color{#2F6B9A}{\hat f_{\mathcal D_{\mathrm{tr}}}}}\right)
+\;\middle|\;
+{\color{#2F6B9A}{\mathcal D_{\mathrm{tr}}}}
+\right]
+&=
+\frac{1}{{\color{#A64B00}{n_{\mathrm{te}}^2}}}
+\sum_{i\in{\color{#A64B00}{\mathcal I_{\mathrm{te}}}}}
+\operatorname{Var}(U_i\mid{\color{#2F6B9A}{\mathcal D_{\mathrm{tr}}}})
+\\[4pt]
+&=
+\frac{\sigma_L^2({\color{#2F6B9A}{\mathcal D_{\mathrm{tr}}}})}
+{{\color{#A64B00}{n_{\mathrm{te}}}}}.
+\end{aligned}
+$$
+
+Consequently, conditional on the realized <span class="training-text">training data</span>,
+
+$$
+{\color{#A64B00}{\widehat R_{\mathrm{te}}}}
+\left({\color{#2F6B9A}{\hat f_{\mathcal D_{\mathrm{tr}}}}}\right)
+\xrightarrow[{{\color{#A64B00}{n_{\mathrm{te}}}}\to\infty}]{\mathrm{a.s.}}
+R_P\!\left(
+{\color{#2F6B9A}{\hat f_{\mathcal D_{\mathrm{tr}}}}}
+\mid
+{\color{#2F6B9A}{\mathcal D_{\mathrm{tr}}}}
+\right),
+$$
+
+by the conditional law of large numbers. Under the corresponding conditional central-limit-theorem conditions,
+
+$$
+\sqrt{{\color{#A64B00}{n_{\mathrm{te}}}}}
+\left[
+{\color{#A64B00}{\widehat R_{\mathrm{te}}}}
+\left({\color{#2F6B9A}{\hat f_{\mathcal D_{\mathrm{tr}}}}}\right)
+-
+R_P\!\left(
+{\color{#2F6B9A}{\hat f_{\mathcal D_{\mathrm{tr}}}}}
+\mid
+{\color{#2F6B9A}{\mathcal D_{\mathrm{tr}}}}
+\right)
+\right]
+\xrightarrow{d}
+N\!\left(
+0,
+\sigma_L^2({\color{#2F6B9A}{\mathcal D_{\mathrm{tr}}}})
+\right).
+$$
+
+These expectation, variance, law-of-large-numbers, and central-limit-theorem calculations apply directly to an average of independent per-observation losses. Nonlinear summaries require their own theory: RMSE uses a transformation of mean squared loss, AUC is a two-sample U-statistic, and calibration coefficients and confusion-matrix ratios are fitted or ratio estimators. Their uncertainty is therefore handled separately, often with an appropriate delta method, U-statistic theory, or resampling design.
+
+A useful performance statement must specify:
+
+1. **Outcome:** What is being predicted?
+2. **Prediction target:** A number, probability, category, or time?
+3. **Target population:** For whom should the rule work?
+4. **Evaluation data:** Were these outcomes hidden during model fitting and tuning?
+5. **Performance measure:** Which type of error matters?
+6. **Uncertainty:** How variable is the reported performance?
+
+::: {.tutorial-box}
+::: {.tutorial-title}
+Goals of This Note
+:::
+::: {.tutorial-body}
+We first develop prediction-performance measures in general. We then compare six binary-outcome learners on the same held-out NHANES test set: logistic regression, a fast Gaussian random-Fourier-feature logistic model, a classification tree, a random forest, gradient-boosted trees, and a two-hidden-layer neural network. Finally, we use each learner as an outcome model and compare standardized outcome-regression contrasts. Those contrasts receive a causal interpretation only under explicit identification and model conditions.
+:::
+:::
+
+```{r performance-workflow-picture, echo=FALSE, fig.width=8.8, fig.height=4.8}
+start_picture()
+
+box_width <- 0.16
+box_height <- 0.17
+
+draw_box(
+  0.10, 0.57, box_width, box_height,
+  "Observed sample\nD_n",
+  fill = "#E8E8E8", cex = 0.64, font = 2
+)
+draw_box(
+  0.29, 0.57, box_width, box_height,
+  "Random split\nI_tr and I_te",
+  fill = "#F1CE63", cex = 0.60, font = 2
+)
+draw_box(
+  0.50, 0.76, box_width, box_height,
+  "Training sample\nD_tr",
+  fill = "#DCEAF5", cex = 0.62, font = 2, text_col = "#2F6B9A"
+)
+draw_box(
+  0.50, 0.36, box_width, box_height,
+  "Evaluation sample\nD_te",
+  fill = "#FCE8D6", cex = 0.55, font = 2, text_col = "#A64B00"
+)
+draw_box(
+  0.71, 0.76, box_width, box_height,
+  "Learning algorithm A\nf hat_Dtr",
+  fill = "#DCEAF5", cex = 0.53, font = 2, text_col = "#2F6B9A"
+)
+draw_box(
+  0.90, 0.55, box_width, box_height,
+  "Held-out losses\nR hat_te",
+  fill = "#FCE8D6", cex = 0.60, font = 2, text_col = "#A64B00"
+)
+
+draw_arrow(0.18, 0.57, 0.21, 0.57)
+draw_arrow(0.37, 0.60, 0.42, 0.72)
+draw_arrow(0.37, 0.53, 0.42, 0.40)
+draw_arrow(0.58, 0.76, 0.63, 0.76)
+draw_arrow(0.79, 0.72, 0.82, 0.62)
+draw_arrow(0.58, 0.37, 0.82, 0.50)
+
+draw_text(
+  0.50, 0.12,
+  "Only D_tr enters A.  D_te is used after f hat_Dtr has been fixed.",
+  cex = 0.70, font = 2
+)
+```
+
+The <span class="training-text">upper training path</span> learns \({\color{#2F6B9A}{\hat f_{\mathcal D_{\mathrm{tr}}}}}\). The <span class="testing-text">lower testing path</span> preserves \({\color{#A64B00}{\mathcal D_{\mathrm{te}}}}\) for evaluation. The two paths meet only when computing <span class="testing-text">held-out losses</span>
+
+$$
+L\left\{
+{\color{#A64B00}{Y_i}},
+{\color{#2F6B9A}{\hat f_{\mathcal D_{\mathrm{tr}}}}}({\color{#A64B00}{W_i}})
+\right\},
+\qquad
+i\in{\color{#A64B00}{\mathcal I_{\mathrm{te}}}},
+$$
+
+and their average \({\color{#A64B00}{\widehat R_{\mathrm{te}}}}\).
+
+## Training Performance Is Not Test Performance
+
+The empirical <span class="training-text">training risk</span> is
+
+$$
+{\color{#2F6B9A}{\widehat R_{\mathrm{tr}}}}
+\left(
+{\color{#2F6B9A}{\hat f_{\mathcal D_{\mathrm{tr}}}}}
+\right)
+=
+\frac{1}{{\color{#2F6B9A}{n_{\mathrm{tr}}}}}
+\sum_{i\in{\color{#2F6B9A}{\mathcal I_{\mathrm{tr}}}}}
+L\left\{
+{\color{#2F6B9A}{Y_i}},
+{\color{#2F6B9A}{\hat f_{\mathcal D_{\mathrm{tr}}}}}({\color{#2F6B9A}{W_i}})
+\right\}.
+$$
+
+The same <span class="training-text">training outcomes</span> appear both in fitting \({\color{#2F6B9A}{\hat f_{\mathcal D_{\mathrm{tr}}}}}\) and evaluating it. Consequently, \({\color{#2F6B9A}{\widehat R_{\mathrm{tr}}}}\) is generally optimistically biased for new-data risk, especially for highly adaptive algorithms.
+
+The empirical <span class="testing-text">test risk</span> \({\color{#A64B00}{\widehat R_{\mathrm{te}}}}\) evaluates the <span class="training-text">already fitted rule</span> on <span class="testing-text">held-out observations</span> and therefore estimates its conditional generalization risk. This interpretation requires that every <span class="training-text">data-dependent choice—including preprocessing, feature selection, hyperparameter tuning, and stopping rules—be completed without using</span> \({\color{#A64B00}{\mathcal D_{\mathrm{te}}}}\).
+
+For \(K\)-fold cross-validation, let \(v(i)\in\{1,\ldots,K\}\) identify the fold containing observation \(i\), and let \({\color{#2F6B9A}{\mathcal D_{-v(i)}}}\) denote the <span class="training-text">data excluding that fold</span>. The cross-validated risk estimate is
+
+$$
+\widehat R_{\mathrm{CV}}
+=
+\frac{1}{n}
+\sum_{i=1}^n
+L\left\{
+{\color{#A64B00}{Y_i}},
+{\color{#2F6B9A}{\hat f_{\mathcal D_{-v(i)}}}}({\color{#A64B00}{W_i}})
+\right\}.
+$$
+
+Each <span class="testing-text">held-out fold observation</span> is evaluated by a rule that was not trained on it. Ordinary \(K\)-fold cross-validation primarily estimates performance for learners trained on approximately \(n(K-1)/K\) observations, not exactly the final learner refit on all \(n\), and the fold-loss contributions are dependent because their training sets overlap. Hyperparameter selection should be nested inside the <span class="training-text">training folds</span>. Choosing a model after repeatedly inspecting the <span class="testing-text">final test set</span> converts that test set into part of the <span class="training-text">training process</span>.
+
+# Continuous-Outcome Performance
+
+Suppose \(\mathcal Y\subseteq\mathbb R\). For learning method \(k\), define the held-out prediction and signed error
+
+$$
+\hat Y_{ik}
+=
+\hat f_{k,\mathcal D_{\mathrm{tr}}}(W_i),
+\qquad
+e_{ik}
+=
+Y_i-\hat Y_{ik},
+\qquad
+i\in\mathcal I_{\mathrm{te}}.
+$$
+
+The convention \(e_{ik}=Y_i-\hat Y_{ik}\) means a positive error represents underprediction.
+
+## Mean Error
+
+The empirical mean signed error is
+
+$$
+\widehat{\operatorname{ME}}_{\mathrm{te},k}
+=
+\bar e_k
+=
+\frac{1}{n_{\mathrm{te}}}
+\sum_{i\in\mathcal I_{\mathrm{te}}}
+e_{ik}.
+$$
+
+A value near zero indicates little average underprediction or overprediction, but positive and negative errors can cancel.
+
+## MAE, MSE, and RMSE
+
+Under absolute-error loss, the empirical test risk is
+
+$$
+\widehat{\operatorname{MAE}}_{\mathrm{te},k}
+=
+\frac{1}{n_{\mathrm{te}}}
+\sum_{i\in\mathcal I_{\mathrm{te}}}
+|e_{ik}|.
+$$
+
+Under squared-error loss, the empirical test risk is
+
+$$
+\widehat{\operatorname{MSE}}_{\mathrm{te},k}
+=
+\frac{1}{n_{\mathrm{te}}}
+\sum_{i\in\mathcal I_{\mathrm{te}}}
+e_{ik}^2.
+$$
+
+The root mean squared error is
+
+$$
+\widehat{\operatorname{RMSE}}_{\mathrm{te},k}
+=
+\sqrt{
+\widehat{\operatorname{MSE}}_{\mathrm{te},k}
+}.
+$$
+
+MAE and RMSE use the outcome's original units. RMSE penalizes large errors more strongly. At the population level, squared-error risk is minimized by \(E(Y\mid W=w)\), whereas absolute-error risk is minimized by a conditional median of \(Y\mid W=w\).
+
+## Error Variance and Prediction Variance
+
+Conditional on the training data, the population residual variance of learner \(k\) is
+
+$$
+\sigma^2_{e,k}(\mathcal D_{\mathrm{tr}})
+=
+\operatorname{Var}_P
+\left[
+Y_{\mathrm{new}}
+-
+\hat f_{k,\mathcal D_{\mathrm{tr}}}(W_{\mathrm{new}})
+\;\middle|\;
+\mathcal D_{\mathrm{tr}}
+\right].
+$$
+
+Its test-sample estimator is
+
+$$
+s^2_{e,k}
+=
+\frac{1}{n_{\mathrm{te}}-1}
+\sum_{i\in\mathcal I_{\mathrm{te}}}
+\left(e_{ik}-\bar e_k\right)^2.
+$$
+
+The empirical MSE separates exactly into squared mean error and sample error variance:
+
+$$
+\widehat{\operatorname{MSE}}_{\mathrm{te},k}
+=
+\bar e_k^2
++
+\frac{n_{\mathrm{te}}-1}{n_{\mathrm{te}}}
+s^2_{e,k}.
+$$
+
+Thus RMSE can be large because predictions are systematically shifted, because individual errors are highly variable, or both.
+
+The empirical variance of predictions across test people is
+
+$$
+s^2_{\hat Y,k}
+=
+\frac{1}{n_{\mathrm{te}}-1}
+\sum_{i\in\mathcal I_{\mathrm{te}}}
+\left(
+\hat Y_{ik}-\bar{\hat Y}_k
+\right)^2.
+$$
+
+This describes prediction spread across people. It is not an error measure and is not the repeated-sample variance of the fitted rule.
+
+To define the theoretical bias-variance decomposition, assume the relevant second moments are finite and let
+
+$$
+f_0(w)=E(Y\mid W=w),
+\qquad
+\sigma^2(w)=\operatorname{Var}(Y\mid W=w).
+$$
+
+For a new outcome at fixed \(W=w\), independent of the random training sample,
+
+$$
+E_{\mathcal D_{\mathrm{tr}},\,Y\mid W=w}
+\left[
+\left\{
+Y-\hat f_{k,\mathcal D_{\mathrm{tr}}}(w)
+\right\}^2
+\right]
+=
+\sigma^2(w)
++
+\left[
+E_{\mathcal D_{\mathrm{tr}}}
+\left\{
+\hat f_{k,\mathcal D_{\mathrm{tr}}}(w)
+\right\}
+-f_0(w)
+\right]^2
++
+\operatorname{Var}_{\mathcal D_{\mathrm{tr}}}
+\left\{
+\hat f_{k,\mathcal D_{\mathrm{tr}}}(w)
+\right\}.
+$$
+
+The three terms are irreducible conditional outcome variance, squared algorithmic bias, and fitted-value variance across repeated training samples. For a randomized learner, the expectations and variance also average over \(U\), or equivalently replace \(\mathcal D_{\mathrm{tr}}\) by \((\mathcal D_{\mathrm{tr}},U)\). The final term cannot be estimated by taking the variance of predictions across people from one fitted model.
+
+## \(R^2\)
+
+Using the test-set mean as the reference predictor, define
+
+$$
+\widehat R^2_{\mathrm{te},k}
+=
+1-
+\frac{
+\sum_{i\in\mathcal I_{\mathrm{te}}}
+(Y_i-\hat Y_{ik})^2
+}{
+\sum_{i\in\mathcal I_{\mathrm{te}}}
+(Y_i-\bar Y_{\mathrm{te}})^2
+},
+$$
+
+where
+
+$$
+\bar Y_{\mathrm{te}}
+=
+\frac{1}{n_{\mathrm{te}}}
+\sum_{i\in\mathcal I_{\mathrm{te}}}Y_i.
+$$
+
+This evaluation convention can produce a negative value when the learner performs worse than the test-set-mean benchmark. It is undefined if every test outcome is identical, because the denominator is then zero. A deployable null predictor would instead use the training mean; that gives a different out-of-sample \(R^2\) convention.
+
+# Binary-Outcome Performance
+
+Suppose \(Y\in\{0,1\}\). The population probability target is
+
+$$
+\eta(w)
+=
+P(Y=1\mid W=w)
+=
+E(Y\mid W=w).
+$$
+
+For learner \(k\), the held-out predicted probability is
+
+$$
+\hat p_{ik}
+=
+\hat f_{k,\mathcal D_{\mathrm{tr}}}(W_i)
+\in[0,1],
+\qquad
+i\in\mathcal I_{\mathrm{te}}.
+$$
+
+Probability performance and classification performance answer different questions.
+
+## Brier Score and Binary RMSE
+
+The empirical test-set Brier score is binary mean squared error:
+
+$$
+\widehat{\operatorname{Brier}}_{\mathrm{te},k}
+=
+\frac{1}{n_{\mathrm{te}}}
+\sum_{i\in\mathcal I_{\mathrm{te}}}
+(Y_i-\hat p_{ik})^2.
+$$
+
+Therefore,
+
+$$
+\widehat{\operatorname{RMSE}}_{\mathrm{te},k}
+=
+\sqrt{
+\widehat{\operatorname{Brier}}_{\mathrm{te},k}
+}.
+$$
+
+Brier score is a proper scoring rule: its population risk is minimized by the true conditional probability \(\eta(w)\). Binary RMSE is a monotone transformation of the Brier score, so the two measures always give the same model ranking on the same test sample.
+
+For a deployable prevalence-only benchmark, estimate prevalence from the training sample:
+
+$$
+\hat\pi_{\mathrm{tr}}
+=
+\frac{1}{n_{\mathrm{tr}}}
+\sum_{i\in\mathcal I_{\mathrm{tr}}}Y_i.
+$$
+
+Its test Brier score is
+
+$$
+\widehat{\operatorname{Brier}}_{\mathrm{null}}
+=
+\frac{1}{n_{\mathrm{te}}}
+\sum_{i\in\mathcal I_{\mathrm{te}}}
+(Y_i-\hat\pi_{\mathrm{tr}})^2.
+$$
+
+Define Brier skill by
+
+$$
+\widehat{\operatorname{BSS}}_k
+=
+1-
+\frac{
+\widehat{\operatorname{Brier}}_{\mathrm{te},k}
+}{
+\widehat{\operatorname{Brier}}_{\mathrm{null}}
+}.
+$$
+
+A positive value improves on predicting the training-set event prevalence for everyone; zero gives no improvement; a negative value is worse than that benchmark. The skill score is undefined if the null Brier score is zero.
+
+## Log Loss
+
+For learner \(k\), empirical log loss on the untouched test set is
+
+$$
+\widehat{\operatorname{LogLoss}}_{\mathrm{te},k}
+=
+-\frac{1}{n_{\mathrm{te}}}
+\sum_{i\in\mathcal I_{\mathrm{te}}}
+\left[
+Y_i\log(\hat p_{ik})
++
+(1-Y_i)\log(1-\hat p_{ik})
+\right].
+$$
+
+Natural logarithms are used here. Log loss is a strictly proper scoring rule: conditional on \(W=w\), its population expectation is uniquely minimized by reporting the true event probability \(\eta(w)\). It penalizes a confident wrong prediction much more strongly than the Brier score. In the mathematical definition, assigning probability 0 to an event that occurs, or probability 1 to a non-event, produces infinite loss.
+
+For numerical evaluation, the code fixes \(\epsilon=10^{-7}\) before examining test outcomes and replaces only the probabilities used inside logarithms by
+
+$$
+\tilde p_{ik}
+=
+\min\{1-\epsilon,\max(\epsilon,\hat p_{ik})\}.
+$$
+
+This clipping convention prevents undefined computer arithmetic, but it must be reported because it caps the penalty for an extreme error. The same fixed \(\epsilon\) is used for every learner.
+
+## Calibration
+
+Calibration asks whether predicted probabilities have the correct probability scale. Conditional on the realized training sample, define the fitted score for a new observation by
+
+$$
+S_k(W)
+=
+\hat f_{k,\mathcal D_{\mathrm{tr}}}(W).
+$$
+
+### Exact population calibration
+
+Learner \(k\) is exactly calibrated in the target population when
+
+$$
+E_P\{Y\mid S_k(W),\mathcal D_{\mathrm{tr}}\}
+=
+S_k(W)
+\quad\text{almost surely}.
+$$
+
+Equivalently, for almost every score value \(s\) that the fitted learner can produce,
+
+$$
+P\{Y=1\mid S_k(W)=s,\mathcal D_{\mathrm{tr}}\}=s.
+$$
+
+This is a population property of the fitted rule for new observations. A finite test sample can diagnose departures from calibration but cannot prove exact calibration.
+
+### Calibration-in-the-large and logistic recalibration
+
+Calibration-in-the-large (CITL) asks whether predictions are systematically too high or too low. It is estimated with the test-set offset model
+
+$$
+\operatorname{logit}P(Y_i=1\mid \tilde p_{ik})
+=
+\alpha_{\mathrm{CITL},k}
++
+\operatorname{offset}\!\left\{
+\operatorname{logit}(\tilde p_{ik})
+\right\},
+\qquad i\in\mathcal I_{\mathrm{te}}.
+$$
+
+The coefficient of the prediction logit is fixed at 1; only \(\alpha_{\mathrm{CITL},k}\) is estimated. Its ideal value is 0. A positive value indicates average underprediction, and a negative value indicates average overprediction. At \(\alpha_{\mathrm{CITL},k}=0\), the offset-model score equation corresponds to equality between the test event rate and the mean test prediction.
+
+Separately, estimate a joint logistic recalibration model:
+
+$$
+\operatorname{logit}P(Y_i=1\mid \tilde p_{ik})
+=
+\alpha_{\mathrm{joint},k}
++
+\beta_{\mathrm{cal},k}
+\operatorname{logit}(\tilde p_{ik}),
+\qquad i\in\mathcal I_{\mathrm{te}}.
+$$
+
+Ideal joint-recalibration values are
+
+$$
+\alpha_{\mathrm{joint},k}=0,
+\qquad
+\beta_{\mathrm{cal},k}=1.
+$$
+
+A slope below 1 commonly indicates predictions that are too extreme, whereas a slope above 1 commonly indicates predictions that do not vary enough. The intercept from this joint model is **not** the CITL estimate because it is estimated while the slope is free. A calibration slope cannot be identified when every predicted score is identical. Both regressions are summaries of calibration and can miss nonlinear departures from the ideal curve.
+
+### Grouped calibration
+
+For a graphical diagnostic, partition test observations into score groups \(G_{1k},\ldots,G_{Gk}\) using \(\hat p_{ik}\), without using \(Y_i\). Within group \(g\), plot
+
+$$
+\bar p_{gk}
+=
+\frac{1}{n_{gk}}
+\sum_{i\in G_{gk}}\hat p_{ik}
+\quad\text{against}\quad
+\bar Y_{gk}
+=
+\frac{1}{n_{gk}}
+\sum_{i\in G_{gk}}Y_i.
+$$
+
+Our helper requests ten approximately equal-frequency groups but never splits observations having exactly the same predicted probability. Consequently, a learner with many tied scores may produce fewer than ten groups. Grouping is descriptive: its appearance depends on the binning rule, it can hide within-group miscalibration, and observed proportions can be noisy when groups contain few events. Exact population calibration is stronger than agreement at these grouped points.
+
+## Discrimination and AUC
+
+Discrimination asks whether cases tend to receive higher scores than non-cases. Conditional on the fitted learner, the population area under the ROC curve is
+
+$$
+\operatorname{AUC}_k
+=
+P(S_{k,1}>S_{k,0})
++
+\frac12P(S_{k,1}=S_{k,0}),
+$$
+
+where \(S_{k,1}\) is the score for an independently drawn case and \(S_{k,0}\) is the score for an independently drawn non-case. The half-weighted equality term is essential for learners, such as classification trees, that produce tied scores.
+
+If the test sample contains \(n_1\) cases and \(n_0\) non-cases, the empirical tie-corrected AUC is the U-statistic
+
+$$
+\widehat{\operatorname{AUC}}_{\mathrm{te},k}
+=
+\frac{1}{n_1n_0}
+\sum_{\substack{i\in\mathcal I_{\mathrm{te}}:Y_i=1\\
+j\in\mathcal I_{\mathrm{te}}:Y_j=0}}
+\left[
+I(\hat p_{ik}>\hat p_{jk})
++
+\frac12I(\hat p_{ik}=\hat p_{jk})
+\right].
+$$
+
+The code computes this quantity from average ranks. AUC is undefined if the evaluation sample has no cases or no non-cases.
+
+For a threshold \(c\), the ROC coordinates are
+
+$$
+\widehat{\operatorname{TPR}}_k(c)
+=
+\frac{\sum_{i\in\mathcal I_{\mathrm{te}}}
+I(Y_i=1,\hat p_{ik}\ge c)}{n_1},
+$$
+
+$$
+\widehat{\operatorname{FPR}}_k(c)
+=
+\frac{\sum_{i\in\mathcal I_{\mathrm{te}}}
+I(Y_i=0,\hat p_{ik}\ge c)}{n_0}.
+$$
+
+The ROC helper moves the threshold once per distinct score and aggregates all observations tied at that score. It never creates an artificial ROC step by ordering equal scores arbitrarily. The resulting trapezoidal ROC area agrees with the half-tie AUC definition.
+
+AUC does not evaluate whether a predicted probability of 0.20 is actually a 20 percent risk. A model can discriminate well and calibrate poorly.
+
+## Classification Measures
+
+Let \(c\) be a threshold specified using subject-matter consequences or training/validation data, without inspecting final test outcomes. Learner \(k\) induces the classifier
+
+$$
+C_k(w;c)
+=
+I\{\hat f_{k,\mathcal D_{\mathrm{tr}}}(w)\ge c\}.
+$$
+
+On held-out person \(i\), this gives
+
+$$
+\widehat C_{ik}(c)=I(\hat p_{ik}\ge c),
+\qquad i\in\mathcal I_{\mathrm{te}},
+$$
+
+so a score exactly equal to \(c\) is classified positive. Define the held-out confusion counts
+
+$$
+\begin{aligned}
+TP_k(c)&=\sum_i I\{Y_i=1,\widehat C_{ik}(c)=1\},
+&FN_k(c)&=\sum_i I\{Y_i=1,\widehat C_{ik}(c)=0\},\\
+FP_k(c)&=\sum_i I\{Y_i=0,\widehat C_{ik}(c)=1\},
+&TN_k(c)&=\sum_i I\{Y_i=0,\widehat C_{ik}(c)=0\},
+\end{aligned}
+$$
+
+where the sums are over \(i\in\mathcal I_{\mathrm{te}}\). Important threshold measures are
+
+$$
+\begin{aligned}
+\text{Sensitivity}&=\frac{TP}{TP+FN},
+&\text{Specificity}&=\frac{TN}{TN+FP},\\
+\text{PPV}&=\frac{TP}{TP+FP},
+&\text{NPV}&=\frac{TN}{TN+FN},\\
+\text{Accuracy}&=\frac{TP+TN}{n_{\mathrm{te}}},
+&\text{Balanced accuracy}
+&=\frac{\text{Sensitivity}+\text{Specificity}}{2},\\
+F_1&=\frac{2TP}{2TP+FP+FN}.
+\end{aligned}
+$$
+
+Sensitivity and specificity are conditional on outcome status. PPV and NPV additionally depend on event prevalence in the evaluation population. Accuracy is prevalence weighted and can be misleading when the outcome is uncommon; balanced accuracy gives cases and non-cases equal weight. If a required denominator is zero, the corresponding quantity is undefined and the helper reports NA rather than silently inventing a value.
+
+Choosing \(c\) to maximize a measure on the final test set would overfit the evaluation. If threshold optimization is desired, it belongs inside the training/validation process. A threshold of 0.5 is not automatic, and the training-prevalence threshold used later is an explicitly labeled classroom illustration rather than a decision-optimal clinical cutoff.
+
+## Summary of Binary Metrics
+
+| Performance dimension | Measure | Better value |
+|:--|:--|:--|
+| Overall probability error | Brier score, RMSE | Smaller |
+| Penalty for confident errors | Log loss | Smaller |
+| Average signed error | Mean error | Near 0 |
+| Average calibration | CITL offset intercept | 0 |
+| Logistic recalibration | Joint intercept and slope | 0 and 1 |
+| Local calibration | Held-out grouped calibration curve | Near equality line |
+| Ranking | AUC | Larger |
+| Threshold performance | Sensitivity, specificity, PPV, NPV, balanced accuracy, \(F_1\) | Context dependent |
+
+# NHANES Binary Prediction Example
+
+## Load and Prepare the Data
+
+For person \(i\), write the observed record as
+
+$$
+O_i=(Y_i,T_i,X_i),
+$$
+
+where \(Y_i\in\{0,1\}\) is the CVD indicator, \(T_i\in\{0,1\}\) is the smoking indicator, and \(X_i\) contains age, gender, race, education, income-to-poverty ratio, and BMI. For ordinary prediction, the complete feature vector is
+
+$$
+W_i=(T_i,X_i).
+$$
+
+This distinction matters later: \(W\) includes smoking for prediction, whereas \(X\) denotes the covariates over which outcome-regression predictions are standardized.
+
+We use the same classroom NHANES complete-case sample as the Prediction and Outcome Regression lectures. Because CVD is recorded cross-sectionally here, the most literal statistical outcome is **observed or prevalent CVD status**, not a future event occurring within a specified prediction horizon. We retain the familiar phrase “CVD probability” in figures, but it should not be read as a prospective clinical-risk model.
+
+This remains a teaching analysis. Complete cases are analyzed without NHANES survey weights. Consequently, the statistical target is the unweighted complete-case analytic distribution; it is not automatically the U.S. adult population. Population generalization would require additional survey-design and missing-data assumptions. For a causal interpretation even within the complete-case population, exchangeability and positivity must hold after selection, and complete-case selection itself must not create uncontrolled selection or collider bias.
+
+```{r load-data}
+data_override <- Sys.getenv("NHANES_DATA_PATH", unset = "")
+data_candidates <- unique(c(
+  if (nzchar(data_override)) data_override else character(0),
+  file.path("..", "Data", "NHANES_data.csv"),
+  file.path("Data", "NHANES_data.csv")
+))
+
+data_path <- data_candidates[file.exists(data_candidates)][1]
+
+if (is.na(data_path)) {
+  stop("Could not find NHANES_data.csv. Check the data path.")
+}
+
+nhanes <- read.csv(data_path, stringsAsFactors = FALSE)
+
+analysis_vars <- c(
+  "cvd_indicator",
+  "smoker_indicator",
+  "age_yr",
+  "gender",
+  "race",
+  "educ_lvl",
+  "inc_to_pov_ratio",
+  "bmi"
+)
+
+performance_data <- nhanes[
+  complete.cases(nhanes[, analysis_vars]),
+  analysis_vars
+]
+
+performance_data$cvd_indicator <- as.integer(
+  performance_data$cvd_indicator
+)
+performance_data$smoker_indicator <- as.integer(
+  performance_data$smoker_indicator
+)
+
+if (any(!performance_data$cvd_indicator %in% 0:1) ||
+    any(!performance_data$smoker_indicator %in% 0:1)) {
+  stop("CVD and smoking indicators must be coded 0/1.")
+}
+
+prespecified_factor_levels <- list(
+  gender = c("F", "M"),
+  race = c(
+    "mex_american", "nh_asian", "nh_black", "nh_white",
+    "other_hispanic"
+  ),
+  educ_lvl = c(
+    "9_to_12th_grade_no_diploma", "college_grad_or_above",
+    "hs_grad_or_ged", "lt_9th_grade", "start_college_to_aa"
+  )
+)
+
+for (variable in names(prespecified_factor_levels)) {
+  observed_levels <- unique(as.character(performance_data[[variable]]))
+  unknown_levels <- setdiff(
+    observed_levels,
+    prespecified_factor_levels[[variable]]
+  )
+  if (length(unknown_levels) > 0) {
+    stop(
+      paste(
+        "Unexpected level(s) in", variable, ":",
+        paste(unknown_levels, collapse = ", ")
+      )
+    )
+  }
+  performance_data[[variable]] <- factor(
+    performance_data[[variable]],
+    levels = prespecified_factor_levels[[variable]]
+  )
+}
+
+performance_data$outcome_factor <- factor(
+  performance_data$cvd_indicator,
+  levels = 0:1
+)
+
+data.frame(
+  Observations = nrow(performance_data),
+  CVD_cases = sum(performance_data$cvd_indicator),
+  CVD_prevalence_percent = round(
+    100 * mean(performance_data$cvd_indicator),
+    2
+  )
+)
+```
+
+## Create a Stratified Training-Evaluation Split
+
+We place 70 percent of cases and 70 percent of non-cases in the training set. Stratification preserves the uncommon event in both samples. Let \(\mathcal I_{\mathrm{tr}}\) and \(\mathcal I_{\mathrm{te}}\) denote the resulting index sets, and let \(\mathcal D_{\mathrm{tr}}\) and \(\mathcal D_{\mathrm{te}}\) denote their data records. Because membership is stratified on \(Y\), the held-out records are random samples within outcome strata rather than conditionally iid draws from \(P\). Therefore, the exact simple-random-holdout identity from Section 1.3 does not apply literally to this example. The nearly equal sampling fractions approximately preserve prevalence, but prevalence-sensitive losses, calibration, predictive values, and accuracy remain descriptive for this stratified evaluation mixture unless target-prevalence weighting is supplied.
+
+```{r train-test-split}
+set.seed(20260717)
+
+case_rows <- which(performance_data$cvd_indicator == 1)
+noncase_rows <- which(performance_data$cvd_indicator == 0)
+
+training_rows <- c(
+  sample(case_rows, floor(0.70 * length(case_rows))),
+  sample(noncase_rows, floor(0.70 * length(noncase_rows)))
+)
+
+training_rows <- sort(training_rows)
+training_data <- performance_data[training_rows, ]
+test_data <- performance_data[-training_rows, ]
+
+split_summary <- data.frame(
+  Sample = c("Training", "Test"),
+  N = c(nrow(training_data), nrow(test_data)),
+  CVD_cases = c(
+    sum(training_data$cvd_indicator),
+    sum(test_data$cvd_indicator)
+  ),
+  CVD_percent = round(
+    100 * c(
+      mean(training_data$cvd_indicator),
+      mean(test_data$cvd_indicator)
+    ),
+    2
+  )
+)
+
+knitr::kable(split_summary)
+```
+
+The evaluation outcomes are not used to fit the displayed learner instances or estimate their numeric preprocessing. However, this teaching artifact was developed iteratively while evaluation results were visible, including comparison of candidate RFF settings. The reported metrics must therefore be read as **exploratory validation summaries**, not as an unbiased final-test assessment after model selection. A research workflow should tune every choice using training-only nested resampling and evaluate the selected procedure once on genuinely untouched new data.
+
+## Six Prediction Methods
+
+Let
+
+$$
+\mathcal K
+=
+\{1,2,3,4,5,6\}
+$$
+
+index logistic regression, Gaussian RFF logistic regression, classification tree, random forest, gradient boosting, and deep neural network in that order. For method \(k\), the learning algorithm \(\mathcal A_k\) maps the training data to the fitted probability rule
+
+$$
+\hat f_{k,\mathcal D_{\mathrm{tr}}}
+=
+\mathcal A_k(\mathcal D_{\mathrm{tr}}),
+\qquad
+\hat p_{ik}
+=
+\hat f_{k,\mathcal D_{\mathrm{tr}}}(W_i).
+$$
+
+The comparison is among the six **fixed specifications** below, not among all possible versions of these method classes. Their hyperparameters are not tuned exhaustively or equally, so the results cannot establish that one method class is universally superior.
+
+```{r prediction-methods-table, echo=FALSE}
+prediction_methods_display <- data.frame(
+  Method = model_order,
+  `R package and fitting function` = c(
+    "stats::glm()",
+    "Custom Gaussian RFF map; glmnet::glmnet()",
+    "rpart::rpart()",
+    "randomForest::randomForest()",
+    "xgboost::xgb.train()",
+    "torch::nn_module(); torch::optim_adam()"
+  ),
+  `Main structure` = c(
+    "Linear predictor on log-odds scale",
+    "Gaussian random features plus ridge logistic regression",
+    "Recursive binary splits",
+    "Average of many randomized trees",
+    "Sequentially improved trees",
+    "Two hidden nonlinear layers"
+  ),
+  `Main teaching point` = c(
+    "Transparent parametric baseline",
+    "Fast finite-dimensional approximation to an RBF kernel",
+    "Simple nonlinear rules and interactions",
+    "Flexible ensemble with reduced tree instability",
+    "Flexible nonlinear learner focused on remaining errors",
+    "Learned nonlinear combinations of predictors"
+  ),
+  check.names = FALSE
+)
+
+prediction_methods_table <- method_kable(
+  prediction_methods_display,
+  font_size = 13
+)
+
+kableExtra::column_spec(
+  prediction_methods_table,
+  column = 2,
+  monospace = TRUE
+)
+```
+
+The fast kernel learner approximates a Gaussian radial-basis-function kernel. For scaled design vectors \(w\) and \(w'\), the target kernel is
+
+$$
+K_\sigma(w,w')
+=
+\exp\{-\sigma\lVert w-w'\rVert_2^2\}.
+$$
+
+Instead of constructing the exact \(n\times n\) kernel matrix, draw, for \(j=1,\ldots,D\),
+
+$$
+\omega_j\overset{\mathrm{iid}}{\sim}
+N_p(0,2\sigma I_p),
+\qquad
+b_j\overset{\mathrm{iid}}{\sim}\operatorname{Unif}(0,2\pi),
+$$
+
+and define the random Fourier feature map
+
+$$
+z_j(w)
+=
+\sqrt{\frac{2}{D}}
+\cos(\omega_j^\top w+b_j).
+$$
+
+Then \(E\{z(w)^\top z(w')\}=K_\sigma(w,w')\), so ordinary linear learning in \(z(w)\) approximates nonlinear Gaussian-kernel learning in \(w\). The probability rule has the form
+
+$$
+\operatorname{logit}\{\hat f_{\mathrm{RFF}}(w)\}
+=
+\hat\beta_0+\hat\beta^\top z(w),
+$$
+
+where the slope coefficients are ridge penalized. We use \(D=256\), \(\sigma=1/p\), and one fixed random map with seed 20260718. On these features, **glmnet** fits ridge logistic regression with \(\alpha=0\) and \(\lambda=0.001\). These values define the fixed specification in the current run; as disclosed above, their displayed evaluation performance is exploratory rather than test-independent.
+
+This is an approximate Gaussian-kernel probability learner, not an exact kernel SVM and not Nadaraya--Watson regression. Its advantage here is computational: it replaces pairwise kernel calculations with a fixed \(D\)-column feature matrix and a fast penalized logistic fit.
+
+<div class="performance-note">
+**Why this version is faster.** In a separate development-machine benchmark, one full-sample RFF fit plus both \(T=0\) and \(T=1\) prediction passes took about 0.6 seconds, compared with about 8.7 seconds for the earlier exact Gaussian-kernel SVM. This document does not rerun that timing benchmark, and exact timings depend on hardware. The comparison motivates the computational choice; it is not evidence about predictive quality.
+</div>
+
+The deep neural network is implemented with the R package **torch**, an R interface to the LibTorch/PyTorch computational engine. It provides multilayer neural-network modules, automatic differentiation, Adam optimization, and CPU or GPU execution. Thus, the model below is a genuine multilayer neural network rather than a manually approximated score or a single-hidden-layer convenience fit.
+
+The network is deliberately small because this tabular dataset is modest: 32 ReLU units in the first hidden layer, 16 ReLU units in the second hidden layer, and one output logit. Deep learning is not guaranteed to outperform regression or tree ensembles, especially without extensive tuning or much larger data.
+
+```{r package-versions}
+package_versions <- data.frame(
+  Package = c(
+    "stats", "glmnet", "rpart", "randomForest", "xgboost", "torch"
+  ),
+  Version = vapply(
+    c("stats", "glmnet", "rpart", "randomForest", "xgboost", "torch"),
+    function(package) as.character(packageVersion(package)),
+    character(1)
+  ),
+  row.names = NULL
+)
+
+knitr::kable(package_versions)
+```
+
+```{r neural-network-picture, echo=FALSE, fig.width=8.8, fig.height=4.3}
+start_picture()
+
+input_y <- seq(0.20, 0.82, length.out = 5)
+hidden1_y <- seq(0.25, 0.77, length.out = 4)
+hidden2_y <- seq(0.32, 0.70, length.out = 3)
+
+for (y0 in input_y) {
+  for (y1 in hidden1_y) {
+    segments(0.18, y0, 0.40, y1, col = "#CFCFCF", lwd = 1)
+  }
+}
+for (y0 in hidden1_y) {
+  for (y1 in hidden2_y) {
+    segments(0.40, y0, 0.63, y1, col = "#CFCFCF", lwd = 1)
+  }
+}
+for (y0 in hidden2_y) {
+  segments(0.63, y0, 0.84, 0.51, col = "#CFCFCF", lwd = 1)
+}
+
+points(rep(0.18, 5), input_y, pch = 21, cex = 2.3,
+       bg = "#F1CE63", col = "#333333")
+points(rep(0.40, 4), hidden1_y, pch = 21, cex = 2.3,
+       bg = "#A0CBE8", col = "#333333")
+points(rep(0.63, 3), hidden2_y, pch = 21, cex = 2.3,
+       bg = "#E4E6FF", col = "#333333")
+points(0.84, 0.51, pch = 21, cex = 2.5,
+       bg = "#DDFBE1", col = "#333333")
+
+draw_text(0.18, 0.08, "Predictors", cex = 0.72, font = 2)
+draw_text(0.40, 0.08, "Hidden layer 1", cex = 0.68, font = 2)
+draw_text(0.63, 0.08, "Hidden layer 2", cex = 0.68, font = 2)
+draw_text(0.84, 0.08, "CVD probability", cex = 0.65, font = 2)
+```
+
+## Prepare the Design Matrices
+
+Tree methods use the original variables. The Gaussian RFF learner, gradient boosting, and neural network use a numeric design matrix. The factor-level schema is fixed from the prespecified variable coding and does not use outcomes. RFF and neural-network inputs are centered and scaled using training-set means and standard deviations only; the test-set transformation reuses those training estimates. The same fixed RFF map is reused for training, test, \(T=0\), and \(T=1\) predictions.
+
+```{r prepare-design-matrices}
+x_train <- design_matrix(training_data)
+x_test <- design_matrix(test_data)
+
+stopifnot(identical(colnames(x_train), colnames(x_test)))
+
+training_scaler <- fit_scaler(x_train)
+x_train_scaled <- apply_scaler(x_train, training_scaler)
+x_test_scaled <- apply_scaler(x_test, training_scaler)
+
+dim(x_train)
+```
+
+## Fit the Six Learners
+
+```{r fit-prediction-models}
+set.seed(20260717)
+
+training_fits <- fit_prediction_learners(
+  data = training_data,
+  x_raw = x_train,
+  x_scaled = x_train_scaled,
+  deep_epochs = deep_epochs_spec,
+  seed = 20260717
+)
+```
+
+```{r deep-loss-picture, echo=FALSE, fig.width=7.5, fig.height=4.8}
+plot(
+  training_fits$deep$loss_history,
+  type = "l",
+  lwd = 3,
+  col = "#4E79A7",
+  xlab = "Training epoch",
+  ylab = "Binary cross-entropy loss",
+  main = "Neural-Network Training Loss"
+)
+```
+
+This curve is training loss, not test performance. A decreasing training loss only shows that the optimizer is fitting the training data.
+
+## Generate Held-Out Test Predictions
+
+```{r predict-test-set}
+test_predictions <- predict_prediction_learners(
+  fits = training_fits,
+  new_data = test_data,
+  x_raw = x_test,
+  x_scaled = x_test_scaled
+)
+
+summary(test_predictions)
+```
+
+# Compare Held-Out Prediction Performance
+
+## Probability-Performance Table
+
+For any metric functional \(M\), define its held-out estimate for learner \(k\) by
+
+$$
+\widehat M^{\mathrm{te}}_k
+=
+M\!\left(
+\{Y_i,\hat p_{ik}:i\in\mathcal I_{\mathrm{te}}\}
+\right).
+$$
+
+Every row below uses the same test observations and the same observed outcomes, so comparisons across methods are paired at the person level.
+
+```{r performance-table}
+y_test <- test_data$cvd_indicator
+method_names <- model_order
+test_predictions <- test_predictions[, method_names, drop = FALSE]
+
+performance_table <- do.call(
+  rbind,
+  lapply(method_names, function(method) {
+    metrics <- probability_metrics(
+      y_test,
+      test_predictions[[method]]
+    )
+    data.frame(
+      Method = method,
+      t(metrics),
+      row.names = NULL,
+      check.names = FALSE
+    )
+  })
+)
+
+training_prevalence <- mean(training_data$cvd_indicator)
+prevalence_brier <- mean(
+  (y_test - training_prevalence)^2
+)
+
+performance_table$Brier_skill <- 1 -
+  performance_table$Brier / prevalence_brier
+
+performance_table <- performance_table[
+  c(
+    "Method",
+    "RMSE",
+    "Brier",
+    "Brier_skill",
+    "MAE",
+    "Log_loss",
+    "AUC",
+    "Mean_error",
+    "Error_variance",
+    "Prediction_variance"
+  )
+]
+
+performance_display <- performance_table
+numeric_columns <- setdiff(names(performance_display), "Method")
+performance_display[numeric_columns] <- lapply(
+  performance_display[numeric_columns],
+  round,
+  digits = 4
+)
+
+method_kable(
+  performance_display,
+  col.names = c(
+    "Method",
+    "RMSE",
+    "Brier score",
+    "Brier skill",
+    "MAE",
+    "Log loss",
+    "AUC",
+    "Mean error",
+    "Error variance",
+    "Prediction variance"
+  ),
+  font_size = 12,
+  best_rules = c(
+    RMSE = "min",
+    Brier = "min",
+    Brier_skill = "max",
+    MAE = "min",
+    Log_loss = "min",
+    AUC = "max",
+    Mean_error = "min_abs"
+  )
+)
+```
+
+Interpret the columns carefully:
+
+- RMSE, Brier score, MAE, and log loss are errors, so smaller is better.
+- Positive Brier skill improves on predicting the training prevalence for everyone.
+- AUC is a ranking measure, so larger is better.
+- Mean error is \(n_{\mathrm{te}}^{-1}\sum_{i\in\mathcal I_{\mathrm{te}}}(Y_i-\hat p_{ik})\); a positive value indicates average underprediction.
+- Error variance is the sample variance of \(Y_i-\hat p_{ik}\) across test people.
+- Prediction variance is the sample variance of \(\hat p_{ik}\) across test people; it is not itself an accuracy measure.
+
+In this and the later performance tables, a **<u>bold, underlined</u>** value is best among the displayed point estimates according to the stated direction: errors are minimized, skill or discrimination measures are maximized, and calibration targets are approached. All displayed ties are marked. This formatting is descriptive and does not establish a statistically significant difference.
+
+Because the same evaluation set is also used to identify the displayed winner, the winning point estimate is subject to selection optimism, or the “winner's curse.” Individual bootstrap standard errors do not remove that post-selection effect. Nested resampling or a new untouched test set is required to estimate the performance of a procedure that includes method selection.
+
+Neither variance column is the sampling variance of the estimated performance measure. That uncertainty is considered later by resampling test people.
+
+## RMSE Comparison
+
+```{r rmse-comparison-picture, echo=FALSE, fig.width=8.0, fig.height=5.2}
+plot_id <- rev(seq_along(method_names))
+
+old_par <- par(mar = c(5, 11, 4, 1))
+barplot(
+  performance_table$RMSE[plot_id],
+  names.arg = performance_table$Method[plot_id],
+  horiz = TRUE,
+  las = 1,
+  col = method_colors[plot_id],
+  xlab = "Test-set probability RMSE",
+  main = "Held-Out Probability Error"
+)
+par(old_par)
+```
+
+Shorter bars indicate smaller held-out probability error. Small visual differences should be interpreted together with their bootstrap standard errors rather than treated as a definitive ranking.
+
+## Calibration Curves
+
+```{r calibration-data}
+calibration_data <- do.call(
+  rbind,
+  lapply(method_names, function(method) {
+    out <- make_calibration_groups(
+      y_test,
+      test_predictions[[method]],
+      groups = 10
+    )
+    out$Method <- method
+    out
+  })
+)
+
+calibration_table <- do.call(
+  rbind,
+  lapply(method_names, function(method) {
+    statistics <- calibration_coefficients(
+      y_test,
+      test_predictions[[method]]
+    )
+    data.frame(
+      Method = method,
+      Event_rate = statistics["Event_rate"],
+      Mean_prediction = statistics["Mean_prediction"],
+      CITL_offset_intercept = statistics["CITL_offset_intercept"],
+      Joint_intercept = statistics["Joint_intercept"],
+      Calibration_slope = statistics["Calibration_slope"],
+      row.names = NULL
+    )
+  })
+)
+
+calibration_display <- calibration_table
+calibration_display[, -1] <- round(calibration_display[, -1], 3)
+method_kable(
+  calibration_display,
+  col.names = c(
+    "Method",
+    "Event rate",
+    "Mean prediction",
+    "CITL offset intercept",
+    "Joint intercept",
+    "Calibration slope"
+  ),
+  best_rules = c(
+    Mean_prediction = "closest_to:Event_rate",
+    CITL_offset_intercept = "min_abs",
+    Joint_intercept = "min_abs",
+    Calibration_slope = "closest_1"
+  )
+)
+```
+
+The event rate is identical across rows because every learner is evaluated on the same test observations. The mean prediction provides a direct probability-scale comparison. The CITL offset intercept comes from the model with prediction logit as an offset and fixed unit slope. The joint intercept and calibration slope come from the separate model in which both coefficients are estimated; the joint intercept should not be called CITL.
+
+```{r calibration-comparison-picture, echo=FALSE, fig.width=10.5, fig.height=7.4}
+old_par <- par(
+  mfrow = c(2, 3),
+  mar = c(3.2, 3.2, 2.3, 0.7),
+  oma = c(3.0, 3.2, 2.5, 0.5),
+  pty = "s"
+)
+
+calibration_maximum <- max(
+  calibration_data$predicted,
+  calibration_data$observed,
+  na.rm = TRUE
+)
+calibration_limit <- min(
+  1,
+  ceiling(10 * 1.10 * calibration_maximum) / 10
+)
+
+for (j in seq_along(method_names)) {
+  method_data <- calibration_data[
+    calibration_data$Method == method_names[j],
+  ]
+
+  plot(
+    method_data$predicted,
+    method_data$observed,
+    type = "b",
+    pch = 19,
+    cex = 1.05,
+    lwd = 2.3,
+    col = unname(method_colors[method_names[j]]),
+    xlim = c(0, calibration_limit),
+    ylim = c(0, calibration_limit),
+    xlab = "",
+    ylab = "",
+    main = method_names[j],
+    cex.main = 0.95
+  )
+  abline(0, 1, lty = 2, lwd = 1.8, col = "#777777")
+}
+
+mtext(
+  "Mean predicted CVD probability",
+  side = 1,
+  outer = TRUE,
+  line = 1.2,
+  cex = 1.05
+)
+mtext(
+  "Observed CVD proportion",
+  side = 2,
+  outer = TRUE,
+  line = 1.2,
+  cex = 1.05
+)
+mtext(
+  "Calibration on the Held-Out Test Set",
+  side = 3,
+  outer = TRUE,
+  line = 0.5,
+  cex = 1.35,
+  font = 2
+)
+
+par(old_par)
+```
+
+Each panel displays one learner on the same horizontal and vertical scales, making its departures from the dashed equality line visible without overlap from the other methods. Points near the dashed diagonal indicate agreement between predicted and observed CVD probability. A point above the diagonal means the observed event proportion exceeds the mean prediction, so the model underpredicts that group's probability. Grouped calibration curves can be noisy because each group contains only a fraction of the test observations and relatively few CVD events.
+
+## ROC Curves and AUC
+
+```{r roc-comparison-picture, echo=FALSE, fig.width=7.5, fig.height=6.5}
+old_par <- par(pty = "s")
+
+plot(
+  0, 0,
+  type = "n",
+  xlim = c(0, 1),
+  ylim = c(0, 1),
+  xlab = "False-positive rate",
+  ylab = "True-positive rate",
+  main = "ROC Curves on the Held-Out Test Set"
+)
+abline(0, 1, lty = 2, lwd = 2, col = "#777777")
+
+for (j in seq_along(method_names)) {
+  roc_data <- roc_coordinates(
+    y_test,
+    test_predictions[[method_names[j]]]
+  )
+  lines(
+    roc_data$FPR,
+    roc_data$TPR,
+    lwd = 2.5,
+    col = method_colors[j]
+  )
+}
+
+auc_labels <- paste0(
+  method_names,
+  " (AUC = ",
+  sprintf("%.3f", performance_table$AUC),
+  ")"
+)
+
+legend(
+  "bottomright",
+  legend = auc_labels,
+  col = method_colors,
+  lwd = 2.5,
+  cex = 0.72,
+  bty = "n"
+)
+
+par(old_par)
+```
+
+Curves closer to the upper-left corner rank cases above non-cases more successfully. The AUC summarizes ranking across all thresholds, but it does not measure calibration.
+
+::: {.performance-note}
+**Why does the simplest model perform so well?**
+
+- **Highest AUC:** logistic regression has the largest held-out AUC, `r sprintf("%.3f", performance_table$AUC[performance_table$Method == "Logistic regression"])`, in this comparison.
+- **The difference is small:** gradient boosting has AUC `r sprintf("%.3f", performance_table$AUC[performance_table$Method == "Gradient boosting"])`. The point-estimate gap is only `r sprintf("%.3f", performance_table$AUC[performance_table$Method == "Logistic regression"] - performance_table$AUC[performance_table$Method == "Gradient boosting"])`, so the graph does not establish an important superiority without a paired uncertainty analysis.
+- **“Best” depends on the metric:** gradient boosting has a very small point-estimate advantage in test RMSE and log loss, whereas logistic regression has the highest AUC. AUC evaluates ranking; RMSE and log loss evaluate probability error.
+- **Complexity is not automatically helpful:** this moderate-sized tabular dataset may be described reasonably well by additive effects on the log-odds scale. Flexible learners can spend capacity fitting noise, and their advantage may require more data or better tuning.
+- **Proper conclusion:** among these six fixed specifications, logistic regression is a strong and competitive benchmark. This result does not prove that logistic regression is universally better than machine learning.
+:::
+
+## Classification at a Prespecified Threshold
+
+Because CVD is uncommon, a threshold of 0.5 would classify very few people as cases. For illustration, we choose the CVD prevalence in the training sample as a common threshold. This threshold is defined without using test outcomes.
+
+```{r classification-table}
+classification_threshold <- mean(training_data$cvd_indicator)
+
+classification_table <- do.call(
+  rbind,
+  lapply(method_names, function(method) {
+    metrics <- classification_metrics(
+      y_test,
+      test_predictions[[method]],
+      threshold = classification_threshold
+    )
+    data.frame(
+      Method = method,
+      Threshold = classification_threshold,
+      t(metrics),
+      row.names = NULL
+    )
+  })
+)
+
+classification_display <- classification_table[
+  c(
+    "Method",
+    "Threshold",
+    "Sensitivity",
+    "Specificity",
+    "Positive_predictive_value",
+    "Negative_predictive_value",
+    "Accuracy",
+    "Balanced_accuracy",
+    "F1"
+  )
+]
+classification_display[, -1] <- round(
+  classification_display[, -1],
+  3
+)
+
+method_kable(
+  classification_display,
+  col.names = c(
+    "Method",
+    "Threshold",
+    "Sensitivity",
+    "Specificity",
+    "PPV",
+    "NPV",
+    "Accuracy",
+    "Balanced accuracy",
+    "F1 score"
+  ),
+  font_size = 12,
+  best_rules = c(
+    Sensitivity = "max",
+    Specificity = "max",
+    Positive_predictive_value = "max",
+    Negative_predictive_value = "max",
+    Accuracy = "max",
+    Balanced_accuracy = "max",
+    F1 = "max"
+  )
+)
+```
+
+The same probability model can produce different sensitivity and specificity under a different threshold. Threshold-specific results should not replace probability calibration and error measures.
+
+## Performance Within Each Exposure Group
+
+Outcome regression will ask every learner to predict under both \(T=0\) and \(T=1\). Overall test performance can hide poor performance in one observed exposure group.
+
+For fitted learner \(k\), write \(\hat m_{k,\mathcal D_{\mathrm{tr}}}(t,x)\equiv\hat f_{k,\mathcal D_{\mathrm{tr}}}(w=(t,x))\). The population quantity represented by observed-group performance is
+
+$$
+R^{\mathrm{obs}}_{L,k,t}(\mathcal D_{\mathrm{tr}})
+=
+E\!\left[
+L\{Y,\hat m_{k,\mathcal D_{\mathrm{tr}}}(t,X)\}
+\mid T=t,\mathcal D_{\mathrm{tr}}
+\right].
+$$
+
+It is averaged over \(X\mid T=t\), not over the full covariate distribution.
+
+```{r treatment-specific-performance}
+treatment_specific_performance <- do.call(
+  rbind,
+  lapply(method_names, function(method) {
+    do.call(
+      rbind,
+      lapply(0:1, function(t_value) {
+        rows <- test_data$smoker_indicator == t_value
+        metrics <- probability_metrics(
+          y_test[rows],
+          test_predictions[[method]][rows]
+        )
+        data.frame(
+          Method = method,
+          Smoking_group = ifelse(
+            t_value == 1,
+            "Smoker",
+            "Non-smoker"
+          ),
+          N = sum(rows),
+          RMSE = metrics["RMSE"],
+          Brier = metrics["Brier"],
+          AUC = metrics["AUC"],
+          row.names = NULL
+        )
+      })
+    )
+  })
+)
+
+treatment_specific_display <- treatment_specific_performance
+treatment_specific_display[c("RMSE", "Brier", "AUC")] <- lapply(
+  treatment_specific_display[c("RMSE", "Brier", "AUC")],
+  round,
+  digits = 4
+)
+
+method_kable(
+  treatment_specific_display,
+  col.names = c(
+    "Method",
+    "Smoking group",
+    "N",
+    "RMSE",
+    "Brier score",
+    "AUC"
+  ),
+  best_rules = c(
+    RMSE = "min",
+    Brier = "min",
+    AUC = "max"
+  ),
+  best_within = "Smoking_group"
+)
+```
+
+These diagnostics evaluate \(\hat m_k(1,X)\) only among observed smokers and \(\hat m_k(0,X)\) only among observed non-smokers. They cannot directly validate \(\hat m_k(1,X)\) among non-smokers, \(\hat m_k(0,X)\) among smokers, or either function in covariate regions with weak smoking-status overlap. Those scenario outcomes are unobserved. Thus, treatment-specific prediction performance is useful but cannot establish causal validity.
+
+# Uncertainty and Variance of Performance Measures
+
+Performance estimates vary because the evaluation sample is finite. Because the split fixed the numbers of cases and non-cases, we use a paired, outcome-stratified nonparametric bootstrap while keeping each trained model and its predictions fixed. Within each replicate, cases are resampled from observed cases and non-cases from observed non-cases. One common vector of resampled row indices is used for every method, so method comparisons remain paired observation for observation.
+
+This quantifies finite-evaluation-sample uncertainty conditional on the fitted learners and the observed outcome-stratum counts. It does not include variation in target prevalence or variation from drawing a new training sample, repeating preprocessing or tuning, and refitting each learner.
+
+```{r performance-bootstrap}
+set.seed(20260720)
+
+B_performance <- 300
+test_case_rows <- which(y_test == 1)
+test_noncase_rows <- which(y_test == 0)
+
+performance_bootstrap_rows <- replicate(
+  B_performance,
+  c(
+    sample(
+      test_case_rows,
+      size = length(test_case_rows),
+      replace = TRUE
+    ),
+    sample(
+      test_noncase_rows,
+      size = length(test_noncase_rows),
+      replace = TRUE
+    )
+  )
+)
+
+bootstrap_metric_array <- array(
+  NA_real_,
+  dim = c(B_performance, length(method_names), 3),
+  dimnames = list(
+    Replicate = seq_len(B_performance),
+    Method = method_names,
+    Metric = c("RMSE", "Log_loss", "AUC")
+  )
+)
+
+for (bootstrap_id in seq_len(B_performance)) {
+  bootstrap_rows <- performance_bootstrap_rows[, bootstrap_id]
+
+  for (method in method_names) {
+    bootstrap_metric_array[bootstrap_id, method, ] <- probability_metrics(
+      y_test[bootstrap_rows],
+      test_predictions[[method]][bootstrap_rows]
+    )[c("RMSE", "Log_loss", "AUC")]
+  }
+}
+
+bootstrap_summary <- do.call(
+  rbind,
+  lapply(method_names, function(method) {
+    point_metrics <- probability_metrics(
+      y_test,
+      test_predictions[[method]]
+    )
+
+    data.frame(
+      Method = method,
+      RMSE = point_metrics["RMSE"],
+      RMSE_bootstrap_SE = sd(
+        bootstrap_metric_array[, method, "RMSE"],
+        na.rm = TRUE
+      ),
+      Log_loss = point_metrics["Log_loss"],
+      Log_loss_bootstrap_SE = sd(
+        bootstrap_metric_array[, method, "Log_loss"],
+        na.rm = TRUE
+      ),
+      AUC = point_metrics["AUC"],
+      AUC_bootstrap_SE = sd(
+        bootstrap_metric_array[, method, "AUC"],
+        na.rm = TRUE
+      ),
+      row.names = NULL
+    )
+  })
+)
+
+bootstrap_display <- bootstrap_summary
+bootstrap_display[, -1] <- round(bootstrap_display[, -1], 4)
+method_kable(
+  bootstrap_display,
+  col.names = c(
+    "Method",
+    "RMSE",
+    "RMSE bootstrap SE",
+    "Log loss",
+    "Log-loss bootstrap SE",
+    "AUC",
+    "AUC bootstrap SE"
+  ),
+  font_size = 12,
+  best_rules = c(
+    RMSE = "min",
+    Log_loss = "min",
+    AUC = "max"
+  )
+)
+```
+
+Two methods with slightly different point estimates may not have meaningfully different future performance. The shared resample indices make within-replicate method differences available for formal paired comparisons. The displayed standard errors still describe each fixed fitted model under repeated within-stratum sampling from this evaluation distribution; they are not post-selection corrections or full training-and-refitting uncertainty estimates.
+
+# Use Each Learner for Outcome Regression
+
+## Prediction Performance and Causal Estimation Are Different
+
+The held-out comparison asks:
+
+> How well does the learner predict observed CVD outcomes under observed smoking status?
+
+Outcome regression asks:
+
+> What does the fitted outcome function predict for everyone under \(T=1\), and what does it predict for everyone under \(T=0\)?
+
+These are connected but not identical tasks. Outcome regression evaluates predictions at exposure settings that may not have been observed for a particular person.
+
+## Causal Estimand and Identification Conditions
+
+The population outcome-regression function is
+
+$$
+m_0(t,x)
+=
+E(Y\mid T=t,X=x)
+=
+P(Y=1\mid T=t,X=x).
+$$
+
+To define a causal target, let \(Y^1\) and \(Y^0\) be the potential CVD outcomes under well-defined smoking interventions \(T=1\) and \(T=0\). The intervention-specific mean outcomes and their contrasts are
+
+$$
+\psi_t=E(Y^t),
+\qquad
+RD=\psi_1-\psi_0,
+\qquad
+RR=\frac{\psi_1}{\psi_0}.
+$$
+
+The risk ratio is defined only when \(\psi_0>0\).
+
+The equality between these causal quantities and functions of the observed-data distribution requires:
+
+1. **Consistency:** \(Y=Y^T\).
+2. **Conditional exchangeability:** \((Y^0,Y^1)\perp T\mid X\).
+3. **Positivity:** \(P(T=t\mid X=x)>0\) for \(t=0,1\) and for \(P_X\)-almost every relevant \(x\).
+4. **A well-defined intervention and no interference:** the intervention specifies a meaningful version, timing, and duration of smoking status, and one person's assigned intervention does not change another person's outcome.
+
+Under these conditions, the g-formula identifies
+
+$$
+\psi_t
+=
+E_X\{m_0(t,X)\}
+=
+\int m_0(t,x)\,dP_X(x).
+$$
+
+For this interpretation, \(X\) must contain sufficient **pre-exposure** adjustment variables. Predictive usefulness alone does not justify adjustment for mediators, colliders, or variables measured after smoking exposure. In this cross-sectional illustration, current smoking and prevalent CVD do not by themselves establish a clear exposure-before-outcome ordering; the intervention version and time horizon underlying \(Y^t\) therefore require substantive definition. The temporal status of variables such as BMI also requires scrutiny.
+
+<div class="warning-note">
+A method can have excellent test-set prediction and still yield biased causal estimates if the adjustment set is inappropriate, exchangeability fails, positivity is weak, or scenario predictions extrapolate beyond supported covariate patterns. Predictive performance does not test causal identification.
+</div>
+
+## Refit Each Learner on the Full Analytic Sample
+
+The test set served its performance-evaluation purpose. For the pedagogical plug-in outcome-regression estimates, we now refit each prespecified learner using the full analytic sample.
+
+Let \(\mathcal D_{\mathrm{full}}=\{O_i:i=1,\ldots,n\}\). Learner \(k\) produces
+
+$$
+\hat m_{k,\mathcal D_{\mathrm{full}}}(t,x)
+=
+\mathcal A_k(\mathcal D_{\mathrm{full}})(t,x).
+$$
+
+These full-data fits differ from the training-only fits used to compute held-out prediction metrics. The later joined table therefore compares method-level summaries from two related but different fitted rules; the displayed test RMSE is not an exact performance estimate for the full-data refit.
+
+In a research analysis with adaptive model selection, cross-fitting or nested resampling should separate nuisance-model selection from effect estimation.
+
+```{r refit-full-models}
+x_full <- design_matrix(performance_data)
+full_scaler <- fit_scaler(x_full)
+x_full_scaled <- apply_scaler(x_full, full_scaler)
+
+full_fits <- fit_prediction_learners(
+  data = performance_data,
+  x_raw = x_full,
+  x_scaled = x_full_scaled,
+  deep_epochs = deep_epochs_spec,
+  seed = full_fit_seed
+)
+```
+
+## Predict Every Person Under Both Smoking Settings
+
+```{r scenario-predictions}
+data_if_smoker <- performance_data
+data_if_non_smoker <- performance_data
+
+data_if_smoker$smoker_indicator <- 1
+data_if_non_smoker$smoker_indicator <- 0
+
+x_if_smoker <- design_matrix(data_if_smoker)
+x_if_non_smoker <- design_matrix(data_if_non_smoker)
+
+x_if_smoker_scaled <- apply_scaler(
+  x_if_smoker,
+  full_scaler
+)
+x_if_non_smoker_scaled <- apply_scaler(
+  x_if_non_smoker,
+  full_scaler
+)
+
+predictions_if_smoker <- predict_prediction_learners(
+  fits = full_fits,
+  new_data = data_if_smoker,
+  x_raw = x_if_smoker,
+  x_scaled = x_if_smoker_scaled
+)
+
+predictions_if_non_smoker <- predict_prediction_learners(
+  fits = full_fits,
+  new_data = data_if_non_smoker,
+  x_raw = x_if_non_smoker,
+  x_scaled = x_if_non_smoker_scaled
+)
+```
+
+For method \(k\), standardization computes
+
+$$
+\hat\psi_{1,k}
+=
+\frac{1}{n}\sum_{i=1}^n
+\hat m_{k,\mathcal D_{\mathrm{full}}}(1,X_i),
+$$
+
+and
+
+$$
+\hat\psi_{0,k}
+=
+\frac{1}{n}\sum_{i=1}^n
+\hat m_{k,\mathcal D_{\mathrm{full}}}(0,X_i).
+$$
+
+This is a plug-in outcome-regression estimator. It is **singly robust**: even if the causal identification conditions hold, inconsistent estimation of \(m_0(t,x)\) can bias \(\hat\psi_{t,k}\). Without the identification and model conditions, the quantities are standardized model-based contrasts rather than causal effects.
+
+The risk difference and risk ratio are
+
+$$
+\widehat{RD}_k
+=
+\hat\psi_{1,k}-\hat\psi_{0,k},
+$$
+
+$$
+\widehat{RR}_k
+=
+\frac{\hat\psi_{1,k}}{\hat\psi_{0,k}}.
+$$
+
+## Compare Outcome-Regression Estimates
+
+```{r outcome-regression-results}
+or_results <- do.call(
+  rbind,
+  lapply(method_names, function(method) {
+    m1 <- predictions_if_smoker[[method]]
+    m0 <- predictions_if_non_smoker[[method]]
+    conditional_mean_contrast <- m1 - m0
+
+    data.frame(
+      Method = method,
+      Risk_if_non_smoker = mean(m0),
+      Risk_if_smoker = mean(m1),
+      Risk_difference = mean(m1) - mean(m0),
+      Risk_ratio = mean(m1) / mean(m0),
+      SD_predicted_risk_non_smoker = sd(m0),
+      SD_predicted_risk_smoker = sd(m1),
+      SD_predicted_conditional_mean_contrast = sd(
+        conditional_mean_contrast
+      ),
+      row.names = NULL
+    )
+  })
+)
+
+or_bootstrap_default <- 50L
+or_bootstrap_env <- Sys.getenv(
+  "PREDICTION_PERFORMANCE_OR_BOOTSTRAP_B",
+  unset = as.character(or_bootstrap_default)
+)
+B_or_bootstrap <- suppressWarnings(as.integer(or_bootstrap_env))
+
+if (is.na(B_or_bootstrap) || B_or_bootstrap < 1L) {
+  stop(
+    "PREDICTION_PERFORMANCE_OR_BOOTSTRAP_B must be a positive integer."
+  )
+}
+
+n_or_bootstrap <- nrow(performance_data)
+or_bootstrap_seed <- 20260722L
+
+set.seed(or_bootstrap_seed)
+or_bootstrap_rows <- replicate(
+  B_or_bootstrap,
+  sample.int(
+    n_or_bootstrap,
+    size = n_or_bootstrap,
+    replace = TRUE
+  ),
+  simplify = FALSE
+)
+
+fit_standardized_rd_in_bootstrap <- function(rows) {
+  bootstrap_data <- performance_data[rows, , drop = FALSE]
+
+  # Refit preprocessing and every learner in this bootstrap sample.
+  x_bootstrap <- design_matrix(bootstrap_data)
+  bootstrap_scaler <- fit_scaler(x_bootstrap)
+  x_bootstrap_scaled <- apply_scaler(
+    x_bootstrap,
+    bootstrap_scaler
+  )
+
+  bootstrap_fits <- fit_prediction_learners(
+    data = bootstrap_data,
+    x_raw = x_bootstrap,
+    x_scaled = x_bootstrap_scaled,
+    deep_epochs = deep_epochs_spec,
+    seed = full_fit_seed
+  )
+
+  bootstrap_if_smoker <- bootstrap_data
+  bootstrap_if_non_smoker <- bootstrap_data
+  bootstrap_if_smoker$smoker_indicator <- 1
+  bootstrap_if_non_smoker$smoker_indicator <- 0
+
+  x_bootstrap_if_smoker <- design_matrix(bootstrap_if_smoker)
+  x_bootstrap_if_non_smoker <- design_matrix(
+    bootstrap_if_non_smoker
+  )
+
+  x_bootstrap_if_smoker_scaled <- apply_scaler(
+    x_bootstrap_if_smoker,
+    bootstrap_scaler
+  )
+  x_bootstrap_if_non_smoker_scaled <- apply_scaler(
+    x_bootstrap_if_non_smoker,
+    bootstrap_scaler
+  )
+
+  predictions_bootstrap_if_smoker <- predict_prediction_learners(
+    fits = bootstrap_fits,
+    new_data = bootstrap_if_smoker,
+    x_raw = x_bootstrap_if_smoker,
+    x_scaled = x_bootstrap_if_smoker_scaled
+  )
+  predictions_bootstrap_if_non_smoker <- predict_prediction_learners(
+    fits = bootstrap_fits,
+    new_data = bootstrap_if_non_smoker,
+    x_raw = x_bootstrap_if_non_smoker,
+    x_scaled = x_bootstrap_if_non_smoker_scaled
+  )
+
+  vapply(
+    model_order,
+    function(method) {
+      mean(
+        predictions_bootstrap_if_smoker[[method]] -
+          predictions_bootstrap_if_non_smoker[[method]]
+      )
+    },
+    numeric(1)
+  )
+}
+
+or_bootstrap_rd <- matrix(
+  NA_real_,
+  nrow = B_or_bootstrap,
+  ncol = length(model_order),
+  dimnames = list(NULL, model_order)
+)
+
+for (b in seq_len(B_or_bootstrap)) {
+  or_bootstrap_rd[b, ] <- fit_standardized_rd_in_bootstrap(
+    rows = or_bootstrap_rows[[b]]
+  )
+
+  if (b %% 10L == 0L) {
+    invisible(gc(verbose = FALSE))
+  }
+}
+
+or_bootstrap_ci <- t(
+  apply(
+    or_bootstrap_rd,
+    2,
+    stats::quantile,
+    probs = c(0.025, 0.975),
+    names = FALSE,
+    type = 7
+  )
+)
+colnames(or_bootstrap_ci) <- c("RD_CI_lower", "RD_CI_upper")
+
+or_results$RD_CI_lower <- or_bootstrap_ci[
+  match(or_results$Method, rownames(or_bootstrap_ci)),
+  "RD_CI_lower"
+]
+or_results$RD_CI_upper <- or_bootstrap_ci[
+  match(or_results$Method, rownames(or_bootstrap_ci)),
+  "RD_CI_upper"
+]
+
+or_display <- or_results
+or_display$Risk_difference_95_CI <- sprintf(
+  "[%.1f, %.1f]",
+  100 * or_display$RD_CI_lower,
+  100 * or_display$RD_CI_upper
+)
+or_display$Risk_if_non_smoker <- round(
+  100 * or_display$Risk_if_non_smoker,
+  2
+)
+or_display$Risk_if_smoker <- round(
+  100 * or_display$Risk_if_smoker,
+  2
+)
+or_display$Risk_difference <- round(
+  100 * or_display$Risk_difference,
+  2
+)
+or_display$Risk_ratio <- round(or_display$Risk_ratio, 3)
+or_display$SD_predicted_risk_non_smoker <- round(
+  or_display$SD_predicted_risk_non_smoker,
+  3
+)
+or_display$SD_predicted_risk_smoker <- round(
+  or_display$SD_predicted_risk_smoker,
+  3
+)
+or_display$SD_predicted_conditional_mean_contrast <- round(
+  or_display$SD_predicted_conditional_mean_contrast,
+  3
+)
+or_display <- or_display[
+  c(
+    "Method",
+    "Risk_if_non_smoker",
+    "Risk_if_smoker",
+    "Risk_difference",
+    "Risk_difference_95_CI",
+    "Risk_ratio",
+    "SD_predicted_risk_non_smoker",
+    "SD_predicted_risk_smoker",
+    "SD_predicted_conditional_mean_contrast"
+  )
+]
+
+method_kable(
+  or_display,
+  col.names = c(
+    "Method",
+    "Risk if T=0 (%)",
+    "Risk if T=1 (%)",
+    "Risk difference (pp)",
+    "Nominal 95% interval for RD (pp)",
+    "Risk ratio",
+    "SD of m-hat(0,X)",
+    "SD of m-hat(1,X)",
+    "SD of predicted conditional-mean contrasts"
+  )
+)
+```
+
+The illustrative nominal interval uses the 2.5th and 97.5th percentiles of the full subject-level bootstrap distribution. This run uses `r B_or_bootstrap` replicates; with the teaching default of only `r or_bootstrap_default`, the endpoints are Monte Carlo-coarse and should not be treated as research-grade confidence limits. The standard deviations in the last three columns describe how predictions vary across people. The last column is the spread of \(\hat m_k(1,X_i)-\hat m_k(0,X_i)\) across covariate profiles; it is neither an individual causal effect nor a standard error of the standardized estimate.
+
+```{r outcome-regression-comparison-picture, echo=FALSE, fig.width=8.0, fig.height=5.4}
+or_plot_data <- or_results[
+  match(model_order, or_results$Method),
+]
+
+rd_percent <- 100 * or_plot_data$Risk_difference
+rd_lower_percent <- 100 * or_plot_data$RD_CI_lower
+rd_upper_percent <- 100 * or_plot_data$RD_CI_upper
+plot_y <- rev(seq_along(model_order))
+plot_colors <- unname(method_colors[or_plot_data$Method])
+
+rd_plot_range <- range(
+  c(0, rd_lower_percent, rd_upper_percent),
+  finite = TRUE
+)
+rd_plot_span <- diff(rd_plot_range)
+if (!is.finite(rd_plot_span) || rd_plot_span == 0) {
+  rd_plot_span <- 1
+}
+rd_plot_xlim <- rd_plot_range + c(
+  -0.08 * rd_plot_span,
+  0.42 * rd_plot_span
+)
+
+old_par <- par(mar = c(5, 11, 4, 1))
+plot(
+  rd_percent,
+  plot_y,
+  type = "n",
+  pch = 19,
+  cex = 1.7,
+  col = plot_colors,
+  yaxt = "n",
+  ylab = "",
+  xlab = "Outcome-regression risk difference (percentage points)",
+  main = "Standardized Outcome-Regression Estimates by Learner",
+  xlim = rd_plot_xlim
+)
+segments(
+  rd_lower_percent,
+  plot_y,
+  rd_upper_percent,
+  plot_y,
+  lwd = 3,
+  col = plot_colors
+)
+segments(
+  rd_lower_percent,
+  plot_y - 0.10,
+  rd_lower_percent,
+  plot_y + 0.10,
+  lwd = 2,
+  col = plot_colors
+)
+segments(
+  rd_upper_percent,
+  plot_y - 0.10,
+  rd_upper_percent,
+  plot_y + 0.10,
+  lwd = 2,
+  col = plot_colors
+)
+points(
+  rd_percent,
+  plot_y,
+  pch = 21,
+  cex = 1.7,
+  bg = plot_colors,
+  col = "white",
+  lwd = 1.2
+)
+axis(2, at = plot_y, labels = or_plot_data$Method, las = 1)
+abline(v = 0, lty = 2, lwd = 2, col = "#777777")
+text(
+  rd_upper_percent + 0.025 * rd_plot_span,
+  plot_y,
+  labels = sprintf(
+    "%.2f [%.1f, %.1f]",
+    rd_percent,
+    rd_lower_percent,
+    rd_upper_percent
+  ),
+  pos = 4,
+  cex = 0.78,
+  xpd = NA
+)
+par(old_par)
+```
+
+Each point is the full-sample standardized risk difference from one outcome learner; its horizontal segment is the illustrative nominal 95% subject-level percentile interval based on `r B_or_bootstrap` replicates. The order and colors match the learner comparisons above. These quantities have a causal interpretation only if consistency, conditional exchangeability, positivity, and the required outcome-model conditions hold. Otherwise, they are standardized model-based contrasts.
+
+## Join Prediction Performance and Standardized Estimates
+
+```{r performance-and-or-table}
+performance_and_or <- merge(
+  performance_table[
+    c("Method", "RMSE", "Log_loss", "AUC")
+  ],
+  or_results[
+    c(
+      "Method",
+      "Risk_if_non_smoker",
+      "Risk_if_smoker",
+      "Risk_difference",
+      "Risk_ratio"
+    )
+  ],
+  by = "Method",
+  sort = FALSE
+)
+
+performance_and_or <- performance_and_or[
+  match(method_names, performance_and_or$Method),
+]
+
+performance_and_or$RMSE <- round(performance_and_or$RMSE, 4)
+performance_and_or$Log_loss <- round(
+  performance_and_or$Log_loss,
+  4
+)
+performance_and_or$AUC <- round(performance_and_or$AUC, 4)
+performance_and_or$Risk_if_non_smoker <- round(
+  100 * performance_and_or$Risk_if_non_smoker,
+  2
+)
+performance_and_or$Risk_if_smoker <- round(
+  100 * performance_and_or$Risk_if_smoker,
+  2
+)
+performance_and_or$Risk_difference <- round(
+  100 * performance_and_or$Risk_difference,
+  2
+)
+performance_and_or$Risk_ratio <- round(
+  performance_and_or$Risk_ratio,
+  3
+)
+
+method_kable(
+  performance_and_or,
+  col.names = c(
+    "Method",
+    "Test RMSE",
+    "Test log loss",
+    "Test AUC",
+    "Risk if T=0 (%)",
+    "Risk if T=1 (%)",
+    "Risk difference (pp)",
+    "Risk ratio"
+  ),
+  best_rules = c(
+    RMSE = "min",
+    Log_loss = "min",
+    AUC = "max"
+  )
+)
+```
+
+The model with the smallest test RMSE need not produce the smallest or largest standardized estimate. Prediction metrics evaluate observed-outcome prediction; the outcome-regression contrast also depends on how the model behaves under both treatment settings for every covariate profile. Only under the stated identification and model conditions does that standardized contrast identify a causal effect.
+
+## What the Outcome-Regression Bootstrap Measures
+
+Each bootstrap replicate samples \(n\) analytic people with replacement. Within that resample, the code reconstructs and scales the design matrix, refits all six prespecified learners, predicts every resampled person under \(T=0\) and \(T=1\), and standardizes the two sets of predictions. Thus, unlike the earlier evaluation-set bootstrap, this procedure propagates subject-sampling variation through preprocessing, learner fitting, scenario prediction, and standardization. Every randomized learner uses the same fixed algorithm seed in the original fit and every replicate; the RFF frequencies and phases are likewise fixed. The resulting distribution therefore targets subject-sampling variation conditional on these realized algorithmic randomizations rather than mixing in new random initializations.
+
+The environment variable `PREDICTION_PERFORMANCE_OR_BOOTSTRAP_B` controls the number of replicates. This run uses `r B_or_bootstrap` replicates; when the variable is unset, the teaching default is `r or_bootstrap_default`. The teaching default keeps this document reasonably quick to knit but produces only an illustrative, coarse percentile interval. A research analysis should ordinarily use at least 1,000 replicates, and often 2,000 or more, after checking Monte Carlo stability. For example, set `PREDICTION_PERFORMANCE_OR_BOOTSTRAP_B=2000` before knitting.
+
+Bootstrap validity is not automatic for flexible or non-smooth learning procedures. Here algorithm seeds are fixed and the RFF ridge-logistic fit is smooth, but the tree is non-smooth and the forest, boosting, and neural-network plug-in estimators still require method-specific regularity conditions. The interval also does not account for the iteratively inspected model-selection process. Identification assumptions alone do not guarantee nominal coverage: outcome-model consistency, sufficiently small bias, rate conditions, and bootstrap regularity are also required. No resampling method repairs failures of causal identification.
+
+This ordinary person-level bootstrap is an iid working-model calculation for the unweighted complete-case teaching distribution. It does not use NHANES strata, clusters, or survey weights and is therefore not a survey-design-valid interval for the U.S. population. Research analyses using flexible nuisance learners should consider prespecified nested resampling, cross-fitting, and an influence-function-based or doubly robust estimator with conditions appropriate to the chosen method.
+
+<div class="causal-note">
+The variance of person-level predictions or conditional-mean contrasts is not the variance of the estimated population effect. These bootstrap intervals are illustrative nominal intervals for the specified standardized procedures. Interpreting them as causal intervals requires both causal identification and valid estimation/coverage conditions; neither is guaranteed here.
+</div>
+
+# How to Choose a Prediction Method
+
+There is no universally best method.
+
+1. Define the target population and outcome.
+2. Keep an untouched test set or use nested cross-validation.
+3. Select metrics that match the intended use.
+4. Compare calibration as well as discrimination.
+5. Quantify uncertainty in performance differences.
+6. Prefer simpler models when performance is essentially tied and interpretability matters.
+7. For causal use, examine treatment-specific fit, overlap, extrapolation, and the causal adjustment set.
+8. Consider ensembles rather than selecting a single learner when causal estimators permit flexible nuisance models.
+
+Deep learning is most useful when the sample and feature space support its flexibility. On moderate-sized tabular datasets, logistic regression and tree ensembles are often strong competitors.
+
+# Key Takeaways
+
+1. Prediction performance must be evaluated on observations not used for fitting or tuning.
+2. RMSE, Brier score, and log loss measure probability error; AUC measures ranking; calibration measures agreement of predicted and observed risks.
+3. Error variance, prediction variance, and sampling variance are different concepts.
+4. Threshold-dependent classification measures should not replace probability-based evaluation.
+5. Flexible machine learning does not automatically outperform logistic regression.
+6. Outcome regression can use many prediction methods by evaluating each fitted function at \(T=1\) and \(T=0\) and then averaging.
+7. Good observed-outcome prediction does not establish causal identification.
+8. Causal standard errors must account for the full fitting and standardization process.
+
+# Appendix: Reproducible Model Specifications
+
+The current comparison uses:
+
+- logistic regression with additive main effects and a binomial logit link;
+- a Gaussian RFF ridge-logistic model fit to training-standardized predictors, with \(D=256\), \(\sigma=1/p\), fixed map seed 20260718, \(\alpha=0\), \(\lambda=0.001\), `standardize = FALSE`, and `maxit = 100000`;
+- a classification tree with `cp = 0`, `minsplit = 30`, `minbucket = 15`, and maximum depth 6;
+- a 400-tree random forest with `mtry = max(2, floor(sqrt(p)))`, terminal-node size 15, and variable importance enabled;
+- 140 rounds of gradient boosting with depth 3, learning rate 0.05, row and column subsampling 0.80, minimum child weight 5, and one computation thread; and
+- a full-batch neural network with ReLU hidden layers of 32 and 16 units, `r deep_epochs_spec` Adam epochs, learning rate 0.01, and weight decay \(10^{-4}\).
+
+The performance fit uses learner seed 20260717; the full-data outcome-regression fit and every bootstrap refit condition on learner seed `r full_fit_seed`. R's random-number generator is reset to the corresponding learner seed before fitting the stochastic learners, and the RFF map always uses seed 20260718. These specifications are fixed within the current rendered run but are not claimed to be optimal or historically test-independent. A research project should tune all hyperparameters inside nested training-only resampling and retain a genuinely untouched final test set.
+
+# References
+
+Brier, G. W. (1950). Verification of forecasts expressed in terms of probability. *Monthly Weather Review*, 78(1), 1-3.
+
+Breiman, L. (2001). Random forests. *Machine Learning*, 45, 5-32.
+
+Rahimi, A., & Recht, B. (2007). Random features for large-scale kernel machines. In *Advances in Neural Information Processing Systems 20*.
+
+Friedman, J., Hastie, T., & Tibshirani, R. (2010). Regularization paths for generalized linear models via coordinate descent. *Journal of Statistical Software*, 33(1), 1-22.
+
+Chen, T., & Guestrin, C. (2016). XGBoost: A scalable tree boosting system. In *Proceedings of the 22nd ACM SIGKDD International Conference on Knowledge Discovery and Data Mining*.
+
+Goodfellow, I., Bengio, Y., & Courville, A. (2016). *Deep Learning*. MIT Press.
+
+Harrell, F. E. (2015). *Regression Modeling Strategies* (2nd ed.). Springer.
+
+Hernan, M. A., & Robins, J. M. (2020). *Causal Inference: What If*. Chapman & Hall/CRC.
+
+Steyerberg, E. W. (2019). *Clinical Prediction Models* (2nd ed.). Springer.
+
+van der Laan, M. J., Polley, E. C., & Hubbard, A. E. (2007). Super learner. *Statistical Applications in Genetics and Molecular Biology*, 6(1).

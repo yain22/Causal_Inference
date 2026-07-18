@@ -1,0 +1,2031 @@
+---
+title: "Nuisance Misspecification and Convergence Rates"
+author: "Se Yoon Lee"
+date: "2026-07-17"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    number_sections: true
+    theme: readable
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = FALSE,
+  warning = FALSE,
+  fig.align = "center"
+)
+
+# Base R plotmath needs a UTF-8 character locale to draw the dagger glyph
+# rather than printing its code point literally on Windows.
+if (.Platform$OS.type == "windows" &&
+    !grepl("utf-?8", Sys.getlocale("LC_CTYPE"), ignore.case = TRUE)) {
+  utf8_locale_candidates <- c(
+    "English_United States.UTF-8",
+    "English_United States.utf8"
+  )
+  for (candidate in utf8_locale_candidates) {
+    locale_result <- suppressWarnings(
+      Sys.setlocale("LC_CTYPE", candidate)
+    )
+    if (is.character(locale_result) && length(locale_result) == 1L &&
+        nzchar(locale_result) &&
+        grepl("utf-?8", locale_result, ignore.case = TRUE)) {
+      break
+    }
+  }
+  if (!grepl("utf-?8", Sys.getlocale("LC_CTYPE"), ignore.case = TRUE)) {
+    stop("A UTF-8 LC_CTYPE locale is required to render mathematical dagger labels.")
+  }
+  rm(candidate, locale_result, utf8_locale_candidates)
+}
+
+read_positive_integer <- function(name, default) {
+  raw_value <- Sys.getenv(name, unset = as.character(default))
+  if (length(raw_value) != 1L ||
+      !grepl("^[1-9][0-9]*$", raw_value)) {
+    stop(name, " must be a positive integer.")
+  }
+  value <- suppressWarnings(as.integer(raw_value))
+  if (is.na(value)) {
+    stop(name, " is too large to represent as an R integer.")
+  }
+  value
+}
+
+rate_simulation_reps <- read_positive_integer(
+  "NUISANCE_RATE_SIM_REPS",
+  120L
+)
+
+set.seed(20260717)
+```
+
+<style type="text/css">
+.tutorial-box {
+  margin: 1.3em 0 1.5em 0;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #eeeeee;
+  box-shadow: 8px 8px 12px rgba(0, 0, 0, 0.18);
+}
+.tutorial-title {
+  background: #cfcfcf;
+  padding: 0.55em 0.9em;
+  font-weight: 700;
+  font-size: 1.05em;
+}
+.tutorial-title p { margin: 0; }
+.tutorial-body { padding: 1.0em 1.25em 1.1em 1.25em; }
+.tutorial-body > p:first-child { margin-top: 0; }
+.nuisance-note {
+  background: #DDFBE1;
+  border-left: 6px solid #59A14F;
+  padding: 0.8em 1.0em;
+  margin: 1.1em 0;
+}
+.rate-note {
+  background: #DCEAF5;
+  border-left: 6px solid #4E79A7;
+  padding: 0.8em 1.0em;
+  margin: 1.1em 0;
+}
+.causal-note {
+  background: #FFF6C7;
+  border-left: 6px solid #E3B341;
+  padding: 0.8em 1.0em;
+  margin: 1.1em 0;
+}
+.warning-note {
+  background: #FFE0E0;
+  border-left: 6px solid #E15759;
+  padding: 0.8em 1.0em;
+  margin: 1.1em 0;
+}
+.propensity-text {
+  color: #2F6B9A;
+  font-weight: 700;
+}
+.outcome-text {
+  color: #A64B00;
+  font-weight: 700;
+}
+</style>
+
+```{r picture-helpers, include=FALSE}
+course_colors <- c(
+  propensity = "#4E79A7",
+  outcome = "#F28E2B",
+  correct = "#59A14F",
+  misspecified = "#E15759",
+  target = "#B07AA1",
+  neutral = "#777777"
+)
+
+course_fills <- c(
+  propensity = "#DCEAF5",
+  outcome = "#FCE4C6",
+  correct = "#DDFBE1",
+  misspecified = "#FFE0E0",
+  target = "#E4D5E7",
+  neutral = "#E8E8E8",
+  assumption = "#FFF6C7"
+)
+
+start_picture <- function() {
+  par(mar = c(0, 0, 0, 0), xaxs = "i", yaxs = "i")
+  plot.new()
+  plot.window(xlim = c(0, 1), ylim = c(0, 1))
+}
+
+draw_text <- function(x, y, label, cex = 1, font = 1,
+                      col = "#222222") {
+  if (inherits(label, "expression") || is.call(label)) {
+    text(x, y, labels = label, cex = cex, font = font, col = col)
+    return(invisible(NULL))
+  }
+  lines <- strsplit(label, "\n", fixed = TRUE)[[1]]
+  offsets <- seq((length(lines) - 1) / 2, -(length(lines) - 1) / 2) *
+    0.058 * cex
+  text(
+    rep(x, length(lines)), y + offsets,
+    labels = lines, cex = cex, font = font, col = col
+  )
+}
+
+draw_box <- function(x, y, w, h, label, fill = "#FFFFFF",
+                     border = "#333333", lwd = 2, lty = 1,
+                     cex = 1, font = 1, text_col = "#222222") {
+  rect(
+    x - w / 2, y - h / 2, x + w / 2, y + h / 2,
+    col = fill, border = border, lwd = lwd, lty = lty
+  )
+  draw_text(x, y, label, cex = cex, font = font, col = text_col)
+}
+
+draw_arrow <- function(x0, y0, x1, y1, col = "#333333",
+                       lwd = 2, lty = 1) {
+  arrows(
+    x0, y0, x1, y1,
+    length = 0.08, lwd = lwd, col = col, lty = lty
+  )
+}
+
+inverse_logit <- plogis
+
+validate_probability <- function(p, name = "probability") {
+  if (length(p) == 0L || anyNA(p) || any(!is.finite(p)) ||
+      any(p <= 0 | p >= 1)) {
+    stop(name, " must contain finite values strictly between 0 and 1.")
+  }
+  invisible(TRUE)
+}
+```
+
+# Why Nuisance Misspecification Matters
+
+## Today's Question
+
+Many causal estimators depend on functions that are not themselves the final scientific target. For example, an estimator of a causal risk difference may require:
+
+- a model for treatment assignment; and
+- a model for the conditional outcome.
+
+These supporting functions are called **nuisance functions**. The word *nuisance* means that they are not the target parameter; it does **not** mean that they are unimportant.
+
+This lecture asks:
+
+> How accurately must nuisance functions be learned, and why can a doubly robust estimator tolerate some nuisance error?
+
+::: {.tutorial-box}
+::: {.tutorial-title}
+Learning Goals
+:::
+::: {.tutorial-body}
+By the end of the lecture, you should be able to distinguish estimation error from permanent model misspecification, read parametric and nonparametric convergence rates, derive the product-of-errors remainder for a doubly robust estimator, and explain why $n^{-1/4}$ is a critical **balanced benchmark** rather than a universal optimal nuisance rate.
+:::
+:::
+
+```{r lecture-roadmap-picture, echo=FALSE, fig.width=8.8, fig.height=4.1}
+start_picture()
+
+draw_box(
+  0.11, 0.66, 0.18, 0.20,
+  "Nuisance\nfunctions",
+  fill = course_fills["neutral"], cex = 0.72, font = 2
+)
+draw_box(
+  0.36, 0.66, 0.22, 0.20,
+  "Misspecification\nand error",
+  fill = course_fills["misspecified"], cex = 0.67, font = 2
+)
+draw_box(
+  0.63, 0.66, 0.20, 0.20,
+  "Convergence\nrates",
+  fill = course_fills["propensity"], cex = 0.72, font = 2
+)
+draw_box(
+  0.88, 0.66, 0.18, 0.20,
+  "Doubly robust\nremainder",
+  fill = course_fills["correct"], cex = 0.65, font = 2
+)
+
+draw_arrow(0.20, 0.66, 0.245, 0.66)
+draw_arrow(0.47, 0.66, 0.52, 0.66)
+draw_arrow(0.73, 0.66, 0.78, 0.66)
+
+draw_box(
+  0.50, 0.25, 0.72, 0.17,
+  "Rate-region analysis: which nuisance-rate combinations make\nthe root-n remainder disappear?",
+  fill = course_fills["assumption"], cex = 0.70, font = 2
+)
+draw_arrow(0.88, 0.55, 0.66, 0.35, lty = 2)
+```
+
+## Target Parameters and Nuisance Functions
+
+For person $i=1,\ldots,n$, let the observed record be
+
+$$
+O_i=(Y_i,T_i,X_i)\stackrel{\mathrm{iid}}{\sim}P,
+$$
+
+where $X_i$ is a vector of baseline covariates, $T_i\in\{0,1\}$ is treatment or exposure, and $Y_i$ is an outcome. For the smoking-CVD example, $T_i=1$ denotes smoking and $Y_i=1$ denotes observed CVD. A generic observation is written $O=(Y,T,X)$.
+
+Two central nuisance functions are
+
+$$
+e(x)
+=
+P(T=1\mid X=x)
+$$
+
+and
+
+$$
+m(t,x)
+=
+E(Y\mid T=t,X=x),
+\qquad t\in\{0,1\}.
+$$
+
+For binary $Y$, this conditional mean is also $P(Y=1\mid T=t,X=x)$. We use the course shorthand $m_t(x)=m(t,x)$. Let $Y_i(t)$ denote person $i$'s potential outcome under treatment level $t$. Under consistency, conditional exchangeability, and positivity, the treatment-specific risks satisfy
+
+$$
+\psi_t=E\{Y(t)\}=E\{m_t(X)\},\qquad t\in\{0,1\},
+$$
+
+and the causal risk difference is
+
+$$
+RD=\psi_1-\psi_0=E\{Y(1)-Y(0)\}=E\{m_1(X)-m_0(X)\}.
+$$
+
+The nuisance vector is
+
+$$
+\eta=(e,m_0,m_1).
+$$
+
+Its fitted counterpart is $\hat\eta=(\hat e,\hat m_0,\hat m_1)$.
+
+```{r target-and-nuisance-picture, echo=FALSE, fig.width=8.8, fig.height=4.8}
+start_picture()
+
+draw_box(
+  0.10, 0.67, 0.17, 0.18,
+  "Baseline\ncovariates X",
+  fill = course_fills["assumption"], cex = 0.67, font = 2
+)
+draw_box(
+  0.37, 0.80, 0.29, 0.17,
+  expression(atop(
+    "Propensity nuisance",
+    e(x) == P(T == 1 ~ "|" ~ X == x)
+  )),
+  fill = course_fills["propensity"],
+  border = course_colors["propensity"], cex = 0.61, font = 2
+)
+draw_box(
+  0.37, 0.48, 0.29, 0.17,
+  expression(atop(
+    "Outcome nuisances",
+    m[1](x) ~ "and" ~ m[0](x)
+  )),
+  fill = course_fills["outcome"],
+  border = course_colors["outcome"], cex = 0.61, font = 2
+)
+draw_box(
+  0.69, 0.64, 0.23, 0.22,
+  expression(atop("Causal target", RD == psi[1] - psi[0])),
+  fill = course_fills["target"],
+  border = course_colors["target"], cex = 0.76, font = 2
+)
+draw_box(
+  0.90, 0.64, 0.15, 0.18,
+  "Risk\ndifference",
+  fill = course_fills["neutral"], cex = 0.68, font = 2
+)
+
+draw_arrow(0.19, 0.72, 0.22, 0.79, col = course_colors["propensity"])
+draw_arrow(0.19, 0.62, 0.22, 0.50, col = course_colors["outcome"])
+draw_arrow(0.52, 0.77, 0.57, 0.68, col = course_colors["propensity"], lwd = 3)
+draw_arrow(0.52, 0.51, 0.57, 0.60, col = course_colors["outcome"], lwd = 3)
+draw_arrow(0.805, 0.64, 0.825, 0.64)
+
+draw_text(
+  0.50, 0.18,
+  "The nuisance functions support estimation of the causal target;\nthey are not the final scientific estimand.",
+  cex = 0.73, font = 2
+)
+```
+
+::: {.causal-note}
+Nuisance estimation cannot repair a failure of causal identification. Even perfectly learned $e$ and $m_t$ do not eliminate bias from unmeasured confounding, ill-defined interventions, interference, selection bias, or structural positivity failure.
+:::
+
+# What Does Misspecification Mean?
+
+## Truth, Working Class, Pseudo-Truth, and Estimate
+
+Let $f_0\in L_2(P_X)$ denote a generic true conditional function, such as $e$ or $m_t$, where $P_X$ is the marginal distribution of $X$ under $P$. For a measurable function $g$, define
+
+$$
+\|g\|_{2,P_X}
+=
+\left\{
+\int g(x)^2\,dP_X(x)
+\right\}^{1/2}.
+$$
+
+Suppose estimation is restricted to a nonempty working class $\mathcal F\subset L_2(P_X)$. For the squared-$L_2(P_X)$ geometry used in this section, define the population best approximation by
+
+$$
+f^\dagger\in\arg\min_{g\in\mathcal F}\|g-f_0\|_{2,P_X}^2.
+$$
+
+The function $f^\dagger$ is the **pseudo-truth**: the best member of the chosen class under the stated criterion, whether or not $\mathcal F$ contains $f_0$. A nonempty closed convex class has a unique $L_2(P_X)$ projection; otherwise we explicitly assume that a measurable minimizer has been selected. The fitted rule $\hat f$ is estimated from a finite training sample.
+
+For a different learning loss, one may instead define $f_\ell^\dagger\in\arg\min_{g\in\mathcal F}E_P[\ell\{O,g\}]$. That loss-based pseudo-truth agrees with the projection above only when the loss and target measure induce the same $L_2(P_X)$ risk. The triangle inequality below remains valid for any selected $f^\dagger\in L_2(P_X)$, whereas the later Pythagorean identity requires the stated least-squares projection structure.
+
+The triangle inequality gives
+
+$$
+\|\hat f-f_0\|_{2,P_X}
+\le
+\underbrace{\|\hat f-f^\dagger\|_{2,P_X}}_{
+\text{estimation and optimization error}}
++
+\underbrace{\|f^\dagger-f_0\|_{2,P_X}}_{
+\text{approximation or misspecification error}}.
+$$
+
+**Why there are no squares here.** This is the triangle inequality for the $L_2(P_X)$ **norm**, so the unsquared display is the generally valid statement. Squaring it gives
+
+$$
+\|\hat f-f_0\|_{2,P_X}^2
+\le
+\left\{\|\hat f-f^\dagger\|_{2,P_X}
++\|f^\dagger-f_0\|_{2,P_X}\right\}^2,
+$$
+
+which contains a cross term and is not generally equal to the sum of the two squared errors. In the special case where $f^\dagger$ is the least-squares $L_2(P_X)$ projection onto a linear subspace and both $f^\dagger$ and $\hat f$ lie in that subspace,
+
+$$
+\langle \hat f-f^\dagger,\,f^\dagger-f_0\rangle_{P_X}=0,
+$$
+
+so the Pythagorean identity applies:
+
+$$
+\|\hat f-f_0\|_{2,P_X}^2
+=
+\|\hat f-f^\dagger\|_{2,P_X}^2
++
+\|f^\dagger-f_0\|_{2,P_X}^2.
+$$
+
+```{r projection-geometry-picture, echo=FALSE, fig.width=9.0, fig.height=5.3}
+start_picture()
+
+polygon(
+  x = c(0.08, 0.72, 0.92, 0.28),
+  y = c(0.16, 0.16, 0.48, 0.48),
+  col = adjustcolor(course_fills["propensity"], alpha.f = 0.62),
+  border = course_colors["propensity"],
+  lwd = 2
+)
+
+f_dagger_point <- c(0.46, 0.34)
+f_hat_point <- c(0.76, 0.34)
+f_zero_point <- c(0.46, 0.82)
+
+segments(
+  f_zero_point[1], f_zero_point[2],
+  f_hat_point[1], f_hat_point[2],
+  col = course_colors["target"], lwd = 4
+)
+segments(
+  f_dagger_point[1], f_dagger_point[2],
+  f_zero_point[1], f_zero_point[2],
+  col = course_colors["misspecified"], lwd = 4, lty = 2
+)
+segments(
+  f_dagger_point[1], f_dagger_point[2],
+  f_hat_point[1], f_hat_point[2],
+  col = course_colors["propensity"], lwd = 4
+)
+
+lines(
+  c(f_dagger_point[1], f_dagger_point[1] + 0.045,
+    f_dagger_point[1] + 0.045),
+  c(f_dagger_point[2] + 0.045, f_dagger_point[2] + 0.045,
+    f_dagger_point[2]),
+  col = "#333333", lwd = 2
+)
+
+points(
+  c(f_zero_point[1], f_dagger_point[1], f_hat_point[1]),
+  c(f_zero_point[2], f_dagger_point[2], f_hat_point[2]),
+  pch = 21, cex = 2.0, lwd = 2,
+  bg = c(
+    course_fills["misspecified"],
+    course_fills["correct"],
+    course_fills["propensity"]
+  ),
+  col = c(
+    course_colors["misspecified"],
+    course_colors["correct"],
+    course_colors["propensity"]
+  )
+)
+
+draw_text(
+  0.50, 0.95,
+  expression("Projection geometry in " * L[2](P[X])),
+  cex = 0.92, font = 2
+)
+draw_text(
+  0.22, 0.43,
+  expression(italic(F) * "  working linear subspace"),
+  cex = 0.70, font = 2, col = course_colors["propensity"]
+)
+draw_text(
+  f_zero_point[1], f_zero_point[2] + 0.065,
+  expression(f[0]), cex = 0.90, font = 2,
+  col = course_colors["misspecified"]
+)
+draw_text(
+  f_dagger_point[1] - 0.045, f_dagger_point[2] - 0.065,
+  expression(f^"\u2020"), cex = 0.90, font = 2,
+  col = course_colors["correct"]
+)
+draw_text(
+  f_hat_point[1] + 0.045, f_hat_point[2] - 0.055,
+  expression(hat(f)), cex = 0.90, font = 2,
+  col = course_colors["propensity"]
+)
+
+draw_text(
+  0.30, 0.61,
+  expression(Delta[app] == group("||", f^"\u2020" - f[0], "||")[2 * "," * P[X]]),
+  cex = 0.63, font = 2, col = course_colors["misspecified"]
+)
+draw_text(
+  0.61, 0.25,
+  expression(Delta[est] == group("||", hat(f) - f^"\u2020", "||")[2 * "," * P[X]]),
+  cex = 0.63, font = 2, col = course_colors["propensity"]
+)
+draw_text(
+  0.75, 0.66,
+  expression(Delta[tot] == group("||", hat(f) - f[0], "||")[2 * "," * P[X]]),
+  cex = 0.63, font = 2, col = course_colors["target"]
+)
+```
+
+**How to read the geometry.** This is a two-dimensional schematic cross-section of the Hilbert space $L_2(P_X)$; the shaded plane represents the closed linear working subspace $\mathcal F$. Its distances and right angle are induced by the $L_2(P_X)$ inner product, not by pointwise function differences. The pseudo-truth $f^\dagger$ is the $L_2(P_X)$ projection of $f_0$ onto $\mathcal F$, and $\hat f\in\mathcal F$. Therefore the red approximation component is orthogonal to every direction in the plane, including the blue estimation component $\hat f-f^\dagger$. The purple diagonal is the total error $\hat f-f_0$. This projection geometry permits the squared-error Pythagorean identity; without these conditions, only the triangle inequality is guaranteed.
+
+The two errors answer different questions:
+
+- **Estimation error:** How far is the fitted rule from the best rule available in the chosen class?
+- **Approximation error:** How far is the best rule in that class from the true function?
+
+With a fixed misspecified class, the first term can shrink rapidly while the second remains permanently positive.
+
+## Pictorial Illustration
+
+Consider
+
+$$
+f_0(x)=1+1.25x+1.5x^2,
+\qquad X\sim\operatorname{Uniform}(-1,1).
+$$
+
+If the working class contains only linear functions $a+bx$, let $q(x)=(1,x)^\top$. The least-squares projection coefficient solves the population normal equations,
+
+$$
+\begin{aligned}
+\theta^\dagger
+&=\left[E\{q(X)q(X)^\top\}\right]^{-1}E\{q(X)f_0(X)\} \\
+&=
+\begin{pmatrix}1&0\\0&1/3\end{pmatrix}^{-1}
+\begin{pmatrix}3/2\\5/12\end{pmatrix}
+=
+\begin{pmatrix}3/2\\5/4\end{pmatrix}.
+\end{aligned}
+$$
+
+Thus, the $L_2(P_X)$ projection is
+
+$$
+f^\dagger(x)=1.5+1.25x.
+$$
+
+The pointwise approximation difference is
+
+$$
+f^\dagger(x)-f_0(x)=\frac12-\frac32x^2.
+$$
+
+For $X\sim\operatorname{Uniform}(-1,1)$,
+
+$$
+E(X^{2k})=\frac12\int_{-1}^{1}x^{2k}\,dx=\frac{1}{2k+1},
+\qquad E(X^2)=\frac13,
+\qquad E(X^4)=\frac15.
+$$
+
+Therefore, the squared approximation error is
+
+$$
+\begin{aligned}
+\Delta_{\mathrm{app}}^2
+&:=\|f^\dagger-f_0\|_{2,P_X}^2 \\
+&=E\left(\frac12-\frac32X^2\right)^2 \\
+&=\frac14-\frac32E(X^2)+\frac94E(X^4) \\
+&=\frac14-\frac32\left(\frac13\right)
+  +\frac94\left(\frac15\right) \\
+&=\frac15.
+\end{aligned}
+$$
+
+Taking the square root gives the permanent approximation floor
+
+$$
+\Delta_{\mathrm{app}}
+=\|f^\dagger-f_0\|_{2,P_X}
+=\frac{1}{\sqrt5}
+\approx0.447.
+$$
+
+```{r misspecification-picture, echo=FALSE, fig.width=9.2, fig.height=6.2}
+set.seed(20260718)
+picture_x <- runif(90, -1, 1)
+picture_y <- 1 + 1.25 * picture_x + 1.5 * picture_x^2 +
+  rnorm(90, sd = 0.70)
+picture_fit <- lm(picture_y ~ picture_x)
+picture_grid <- seq(-1, 1, length.out = 501)
+picture_truth <- 1 + 1.25 * picture_grid + 1.5 * picture_grid^2
+picture_pseudo_truth <- 1.5 + 1.25 * picture_grid
+picture_estimate <- predict(
+  picture_fit,
+  newdata = data.frame(picture_x = picture_grid)
+)
+
+plot(
+  picture_grid, picture_truth,
+  type = "l", lwd = 4, col = "#222222",
+  xlab = expression("Predictor value, " * x),
+  ylab = expression("Conditional function value"),
+  main = "A Fast Estimate Can Converge to the Wrong Function",
+  xaxs = "i", yaxs = "i",
+  ylim = range(c(picture_truth, picture_pseudo_truth, picture_estimate))
+)
+lines(
+  picture_grid, picture_pseudo_truth,
+  lwd = 4, lty = 2, col = course_colors["misspecified"]
+)
+lines(
+  picture_grid, picture_estimate,
+  lwd = 3, lty = 3, col = course_colors["propensity"]
+)
+
+mark_x <- 0.72
+truth_at_mark <- 1 + 1.25 * mark_x + 1.5 * mark_x^2
+pseudo_at_mark <- 1.5 + 1.25 * mark_x
+estimate_at_mark <- predict(
+  picture_fit,
+  newdata = data.frame(picture_x = mark_x)
+)
+segments(
+  mark_x, pseudo_at_mark, mark_x, truth_at_mark,
+  col = course_colors["misspecified"], lwd = 6
+)
+segments(
+  mark_x + 0.035, pseudo_at_mark,
+  mark_x + 0.035, estimate_at_mark,
+  col = course_colors["outcome"], lwd = 6
+)
+text(
+  mark_x - 0.03,
+  (truth_at_mark + pseudo_at_mark) / 2,
+  "pointwise\napproximation gap",
+  pos = 2, cex = 0.80, col = course_colors["misspecified"]
+)
+text(
+  0.98,
+  (estimate_at_mark + pseudo_at_mark) / 2,
+  "pointwise\nestimation gap",
+  pos = 2, cex = 0.80, col = "#8A4F00"
+)
+legend(
+  "topleft",
+  legend = c(
+    expression("Truth  " * f[0]),
+    expression("Pseudo-truth  " * f^"\u2020"),
+    expression("Finite-sample estimate  " * hat(f))
+  ),
+  col = c(
+    "#222222",
+    course_colors["misspecified"],
+    course_colors["propensity"]
+  ),
+  lty = c(1, 2, 3), lwd = c(4, 4, 3), bty = "n"
+)
+```
+
+**Single-sample interpretation.** The blue fitted line can move closer to the red pseudo-truth as the sample grows. It does not move toward the black truth because the fixed linear class cannot represent curvature. Fast convergence to $f^\dagger$ is not consistency for $f_0$. The two vertical brackets are pointwise gaps at $x=0.72$; the simulation below instead summarizes integrated $L_2(P_X)$ function errors.
+
+### Monte Carlo Confirmation
+
+For this least-squares projection, $f_0-f^\dagger$ is orthogonal to every linear function. Therefore, every fitted linear rule satisfies the exact Pythagorean identity
+
+$$
+\|\hat f-f_0\|_{2,P_X}^2
+=\|\hat f-f^\dagger\|_{2,P_X}^2
++\underbrace{\|f^\dagger-f_0\|_{2,P_X}^2}_{\Delta_{\mathrm{app}}^2=1/5}.
+$$
+
+Consequently, if $\|\hat f-f^\dagger\|_{2,P_X}\to0$, then $\|\hat f-f_0\|_{2,P_X}\to\Delta_{\mathrm{app}}=1/\sqrt5$. The error relative to the truth cannot fall below this value asymptotically, which is why it is called the **approximation floor**.
+
+We now generate $X_i\sim\operatorname{Uniform}(-1,1)$ and $Y_i=f_0(X_i)+\varepsilon_i$, where $\varepsilon_i\sim N(0,0.7^2)$, fit the same misspecified linear regression in each sample, and repeat the experiment `r rate_simulation_reps` times at every sample size.
+
+For this data-generating process, random-design least-squares theory gives
+
+$$
+nE\|\hat f-f^\dagger\|_{2,P_X}^2\longrightarrow\frac{523}{350},
+\qquad
+\left\{E\|\hat f-f^\dagger\|_{2,P_X}^2\right\}^{1/2}
+\sim \sqrt{\frac{523}{350}}\,n^{-1/2}\approx1.222\,n^{-1/2}.
+$$
+
+Let $B=`r rate_simulation_reps`$ be the number of Monte Carlo repetitions and write the fitted rule in repetition $b$ as
+
+$$
+\hat f_n^{(b)}(x)=\hat a_n^{(b)}+\hat b_n^{(b)}x,
+\qquad b=1,\ldots,B.
+$$
+
+The table uses the following notation:
+
+$$
+\overline{\hat a}_n=\frac1B\sum_{b=1}^B\hat a_n^{(b)},
+\qquad
+\overline{\hat b}_n=\frac1B\sum_{b=1}^B\hat b_n^{(b)},
+$$
+
+For either reference function $g\in\{f^\dagger,f_0\}$, define the root mean integrated squared error
+
+$$
+\operatorname{RMISE}_n(g)
+=\left\{\frac1B\sum_{b=1}^B
+\|\hat f_n^{(b)}-g\|_{2,P_X}^2\right\}^{1/2}.
+$$
+
+```{r pseudo-truth-monte-carlo}
+simulate_pseudo_truth_errors <- function(n) {
+  x <- runif(n, -1, 1)
+  y <- 1 + 1.25 * x + 1.5 * x^2 + rnorm(n, sd = 0.70)
+  fit <- lm(y ~ x)
+  fitted_coefficients <- unname(coef(fit))
+
+  if (length(fitted_coefficients) != 2L ||
+      any(!is.finite(fitted_coefficients))) {
+    stop("The misspecified linear fit produced invalid coefficients.")
+  }
+
+  estimation_error_squared <-
+    (fitted_coefficients[1] - 1.5)^2 +
+      (fitted_coefficients[2] - 1.25)^2 / 3
+  total_error_squared <- estimation_error_squared + 1 / 5
+
+  c(
+    `Estimated intercept` = fitted_coefficients[1],
+    `Estimated slope` = fitted_coefficients[2],
+    `Estimation error squared` = estimation_error_squared,
+    `Total error squared` = total_error_squared
+  )
+}
+
+set.seed(20260719)
+pseudo_truth_sample_sizes <- c(50L, 100L, 250L, 500L, 1000L, 2500L, 5000L)
+pseudo_truth_results <- lapply(
+  pseudo_truth_sample_sizes,
+  function(n) {
+    replicate(rate_simulation_reps, simulate_pseudo_truth_errors(n))
+  }
+)
+
+pseudo_truth_summary <- do.call(
+  rbind,
+  Map(
+    function(n, errors) {
+      estimation_error <- sqrt(errors["Estimation error squared", ])
+      total_error <- sqrt(errors["Total error squared", ])
+      rm_estimation_error <- sqrt(
+        mean(errors["Estimation error squared", ])
+      )
+      rm_total_error <- sqrt(mean(errors["Total error squared", ]))
+
+      data.frame(
+        `Sample size` = n,
+        `Mean intercept` = mean(errors["Estimated intercept", ]),
+        `Mean slope` = mean(errors["Estimated slope", ]),
+        `RM error to pseudo-truth` = rm_estimation_error,
+        `Scaled RM error` = sqrt(n) * rm_estimation_error,
+        `RM error to truth` = rm_total_error,
+        `Approximation floor` = 1 / sqrt(5),
+        Estimation_q10 = unname(quantile(estimation_error, 0.10)),
+        Estimation_q90 = unname(quantile(estimation_error, 0.90)),
+        Total_q10 = unname(quantile(total_error, 0.10)),
+        Total_q90 = unname(quantile(total_error, 0.90)),
+        check.names = FALSE
+      )
+    },
+    pseudo_truth_sample_sizes,
+    pseudo_truth_results
+  )
+)
+
+if (any(!is.finite(as.matrix(pseudo_truth_summary)))) {
+  stop("The pseudo-truth simulation produced a non-finite result.")
+}
+
+pseudo_truth_display <- pseudo_truth_summary[
+  ,
+  c(
+    "Sample size",
+    "Mean intercept",
+    "Mean slope",
+    "RM error to pseudo-truth",
+    "Scaled RM error",
+    "RM error to truth",
+    "Approximation floor"
+  )
+]
+names(pseudo_truth_display) <- c(
+  "$n$",
+  "$\\overline{\\hat a}_n$",
+  "$\\overline{\\hat b}_n$",
+  "$\\operatorname{RMISE}_n(f^\\dagger)$",
+  "$\\sqrt n\\,\\operatorname{RMISE}_n(f^\\dagger)$",
+  "$\\operatorname{RMISE}_n(f_0)$",
+  "$\\Delta_{\\mathrm{app}}$"
+)
+for (column in names(pseudo_truth_display)[-1]) {
+  pseudo_truth_display[[column]] <- sprintf(
+    "%.3f",
+    pseudo_truth_display[[column]]
+  )
+}
+
+knitr::kable(
+  pseudo_truth_display,
+  align = rep("r", ncol(pseudo_truth_display)),
+  escape = FALSE
+)
+```
+
+```{r pseudo-truth-monte-carlo-plot, echo=FALSE, fig.width=8.8, fig.height=5.8}
+estimation_color <- course_colors["propensity"]
+total_error_color <- "#222222"
+approximation_color <- course_colors["misspecified"]
+
+plot(
+  pseudo_truth_summary$`Sample size`,
+  pseudo_truth_summary$`RM error to truth`,
+  type = "n", log = "xy",
+  ylim = range(
+    pseudo_truth_summary$Estimation_q10,
+    pseudo_truth_summary$Total_q90,
+    pseudo_truth_summary$`Approximation floor`
+  ),
+  xlab = expression("Sample size, " * n),
+  ylab = expression("Root " * L[2](P[X]) * " error"),
+  main = "Monte Carlo Error Under a Misspecified Linear Model"
+)
+
+polygon(
+  c(
+    pseudo_truth_summary$`Sample size`,
+    rev(pseudo_truth_summary$`Sample size`)
+  ),
+  c(
+    pseudo_truth_summary$Estimation_q10,
+    rev(pseudo_truth_summary$Estimation_q90)
+  ),
+  col = adjustcolor(estimation_color, alpha.f = 0.16),
+  border = NA
+)
+polygon(
+  c(
+    pseudo_truth_summary$`Sample size`,
+    rev(pseudo_truth_summary$`Sample size`)
+  ),
+  c(
+    pseudo_truth_summary$Total_q10,
+    rev(pseudo_truth_summary$Total_q90)
+  ),
+  col = adjustcolor(total_error_color, alpha.f = 0.10),
+  border = NA
+)
+
+lines(
+  pseudo_truth_summary$`Sample size`,
+  pseudo_truth_summary$`RM error to pseudo-truth`,
+  type = "b", lwd = 3, pch = 16, col = estimation_color
+)
+lines(
+  pseudo_truth_summary$`Sample size`,
+  pseudo_truth_summary$`RM error to truth`,
+  type = "b", lwd = 3, pch = 15, col = total_error_color
+)
+abline(
+  h = 1 / sqrt(5),
+  lwd = 3, lty = 2, col = approximation_color
+)
+
+root_n_reference <-
+  pseudo_truth_summary$`RM error to pseudo-truth`[1] *
+  (pseudo_truth_summary$`Sample size` /
+    pseudo_truth_summary$`Sample size`[1])^(-1 / 2)
+lines(
+  pseudo_truth_summary$`Sample size`,
+  root_n_reference,
+  lwd = 2, lty = 3, col = "#777777"
+)
+
+legend(
+  "bottomleft",
+  legend = c(
+    expression(plain("RMISE")[n](f^"\u2020")),
+    expression(plain("RMISE")[n](f[0])),
+    expression("Approximation floor  " * 1 / sqrt(5)),
+    expression(n^(-1 / 2) * " reference")
+  ),
+  col = c(
+    estimation_color,
+    total_error_color,
+    approximation_color,
+    "#777777"
+  ),
+  lty = c(1, 1, 2, 3),
+  pch = c(16, 15, NA, NA),
+  lwd = c(3, 3, 3, 2),
+  cex = 0.84,
+  bg = adjustcolor("white", alpha.f = 0.92),
+  box.col = "#CCCCCC",
+  bty = "o"
+)
+```
+
+**Simulation interpretation.** The root-mean integrated function error relative to $f^\dagger$ decreases from `r sprintf("%.3f", pseudo_truth_summary[["RM error to pseudo-truth"]][1])` at $n=`r pseudo_truth_summary[["Sample size"]][1]`$ to `r sprintf("%.3f", tail(pseudo_truth_summary[["RM error to pseudo-truth"]], 1))` at $n=`r tail(pseudo_truth_summary[["Sample size"]], 1)`$. Meanwhile, the root-mean integrated function error relative to $f_0$ approaches `r sprintf("%.3f", tail(pseudo_truth_summary[["RM error to truth"]], 1))`, close to the permanent approximation floor $1/\sqrt 5\approx0.447$. The approximately stable $\sqrt n$-scaled column is empirical evidence of root-$n$ convergence to $f^\dagger$, not convergence to $f_0$. The shaded regions show the 10th--90th percentiles of the repetition-specific integrated function errors. These are integrated **function** errors; they are not outcome-prediction RMSEs, which would also contain the irreducible noise variance $0.7^2$.
+
+## Misspecification Is Not the Same as Other Problems
+
+| Problem | Meaning | Does more data automatically solve it? |
+|:--|:--|:--|
+| Sampling error | The fitted rule varies across samples | Usually decreases |
+| Optimization error | The fitting algorithm has not found its intended solution | Only with better optimization |
+| Overfitting | The fitted rule adapts too closely to training noise | Requires regularization or honest evaluation |
+| Fixed-class misspecification | The truth is outside the working class | No |
+| Positivity failure | Some treatment levels are unavailable at relevant $X$ | No |
+| Unmeasured confounding | Important common causes are absent from $X$ | No |
+
+# Convergence Rates of Nuisance Estimators
+
+## Rate Notation
+
+We write
+
+$$
+\|\hat f-f_0\|_{2,P_X}=O_p(r_n)
+$$
+
+when the stochastic error is of order $r_n$. If
+
+$$
+r_n=n^{-\alpha},
+$$
+
+then larger $\alpha$ means faster convergence. Throughout this lecture, a rate such as $n^{-\alpha}$ refers to the **root $L_2$ error**. Its square has rate $n^{-2\alpha}$.
+
+::: {.rate-note}
+Always identify what quantity has the stated rate. The $L_2$ norm, its square, parameter error, excess risk, and pointwise error generally have different rates.
+:::
+
+## Correctly Specified Parametric Models
+
+For a fixed-dimensional, correctly specified regular parametric model $f_\theta$,
+
+$$
+\sqrt n(\hat\theta-\theta_0)=O_p(1).
+$$
+
+If the map $\theta\mapsto f_\theta$ is sufficiently smooth, then
+
+$$
+\|f_{\hat\theta}-f_{\theta_0}\|_{2,P_X}
+=
+O_p(n^{-1/2}).
+$$
+
+This conclusion requires correct specification and fixed effective dimension.
+
+If a fixed parametric class is misspecified, an estimator may still satisfy
+
+$$
+\|\hat f-f^\dagger\|_{2,P_X}=O_p(n^{-1/2}),
+$$
+
+while
+
+$$
+\|\hat f-f_0\|_{2,P_X}
+\xrightarrow{p}
+\|f^\dagger-f_0\|_{2,P_X}>0.
+$$
+
+## Nonparametric Rates and the Curse of Dimensionality
+
+Suppose $f_0$ has smoothness $s>0$ over $d$ continuous predictors. For a kernel or local-polynomial estimator of adequate order, under regular-design and moment conditions with $h\to0$ and $nh^d\to\infty$, a generic order bound has the form
+
+$$
+\|\hat f_h-f_0\|_{2,P_X}
+=
+\underbrace{O(h^s)}_{\text{smoothing bias}}
++
+\underbrace{O_p\!\left\{(nh^d)^{-1/2}\right\}}_{\text{sampling variability}}.
+$$
+
+Choose $h$ so that neither component dominates. Equating their orders gives
+
+$$
+\begin{aligned}
+h^s &\asymp (nh^d)^{-1/2} \\
+\Longleftrightarrow\quad h^{2s} &\asymp (nh^d)^{-1} \\
+\Longleftrightarrow\quad nh^{2s+d} &\asymp 1 \\
+\Longleftrightarrow\quad h^{2s+d} &\asymp n^{-1} \\
+\Longleftrightarrow\quad h &\asymp n^{-1/(2s+d)}.
+\end{aligned}
+$$
+
+At this bandwidth, both components have the same order,
+
+$$
+\underbrace{h^s}_{\text{bias}}
+\asymp
+\underbrace{(nh^d)^{-1/2}}_{\text{variability}}
+\asymp
+n^{-s/(2s+d)}.
+$$
+
+Therefore,
+
+$$
+\|\hat f_h-f_0\|_{2,P_X}
+=
+O_p\!\left\{n^{-s/(2s+d)}\right\}.
+$$
+
+Squaring the root-$L_2$ rate gives $n^{-2s/(2s+d)}$. Equivalently, under regular-design and moment conditions, the minimax squared $L_2$ risk over a Hölder-type smoothness class behaves as
+
+$$
+\inf_{\tilde f_n}
+\sup_{f_0\in\mathcal H^s(L)}
+E\|\tilde f_n-f_0\|_{2,P_X}^2
+\asymp
+n^{-2s/(2s+d)}.
+$$
+
+This rate is a benchmark for a specified smoothness class, not a universal rate for random forests, boosting, neural networks, or every function called "nonparametric."
+
+```{r curse-dimensionality-picture, echo=FALSE, fig.width=9.0, fig.height=6.2}
+dimension_grid <- 1:16
+smoothness_values <- c(1, 2, 4)
+rate_palette <- c("#4E79A7", "#F28E2B", "#59A14F")
+rate_plot_n <- 1000L
+rate_matrix <- vapply(
+  smoothness_values,
+  function(s) {
+    rate_plot_n^(-2 * s / (2 * s + dimension_grid))
+  },
+  numeric(length(dimension_grid))
+)
+dr_squared_boundary <- rate_plot_n^(-1 / 2)
+
+plot(
+  dimension_grid,
+  rate_matrix[, 1],
+  type = "n",
+  ylim = c(0, 1.05 * max(rate_matrix)),
+  xlab = expression("Number of continuous predictors, " * d),
+  ylab = expression("Squared-" * L[2] * " risk  " * n^(-2 * s / (2 * s + d))),
+  main = paste0(
+    "Squared-L2 Nonparametric Benchmark at n = ",
+    format(rate_plot_n, big.mark = ",")
+  ),
+  xaxt = "n"
+)
+axis(1, at = dimension_grid)
+abline(
+  h = dr_squared_boundary,
+  lty = 2, lwd = 3, col = course_colors["misspecified"]
+)
+
+for (j in seq_along(smoothness_values)) {
+  lines(
+    dimension_grid,
+    rate_matrix[, j],
+    type = "b", pch = 14 + j, lwd = 3,
+    col = rate_palette[j]
+  )
+}
+
+text(
+  15.8, dr_squared_boundary - 0.010,
+  expression(n^{-1/2} * " squared-risk boundary"),
+  adj = c(1, 1), col = course_colors["misspecified"], cex = 0.90
+)
+legend(
+  "topleft",
+  legend = paste("smoothness s =", smoothness_values),
+  col = rate_palette, pch = 15:17, lwd = 3, bty = "n"
+)
+```
+
+**How to read the plot.** The vertical coordinate is the squared-$L_2$ rate benchmark $n^{-2s/(2s+d)}$ itself, evaluated at $n=`r format(rate_plot_n, big.mark = ",")`$; the unknown multiplicative constants are omitted. Larger values indicate a worse squared-error benchmark. For fixed $s$, increasing $d$ raises the curve because $2s/(2s+d)$ becomes smaller, so convergence is slower. The red $n^{-1/2}$ line is the squared-error equivalent of the later root-$L_2$ $n^{-1/4}$ boundary. A curve crosses it at $d=2s$; $d<2s$ gives a faster rate, whereas equality is only the boundary and does not by itself establish the required little-$o$ condition.
+
+The complementary figure below fixes $d=4$ and instead varies the sample size $n$.
+
+```{r nonparametric-rate-by-sample-size-picture, echo=FALSE, fig.width=9.0, fig.height=6.2}
+old_par <- par(mar = c(5.2, 7.0, 4.2, 1.2))
+sample_size_grid <- 10^seq(2, 5, length.out = 241L)
+sample_size_marks <- c(100, 300, 1000, 3000, 10000, 30000, 100000)
+sample_size_ticks <- c(100, 1000, 10000, 100000)
+sample_size_y_ticks <- c(0.20, 0.05, 0.02, 0.005, 0.002, 0.0005)
+fixed_dimension <- 4L
+
+sample_size_rate_matrix <- vapply(
+  smoothness_values,
+  function(s) {
+    sample_size_grid^(-2 * s / (2 * s + fixed_dimension))
+  },
+  numeric(length(sample_size_grid))
+)
+sample_size_boundary <- sample_size_grid^(-1 / 2)
+
+plot(
+  sample_size_grid,
+  sample_size_rate_matrix[, 1],
+  type = "n", log = "xy",
+  ylim = range(sample_size_rate_matrix) * c(0.82, 1.18),
+  xaxt = "n", yaxt = "n",
+  xlab = expression("Sample size, " * n * "  (log scale)"),
+  ylab = expression("Squared-" * L[2] * " risk benchmark  (log scale)"),
+  main = paste0(
+    "Squared-L2 Benchmark as Sample Size Grows  (d = ",
+    fixed_dimension, ")"
+  )
+)
+axis(
+  1,
+  at = sample_size_ticks,
+  labels = format(sample_size_ticks, big.mark = ",", scientific = FALSE)
+)
+axis(
+  2,
+  at = sample_size_y_ticks,
+  labels = format(sample_size_y_ticks, trim = TRUE, scientific = FALSE),
+  las = 1
+)
+
+for (j in seq_along(smoothness_values)) {
+  lines(
+    sample_size_grid,
+    sample_size_rate_matrix[, j],
+    lwd = 3, col = rate_palette[j]
+  )
+  points(
+    sample_size_marks,
+    sample_size_marks^(
+      -2 * smoothness_values[j] /
+        (2 * smoothness_values[j] + fixed_dimension)
+    ),
+    pch = 14 + j, cex = 1.05, col = rate_palette[j]
+  )
+}
+
+lines(
+  sample_size_grid,
+  sample_size_boundary,
+  lwd = 3, lty = 2, col = course_colors["misspecified"]
+)
+
+legend(
+  "topright",
+  legend = c(
+    paste("smoothness s =", smoothness_values),
+    expression(n^{-1/2} * " squared-risk boundary")
+  ),
+  col = c(rate_palette, course_colors["misspecified"]),
+  pch = c(15:17, NA),
+  lty = c(1, 1, 1, 2),
+  lwd = 3,
+  bty = "n"
+)
+par(old_par)
+```
+
+**How to read the sample-size plot.** Here the horizontal axis is $n$, the dimension is fixed at $d=`r fixed_dimension`$, and lower curves indicate faster convergence. On the log--log scale, the slopes are $-1/3$, $-1/2$, and $-2/3$ for $s=1,2,4$, respectively. Thus, the $s=1$ benchmark is slower than the squared-risk boundary $n^{-1/2}$, the $s=2$ benchmark lies exactly on it, and the $s=4$ benchmark is faster. The plotted rates again omit unknown multiplicative constants.
+
+## Flexible Learning Does Not Eliminate Assumptions
+
+A growing sieve or adaptive learner can reduce approximation error as $n$ grows. Its actual rate still depends on structure such as:
+
+- smoothness or bounded variation;
+- sparsity;
+- low-dimensional or additive structure;
+- compositional structure;
+- regularization and tuning; and
+- the distribution of $X$.
+
+Calling a method "machine learning" does not prove consistency, a particular convergence rate, or causal validity.
+
+::: {.nuisance-note}
+No learner is uniformly best. Performance depends on how its structure and tuning match the data-generating process. A defensible library retains a simple parametric baseline alongside prespecified flexible learners; any stacking weights, hyperparameters, scaling, and feature selection must be learned inside the training folds. Repeating cross-fitting can reveal split instability, but it does not remove systematic bias. These practical lessons are emphasized by Ahrens et al. (2024).
+:::
+
+# Simulation: Parametric, Nonparametric, and Misspecified Rates
+
+## Simulation Design
+
+We now estimate the same one-dimensional conditional mean
+
+$$
+f_0(x)=1+1.25x+1.5x^2
+$$
+
+from data generated by
+
+$$
+X_i\sim\operatorname{Uniform}(-1,1),
+\qquad
+Y_i=f_0(X_i)+\varepsilon_i,
+\qquad
+\varepsilon_i\sim N(0,0.7^2).
+$$
+
+We compare three learners:
+
+1. **Correct quadratic regression:** a fixed, correctly specified parametric model;
+2. **Histogram regression:** a piecewise-constant nonparametric learner with $K_n\asymp n^{1/3}$ bins; and
+3. **Misspecified linear regression:** a fixed model that omits the quadratic term.
+
+The histogram is deliberately a first-order learner: its root-$L_2$ bias is
+$O(K_n^{-1})$ and its variability is $O_p\{\sqrt{K_n/n}\}$. Balancing these
+terms gives $K_n\asymp n^{1/3}$ and error $O_p(n^{-1/3})$. Although the truth
+is twice differentiable, a piecewise-constant histogram does not exploit all
+of that smoothness; a suitable local-linear method could attain the earlier
+$n^{-2/5}$ benchmark for $s=2$ and $d=1$.
+
+For each fitted learner, error is evaluated against the true conditional function on a fixed dense midpoint grid that approximates integration under $X\sim\operatorname{Uniform}(-1,1)$:
+
+$$
+\widehat{\operatorname{Err}}
+=
+\left[
+\frac{1}{M}
+\sum_{j=1}^M
+\{\hat f(X_j^{\mathrm{eval}})-f_0(X_j^{\mathrm{eval}})\}^2
+\right]^{1/2}.
+$$
+
+This is function-estimation error. It does not include the irreducible noise $\varepsilon$. The midpoint quadrature grid is fixed independently of every training sample.
+
+```{r rate-simulation}
+truth_regression <- function(x) {
+  1 + 1.25 * x + 1.50 * x^2
+}
+
+histogram_predict <- function(x, y, new_x, bins) {
+  breaks <- seq(-1, 1, length.out = bins + 1L)
+  training_bin <- findInterval(x, breaks, all.inside = TRUE)
+  evaluation_bin <- findInterval(new_x, breaks, all.inside = TRUE)
+
+  bin_mean <- tapply(y, training_bin, mean)
+  prediction <- as.numeric(bin_mean[as.character(evaluation_bin)])
+  prediction[!is.finite(prediction)] <- mean(y)
+  prediction
+}
+
+simulate_rate_once <- function(n, evaluation_x) {
+  x <- runif(n, -1, 1)
+  y <- truth_regression(x) + rnorm(n, sd = 0.70)
+  truth <- truth_regression(evaluation_x)
+
+  correct_fit <- lm(y ~ x + I(x^2))
+  misspecified_fit <- lm(y ~ x)
+
+  correct_prediction <- predict(
+    correct_fit,
+    newdata = data.frame(x = evaluation_x)
+  )
+  misspecified_prediction <- predict(
+    misspecified_fit,
+    newdata = data.frame(x = evaluation_x)
+  )
+  histogram_prediction <- histogram_predict(
+    x = x,
+    y = y,
+    new_x = evaluation_x,
+    bins = max(2L, as.integer(round(n^(1 / 3))))
+  )
+
+  c(
+    `Correct quadratic` = sqrt(
+      mean((correct_prediction - truth)^2)
+    ),
+    `Histogram regression` = sqrt(
+      mean((histogram_prediction - truth)^2)
+    ),
+    `Misspecified linear` = sqrt(
+      mean((misspecified_prediction - truth)^2)
+    )
+  )
+}
+
+set.seed(20260719)
+rate_sample_sizes <- c(200L, 400L, 800L, 1600L, 3200L, 6400L)
+rate_evaluation_size <- 801L
+rate_evaluation_x <- -1 +
+  2 * (seq_len(rate_evaluation_size) - 0.5) / rate_evaluation_size
+rate_method_names <- c(
+  "Correct quadratic",
+  "Histogram regression",
+  "Misspecified linear"
+)
+
+rate_errors <- array(
+  NA_real_,
+  dim = c(
+    length(rate_sample_sizes),
+    rate_simulation_reps,
+    length(rate_method_names)
+  ),
+  dimnames = list(
+    n = rate_sample_sizes,
+    replicate = seq_len(rate_simulation_reps),
+    method = rate_method_names
+  )
+)
+
+for (sample_index in seq_along(rate_sample_sizes)) {
+  for (replicate_index in seq_len(rate_simulation_reps)) {
+    rate_errors[sample_index, replicate_index, ] <-
+      simulate_rate_once(
+        n = rate_sample_sizes[sample_index],
+        evaluation_x = rate_evaluation_x
+      )
+  }
+}
+
+if (any(!is.finite(rate_errors)) || any(rate_errors <= 0)) {
+  stop("The rate simulation produced an invalid function error.")
+}
+
+rate_mean <- apply(rate_errors, c(1, 3), mean)
+rate_lower <- apply(
+  rate_errors,
+  c(1, 3),
+  quantile,
+  probs = 0.10,
+  names = FALSE
+)
+rate_upper <- apply(
+  rate_errors,
+  c(1, 3),
+  quantile,
+  probs = 0.90,
+  names = FALSE
+)
+
+rate_slope <- vapply(
+  rate_method_names,
+  function(method) {
+    unname(
+      coef(
+        lm(log(rate_mean[, method]) ~ log(rate_sample_sizes))
+      )[2]
+    )
+  },
+  numeric(1)
+)
+
+rate_slope_table <- data.frame(
+  Method = rate_method_names,
+  `Expected asymptotic slope` = c(-0.50, -1 / 3, 0),
+  `Fitted simulation slope` = unname(round(rate_slope, 3)),
+  check.names = FALSE,
+  row.names = NULL
+)
+
+knitr::kable(
+  rate_slope_table,
+  align = c("l", "r", "r"),
+  row.names = FALSE
+)
+```
+
+The teaching render uses `r rate_simulation_reps` independent repetitions at each sample size. The slopes are descriptive finite-sample summaries; they do not prove a minimax theorem.
+
+## One Realized Training Sample
+
+```{r realized-rate-fits-picture, echo=FALSE, fig.width=9.2, fig.height=6.2}
+set.seed(20260720)
+realized_n <- 800L
+realized_x <- runif(realized_n, -1, 1)
+realized_y <- truth_regression(realized_x) + rnorm(realized_n, sd = 0.70)
+realized_grid <- seq(-1, 1, length.out = 801L)
+
+realized_correct_fit <- lm(realized_y ~ realized_x + I(realized_x^2))
+realized_wrong_fit <- lm(realized_y ~ realized_x)
+realized_correct <- predict(
+  realized_correct_fit,
+  newdata = data.frame(realized_x = realized_grid)
+)
+realized_wrong <- predict(
+  realized_wrong_fit,
+  newdata = data.frame(realized_x = realized_grid)
+)
+realized_histogram <- histogram_predict(
+  x = realized_x,
+  y = realized_y,
+  new_x = realized_grid,
+  bins = max(2L, as.integer(round(realized_n^(1 / 3))))
+)
+
+plot(
+  realized_grid,
+  truth_regression(realized_grid),
+  type = "l", lwd = 4, col = "#222222",
+  xlab = expression("Predictor value, " * x),
+  ylab = expression("Estimated conditional mean"),
+  main = "Three Learners Applied to the Same Training Sample"
+)
+lines(
+  realized_grid, realized_correct,
+  lwd = 3, col = course_colors["propensity"]
+)
+lines(
+  realized_grid, realized_histogram,
+  lwd = 3, col = course_colors["outcome"], type = "s"
+)
+lines(
+  realized_grid, realized_wrong,
+  lwd = 3, lty = 2, col = course_colors["misspecified"]
+)
+legend(
+  "topleft",
+  legend = c(
+    "True conditional mean",
+    "Correct quadratic",
+    "Histogram regression",
+    "Misspecified linear"
+  ),
+  col = c(
+    "#222222",
+    course_colors["propensity"],
+    course_colors["outcome"],
+    course_colors["misspecified"]
+  ),
+  lty = c(1, 1, 1, 2), lwd = c(4, 3, 3, 3), bty = "n"
+)
+```
+
+The quadratic model is smooth and accurate because its working class contains the truth. The histogram is rougher but becomes more detailed as $n$ increases. The linear fit is stable and simple, but its class cannot represent the curved truth.
+
+## Empirical Log-Log Convergence Plot
+
+```{r rate-convergence-picture, echo=FALSE, fig.width=9.4, fig.height=6.5}
+rate_plot_colors <- c(
+  `Correct quadratic` = unname(course_colors["propensity"]),
+  `Histogram regression` = unname(course_colors["outcome"]),
+  `Misspecified linear` = unname(course_colors["misspecified"])
+)
+rate_plot_pch <- c(
+  `Correct quadratic` = 16,
+  `Histogram regression` = 17,
+  `Misspecified linear` = 15
+)
+
+plot(
+  rate_sample_sizes,
+  rate_mean[, 1],
+  type = "n", log = "xy",
+  ylim = c(
+    0.90 * min(rate_lower),
+    2.20 * max(rate_upper)
+  ),
+  xlab = expression("Training sample size, " * n * "  (log scale)"),
+  ylab = expression("Root " * L[2](P[X]) * " function error  (log scale)"),
+  main = "Correct Parametric, Nonparametric, and Misspecified Rates"
+)
+
+for (method in rate_method_names) {
+  polygon(
+    c(rate_sample_sizes, rev(rate_sample_sizes)),
+    c(rate_lower[, method], rev(rate_upper[, method])),
+    border = NA,
+    col = grDevices::adjustcolor(rate_plot_colors[method], alpha.f = 0.13)
+  )
+  lines(
+    rate_sample_sizes,
+    rate_mean[, method],
+    type = "b", lwd = 3, pch = rate_plot_pch[method],
+    col = rate_plot_colors[method]
+  )
+}
+
+legend(
+  "topright",
+  legend = paste0(
+    rate_method_names,
+    "  (slope ",
+    sprintf("%.2f", rate_slope[rate_method_names]),
+    ")"
+  ),
+  col = rate_plot_colors[rate_method_names],
+  pch = rate_plot_pch[rate_method_names],
+  lwd = 3, bty = "n"
+)
+```
+
+**Interpretation.** In this run, the fitted slopes are approximately `r sprintf("%.2f", rate_slope["Correct quadratic"])` for the correct parametric learner, `r sprintf("%.2f", rate_slope["Histogram regression"])` for the nonparametric histogram, and `r sprintf("%.2f", rate_slope["Misspecified linear"])` for the misspecified linear learner. The red curve approaches the theoretical misspecification plateau $1/\sqrt{5}\approx 0.447$. The shaded regions show the pointwise 10th--90th percentiles of the repeated-sample function error at each displayed sample size.
+
+::: {.warning-note}
+A learner can have a very small training error or a fast parameter-estimation rate while remaining inconsistent for the true nuisance function. The relevant error for the later doubly robust argument is distance from the true nuisance function, not distance from the pseudo-truth.
+:::
+
+# From Nuisance Error to Double Robustness
+
+## Pathwise Differentiability, the EIF, and the Remainder
+
+Let $\mathcal M$ denote the observed-data model and, for each $P\in\mathcal M$, define the distribution-indexed nuisance functions
+
+$$
+e_P(x)=P(T=1\mid X=x),
+\qquad
+m_{t,P}(x)=E_P(Y\mid T=t,X=x),\quad t\in\{0,1\},
+$$
+
+where the conditional probability and expectation are taken under $P$.
+
+After identification, write the risk difference as the observed-data **functional**
+
+$$
+\boxed{\Psi:\mathcal M\to\mathbb R,\qquad
+\Psi(P)=E_P\{m_{1,P}(X)-m_{0,P}(X)\}.}
+$$
+
+Under positivity, $m_{t,P}$ is defined on the relevant $P_X$ support and $\Psi(P)$ is a version-independent standardized observed-data contrast. Consistency and conditional exchangeability then give it the causal interpretation
+
+$$
+RD=E\{Y(1)-Y(0)\}=\Psi(P).
+$$
+
+If consistency or exchangeability fails while positivity holds, $\Psi(P)$ remains an associational standardized contrast but need not equal the causal risk difference. If positivity fails, the integral generally depends on how $m_{t,P}$ is extrapolated into unsupported covariate regions and is not nonparametrically identified without an additional convention or model.
+
+Let $\{P_\varepsilon:\varepsilon\in(-\delta,\delta)\}$ be a regular one-dimensional submodel through $P=P_0$, with score $S(O)=\left.\partial_\varepsilon\log p_\varepsilon(O)\right|_{\varepsilon=0}$ satisfying $E_P\{S(O)\}=0$ and $E_P\{S(O)^2\}<\infty$. Pathwise differentiability means that there is a mean-zero, square-integrable function $D_{\Psi}^*(\,\cdot\,;P)$ such that, for every such submodel,
+
+$$
+\left.\frac{d}{d\varepsilon}\Psi(P_\varepsilon)\right|_{\varepsilon=0}
+=E_P\{D_{\Psi}^*(O;P)S(O)\}.
+$$
+
+For the risk-difference functional, suppressing the $P$ subscripts on $e_P$ and $m_{t,P}$ on the right-hand side,
+
+$$
+D_{\Psi}^*(O;P)=m_1(X)-m_0(X)+\frac{T}{e(X)}\{Y-m_1(X)\}-\frac{1-T}{1-e(X)}\{Y-m_0(X)\}-\Psi(P).
+$$
+
+In the nonparametric observed-data model, whenever the displayed gradient belongs to $L_2(P)$, it is the efficient influence function (EIF), and $E_P\{D_{\Psi}^*(O;P)^2\}$ is the semiparametric efficiency bound. Strong overlap together with $E_P(Y^2)<\infty$ is a transparent sufficient condition; weak positivity alone is not. For any $Q$ for which the terms are well-defined, define the von Mises residual algebraically by
+
+$$
+\Psi(Q)-\Psi(P)=\int D_{\Psi}^*(o;P)\,d(Q-P)(o)+R_2(Q,P),
+$$
+
+Along a regular submodel $Q=P_\varepsilon$, pathwise differentiability implies $R_2(P_\varepsilon,P)=o(\varepsilon)$. Uniform control over more general nearby $Q$ requires additional smoothness and topology conditions. The exact product drift derived below is generated by the risk-difference DR score; not every semiparametric target has the same product form.
+
+::: {.warning-note}
+An efficient influence function is the canonical gradient that **represents** a parameter's pathwise derivative; it is not itself a derivative operator. It becomes the first-order influence function of a particular **estimator** only after that estimator's empirical-process and remainder terms are controlled. Merely computing a numerical Gateaux derivative or writing down an orthogonal score does not by itself establish consistency or efficiency. Here pathwise differentiability with a finite efficiency bound requires $D_{\Psi}^*(O;P)\in L_2(P)$; strong overlap and finite outcome second moments are sufficient. Nonsmooth or infinite-dimensional targets may require different theory. Kennedy's review (Chapter 10, pp. 213-230) develops these distinctions; Mai (2019, pp. 59-60) gives concrete warnings about numerical influence-function construction without the required justification.
+:::
+
+## The DR (AIPW) Score
+
+The course notation for the true nuisance functions is $\eta=(e,m_0,m_1)$. To distinguish truth from an arbitrary working choice, write
+
+$$
+\bar\eta=(\bar e,\bar m_0,\bar m_1).
+$$
+
+The augmented inverse-probability-weighted (AIPW) form of Lecture 4's doubly robust (DR) score for the risk difference is
+
+$$
+\phi_{\Psi}^{DR}(O;\bar\eta)=\bar m_1(X)-\bar m_0(X)+\frac{T}{\bar e(X)}\{Y-\bar m_1(X)\}-\frac{1-T}{1-\bar e(X)}\{Y-\bar m_0(X)\}.
+$$
+
+This $\phi_{\Psi}^{DR}$ is an **uncentered estimating score**, not the EIF itself. At the true nuisance functions,
+
+$$
+E_P\{\phi_{\Psi}^{DR}(O;\eta)\}=\Psi(P)=RD,
+\qquad
+D_{\Psi}^*(O;P)=\phi_{\Psi}^{DR}(O;\eta)-\Psi(P).
+$$
+
+To state Neyman orthogonality precisely, define the population moment $M(\theta,\bar\eta)=E_P\{\phi_{\Psi}^{DR}(O;\bar\eta)-\theta\}$. At $\theta=\Psi(P)$, for every regular nuisance path $\eta_r$ through the truth $\eta$,
+
+$$
+\left.\frac{d}{dr}M\{\Psi(P),\eta_r\}\right|_{r=0}=0.
+$$
+
+Thus, the population moment has no first-order drift along nuisance directions at the truth. Orthogonality does not make an inconsistent nuisance learner consistent; it makes the leading local drift second order.
+
+A DR estimator averages this score after replacing the nuisance functions by fitted values. With cross-fitted nuisances, observation $i$ is evaluated using functions trained without observation $i$. Let $k(i)$ denote the fold containing observation $i$. We use $\widehat\Psi_{\mathrm{CF}}^{DR}$ for the statistical-functional notation and retain $\widehat{RD}_{\mathrm{CF}}^{DR}$ as the equivalent course label:
+
+$$
+\widehat\Psi_{\mathrm{CF}}^{DR}
+\equiv
+\widehat{RD}_{\mathrm{CF}}^{DR}
+=\frac1n\sum_{i=1}^n\phi_{\Psi}^{DR}\{O_i;\hat\eta^{(-k(i))}\}.
+$$
+
+## Exact Population Drift
+
+The central identity is exact, not merely a heuristic. Consider candidate functions $(\bar e,\bar m_0,\bar m_1)$ such that $0<\bar e(X)<1$ $P_X$-almost surely and the displayed score is integrable. Condition on $X$. Since
+
+$$
+E(TY\mid X)=e(X)m_1(X)
+$$
+
+and
+
+$$
+E\{(1-T)Y\mid X\}=\{1-e(X)\}m_0(X),
+$$
+
+we obtain
+
+$$
+E\{\phi_{\Psi}^{DR}(O;\bar\eta)\mid X\}=\bar m_1(X)-\bar m_0(X)+\frac{e(X)}{\bar e(X)}\{m_1(X)-\bar m_1(X)\}-\frac{1-e(X)}{1-\bar e(X)}\{m_0(X)-\bar m_0(X)\}.
+$$
+
+Subtracting $m_1(X)-m_0(X)$ and simplifying gives
+
+$$
+\boxed{\mathcal B_P(\bar\eta)\equiv E_P\{\phi_{\Psi}^{DR}(O;\bar\eta)\}-\Psi(P)=E_P\!\left[(\bar e-e)\left\{\frac{\bar m_1-m_1}{\bar e}+\frac{\bar m_0-m_0}{1-\bar e}\right\}\right].}
+$$
+
+The quantity $\mathcal B_P(\bar\eta)$ is the **population drift** of the nuisance-indexed score. Its product form makes it a second-order nuisance remainder in the estimator expansion. The distinct notation is intentional: $R_2(Q,P)$ above is indexed by two full distributions, whereas $\mathcal B_P(\bar\eta)$ is indexed by candidate nuisance functions while the evaluation law $P$ is fixed.
+
+```{r product-remainder-picture, echo=FALSE, fig.width=8.8, fig.height=4.6}
+start_picture()
+
+draw_box(
+  0.50, 0.88, 0.62, 0.12,
+  "Second-order remainder = product of nuisance errors",
+  fill = course_fills["neutral"], cex = 0.71, font = 2
+)
+draw_box(
+  0.20, 0.61, 0.29, 0.19,
+  expression(atop(
+    "Propensity error",
+    r[e*","*n]
+  )),
+  fill = course_fills["propensity"],
+  border = course_colors["propensity"], cex = 0.67, font = 2
+)
+draw_box(
+  0.50, 0.61, 0.08, 0.19,
+  "x",
+  fill = "#FFFFFF", cex = 1.10, font = 2
+)
+draw_box(
+  0.80, 0.61, 0.29, 0.19,
+  expression(atop("Outcome error", r[m*","*n])),
+  fill = course_fills["outcome"],
+  border = course_colors["outcome"], cex = 0.67, font = 2
+)
+
+draw_arrow(0.31, 0.51, 0.44, 0.36, col = course_colors["propensity"])
+draw_arrow(0.69, 0.51, 0.56, 0.36, col = course_colors["outcome"])
+
+draw_box(
+  0.50, 0.29, 0.35, 0.16,
+  expression(atop(
+    "Population drift",
+    B[P](hat(eta))
+  )),
+  fill = course_fills["misspecified"], cex = 0.68, font = 2
+)
+draw_text(
+  0.50, 0.08,
+  "Orthogonality removes the first-order sum;\nthe leading drift is a product.",
+  cex = 0.70, font = 2
+)
+```
+
+## Model Double Robustness
+
+The exact drift is zero if either:
+
+- $\bar e=e$, even when the outcome regressions are misspecified; or
+- $\bar m_1=m_1$ **and** $\bar m_0=m_0$, even when the propensity score is misspecified.
+
+For a risk difference, saying "the outcome model is correct" means that **both** treatment-specific outcome regressions are correct.
+
+Zero population drift is the algebraic core of model double robustness. To turn it into estimator consistency, also require fitted overlap and integrability, a law of large numbers for the evaluated score, and convergence of the fitted nuisance functions to stable limits. Under those regularity conditions:
+
+| Propensity nuisance | Outcome nuisances | Outcome regression | IPW | DR (AIPW) |
+|:--|:--|:--|:--|:--|
+| Correct | Correct | Consistent | Consistent | Consistent |
+| Correct | Misspecified | Generally biased | Consistent | Consistent |
+| Misspecified | Correct | Consistent | Generally biased | Consistent |
+| Misspecified | Misspecified | Generally biased | Generally biased | Generally biased in general |
+
+::: {.nuisance-note}
+This is **model double robustness for consistency**. It does not say that an estimator is always unbiased in a finite sample, that it is automatically efficient, or that a standard influence-function confidence interval remains valid under every one-correct-model configuration.
+:::
+
+## Positivity and the Product Remainder
+
+Three conditions should not be conflated:
+
+- **Causal positivity:** $0<e(X)<1$ almost surely is part of identification.
+- **Strong overlap:** $\delta\le e(X)\le1-\delta$ almost surely is a transparent sufficient condition for a square-integrable EIF when $Y$ is binary.
+- **Fitted overlap:** $\epsilon\le\hat e^{(-k)}(X)\le1-\epsilon$ with probability approaching one, uniformly over folds, controls the fitted denominators. In practice this is an assumption about the fitted rule, not proof of population overlap.
+
+More formally, define the fitted-overlap event
+
+$$
+\mathcal A_n
+=
+\left\{
+\epsilon\le \hat e^{(-k)}(x)\le1-\epsilon
+\text{ for every }k\text{ and }P_X\text{-almost every }x
+\right\},
+\qquad
+P(\mathcal A_n)\longrightarrow1.
+$$
+
+Let $I_k$ be test fold $k$, let $\mathcal D_{-k}$ contain the observations used to train its nuisance functions, and let $E_P$ integrate over a fresh $O\sim P$ while holding $\mathcal D_{-k}$ fixed. Define the fold-specific drift and fold-uniform errors by
+
+$$
+\mathcal B_k
+=E_P\!\left[\phi_{\Psi}^{DR}\{O;\hat\eta^{(-k)}\}-\phi_{\Psi}^{DR}(O;\eta)\mid\mathcal D_{-k}\right],
+$$
+
+$$
+r_{e,n}=\max_{1\le k\le K}\|\hat e^{(-k)}-e\|_{2,P_X},\qquad r_{m,n}=\max_{1\le k\le K}\sum_{t=0}^1\|\hat m_t^{(-k)}-m_t\|_{2,P_X}.
+$$
+
+By the exact drift identity and Cauchy--Schwarz, on $\mathcal A_n$ the fitted-overlap condition gives the one-line bound
+
+$$
+\boxed{\max_{1\le k\le K}|\mathcal B_k|\le\epsilon^{-1}r_{e,n}r_{m,n}.}
+$$
+
+All nuisance functions in the compact drift formulas are evaluated at $X$.
+
+## Exact Cross-Fitted Expansion
+
+Define the centered foldwise empirical-process term and the fold-averaged population drift by
+
+$$
+\mathcal E_n=\frac1n\sum_{k=1}^K\sum_{i\in I_k}\!\left[\phi_{\Psi}^{DR}\{O_i;\hat\eta^{(-k)}\}-\phi_{\Psi}^{DR}(O_i;\eta)-E_P\!\left\{\phi_{\Psi}^{DR}(O;\hat\eta^{(-k)})-\phi_{\Psi}^{DR}(O;\eta)\mid\mathcal D_{-k}\right\}\right],
+$$
+
+$$
+\bar{\mathcal B}_n=\sum_{k=1}^K\frac{|I_k|}{n}\mathcal B_k.
+$$
+
+The estimator therefore has the exact decomposition
+
+$$
+\widehat\Psi_{\mathrm{CF}}^{DR}-\Psi(P)=\frac1n\sum_{i=1}^nD_{\Psi}^*(O_i;P)+\mathcal E_n+\bar{\mathcal B}_n.
+$$
+
+The three terms are, respectively, the first-order EIF average, the foldwise empirical-process error, and the second-order nuisance drift.
+
+Assume the observations are iid, fold assignment is independent of the data, $K$ is fixed and finite, and $\min_k|I_k|/n$ is bounded away from zero. Every data-dependent operation---including preprocessing, feature selection, tuning, and stopping---must use only $\mathcal D_{-k}$. If
+
+$$
+\max_{1\le k\le K}\|\phi_{\Psi}^{DR}(\,\cdot\,;\hat\eta^{(-k)})-\phi_{\Psi}^{DR}(\,\cdot\,;\eta)\|_{2,P}=o_p(1),
+$$
+
+then conditional mean-zero and variance arguments give $\mathcal E_n=o_p(n^{-1/2})$. Cross-fitting removes the need for a Donsker-class restriction in this fixed-$K$ argument, but it does not remove score convergence, overlap, moment, or remainder conditions. Without sample splitting, a standard alternative is to impose suitable Donsker or entropy conditions and stochastic equicontinuity. Leave-one-out or growing-$K$ schemes require separate analysis.
+
+The product bound gives $\bar{\mathcal B}_n=O_p(r_{e,n}r_{m,n})$. Hence a useful sufficient condition for the nuisance drift to be negligible on the root-$n$ scale is
+
+$$
+\boxed{r_{e,n}r_{m,n}=o_p(n^{-1/2}).}
+$$
+
+Together with square integrability of the EIF and the preceding conditions,
+
+$$
+\sqrt n\left\{\widehat\Psi_{\mathrm{CF}}^{DR}-\Psi(P)\right\}=\frac1{\sqrt n}\sum_{i=1}^nD_{\Psi}^*(O_i;P)+o_p(1)\rightsquigarrow N(0,\sigma^2),\qquad \sigma^2=E_P\{D_{\Psi}^*(O;P)^2\}.
+$$
+
+For iid data, define $\hat D_i=\phi_{\Psi}^{DR}\{O_i;\hat\eta^{(-k(i))}\}-\widehat\Psi_{\mathrm{CF}}^{DR}$ and $\hat\sigma^2=n^{-1}\sum_{i=1}^n\hat D_i^2$. The canonical Wald interval is
+
+$$
+\widehat\Psi_{\mathrm{CF}}^{DR}\pm1.96\sqrt{\hat\sigma^2/n}.
+$$
+
+This variance formula must be modified for clustering, repeated observations, survey sampling, or other dependence.
+
+## The $n^{-1/4}$ Balanced Benchmark
+
+Suppose
+
+$$
+r_{e,n}=O_p(n^{-\alpha_e}),
+\qquad
+r_{m,n}=O_p(n^{-\alpha_m}).
+$$
+
+Then
+
+$$
+r_{e,n}r_{m,n}
+=
+O_p\{n^{-(\alpha_e+\alpha_m)}\}.
+$$
+
+A useful sufficient exponent condition is
+
+$$
+\boxed{
+\alpha_e+\alpha_m>\frac12.
+}
+$$
+
+If the two rates are balanced, the familiar sufficient condition is
+
+$$
+r_{e,n}=o_p(n^{-1/4}),
+\qquad
+r_{m,n}=o_p(n^{-1/4}).
+$$
+
+Exactly $O_p(n^{-1/4})$ for both nuisances gives only an $O_p(n^{-1/2})$ product. At that boundary, the scaled drift need not disappear.
+
+```{r rate-region-picture, echo=FALSE, fig.width=8.2, fig.height=7.0}
+old_par <- par(pty = "s")
+plot(
+  NA,
+  xlim = c(0, 0.60), ylim = c(0, 0.60),
+  xlab = expression("Propensity exponent  " * alpha[e]),
+  ylab = expression("Outcome exponent  " * alpha[m]),
+  main = "Which Nuisance-Rate Pairs Make the Root-n Drift Vanish?",
+  asp = 1
+)
+polygon(
+  c(0, 0.50, 0), c(0, 0, 0.50),
+  col = course_fills["misspecified"], border = NA
+)
+polygon(
+  c(0, 0, 0.60, 0.60, 0.50),
+  c(0.50, 0.60, 0.60, 0, 0),
+  col = course_fills["correct"], border = NA
+)
+segments(
+  0, 0.50, 0.50, 0,
+  lwd = 4, lty = 2, col = course_colors["misspecified"]
+)
+
+points(0.30, 0.30, pch = 16, cex = 1.7, col = course_colors["correct"])
+points(0.25, 0.25, pch = 17, cex = 1.7, col = "#8A4F00")
+points(0.20, 0.20, pch = 15, cex = 1.7, col = course_colors["misspecified"])
+points(0.50, 0.10, pch = 18, cex = 1.9, col = course_colors["propensity"])
+
+text(
+  0.43, 0.47,
+  expression(atop("product is", o[p](n^{-1/2}))),
+  cex = 0.87, font = 2
+)
+text(0.14, 0.08, "too slow", cex = 0.90, font = 2)
+text(0.15, 0.39, "boundary", cex = 0.82, col = "#8A4F00")
+text(0.37, 0.34, "0.30 + 0.30", pos = 4, cex = 0.78)
+text(0.50, 0.10, "0.50 + 0.10", pos = 3, cex = 0.78)
+box()
+par(old_par)
+```
+
+**Ordered-pair interpretation.** A point $(\alpha_e,\alpha_m)=(0.30,0.30)$ means that the propensity error is of order $n^{-0.30}$ and the combined outcome-regression error is of order $n^{-0.30}$. Their product has order $n^{-0.60}$, which is smaller than $n^{-1/2}$. The rates need not be equal: $(0.50,0.10)$ also has exponent sum $0.60$.
+
+## Connecting the Nonparametric Rate to the DR Benchmark
+
+If both nuisance sides have the same generic $s$-smooth, $d$-dimensional rate,
+
+$$
+\alpha_e=\alpha_m=\frac{s}{2s+d},
+$$
+
+then the strict product-rate condition becomes
+
+$$
+\frac{2s}{2s+d}>\frac12
+\quad\Longleftrightarrow\quad
+2s>d.
+$$
+
+Thus, the generic smoothness rate is faster than the balanced $n^{-1/4}$ benchmark when $s>d/2$. At $s=d/2$, it lies exactly on the boundary.
+
+::: {.warning-note}
+**Two different ideas must be separated.**
+
+- **A learner-specific optimal rate** describes how quickly a nuisance function can be estimated over a specified function class under a specified loss. For example, the generic root-$L_2$ benchmark for an $s$-smooth function of $d$ continuous predictors is $n^{-s/(2s+d)}$. A different class, dimension, smoothness assumption, or loss produces a different rate.
+- **The DR inferential threshold** comes from the remainder, not from minimax prediction theory. Root-$n$ inference requires
+  $$
+  r_{e,n}r_{m,n}=o_p(n^{-1/2}).
+  $$
+  If the two errors have the same order, $r_{e,n}\asymp r_{m,n}\asymp r_n$, this reduces to $r_n^2=o_p(n^{-1/2})$, or
+  $$
+  r_n=o_p(n^{-1/4}).
+  $$
+- **The equality case is only a boundary.** If both errors are merely $O_p(n^{-1/4})$, their product is generally only $O_p(n^{-1/2})$, not the required little-$o_p(n^{-1/2})$. Additional structure would be needed to make the scaled remainder vanish.
+- **Equal rates are not required.** If $r_{e,n}=O_p(n^{-\alpha_e})$ and $r_{m,n}=O_p(n^{-\alpha_m})$, the relevant condition is $\alpha_e+\alpha_m>1/2$. One nuisance may converge more slowly than $n^{-1/4}$ when the other converges sufficiently faster.
+
+Therefore, $n^{-1/4}$ is a **balanced sufficient-rate benchmark for this DR remainder**, not a universal optimum and not a claim that every nuisance learner should attain exactly that rate.
+:::
+
+## Model DR, Rate DR, and Local Efficiency Are Different
+
+| Claim | Sufficient conditions in this lecture | What follows |
+|:--|:--|:--|
+| **Neyman orthogonality** | The pathwise derivative of $M\{\Psi(P),\eta_r\}$ is zero at the truth | First-order local nuisance perturbations cancel in the population moment |
+| **Model double robustness** | $\bar e=e$, or both $\bar m_1=m_1$ and $\bar m_0=m_0$ | The population drift is zero, so consistency can hold |
+| **Rate double robustness** | Fixed finite $K$, foldwise score convergence, overlap and moment bounds, and $r_{e,n}r_{m,n}=o_p(n^{-1/2})$ | Root-$n$ asymptotic linearity with the canonical first-order term |
+| **Local efficiency** | At the intersection model, the estimator is asymptotically linear with influence function $D_{\Psi}^*$ | The point estimator attains the semiparametric efficiency bound |
+| **Valid canonical Wald inference** | Local efficiency plus consistent estimation of $E_P\{D_{\Psi}^*(O;P)^2\}$ | The canonical influence-function confidence interval has asymptotically correct coverage |
+
+These are not interchangeable. If one nuisance is estimated at $O_p(n^{-1/2})$ while the other is consistent at $o_p(1)$, their product is $o_p(n^{-1/2})$. If the second nuisance instead has a fixed nonzero misspecification error, the product is generally only $O_p(n^{-1/2})$. The estimator may remain consistent by model double robustness, but the canonical efficient-influence-function approximation need not be the complete first-order expansion.
+
+$$
+O_p(n^{-1/2})\times O_p(1)=O_p(n^{-1/2}),\qquad\text{not necessarily }o_p(n^{-1/2}).
+$$
+
+Under a union model with one misspecified parametric nuisance, a valid influence function can contain extra terms for estimating the nuisance probability limits; under the intersection model where both nuisances are correct, those terms simplify and local efficiency can be recovered. This distinction is explicit in Vermeulen (2016, pp. 9-17). Gao, Zhang, and Yang (2025, pp. 6-7) use the term **rate double robustness** for analogous sums of products of nuisance errors.
+
+**Sensitivity robustness is different again.** It asks whether conclusions persist as an unidentified causal assumption is varied through scientifically plausible sensitivity parameters. Flexible nuisance learning, orthogonality, and cross-fitting do not identify such parameters or repair failed exchangeability. Gao, Zhang, and Yang (2025) carefully separate nuisance-rate robustness from sensitivity analysis in an externally controlled-trial setting.
+
+# Cross-Fitting
+
+## Honest Nuisance Prediction for Every Observation
+
+With $K$ folds, cross-fitting repeats two operations:
+
+1. fit the nuisance functions using observations outside fold $k$; and
+2. evaluate the DR (AIPW) score on observations inside fold $k$.
+
+```{r cross-fitting-picture, echo=FALSE, fig.width=9.2, fig.height=5.4}
+start_picture()
+
+fold_y <- c(0.76, 0.50, 0.24)
+for (k in 1:3) {
+  draw_text(0.06, fold_y[k], paste0("Fold ", k), cex = 0.68, font = 2)
+
+  for (block in 1:3) {
+    x <- c(0.20, 0.36, 0.52)[block]
+    is_evaluation <- block == k
+    draw_box(
+      x, fold_y[k], 0.14, 0.14,
+      if (is_evaluation) "Evaluate" else "Train",
+      fill = if (is_evaluation) {
+        course_fills["outcome"]
+      } else {
+        course_fills["propensity"]
+      },
+      border = if (is_evaluation) {
+        course_colors["outcome"]
+      } else {
+        course_colors["propensity"]
+      },
+      cex = 0.58, font = 2
+    )
+  }
+
+  draw_arrow(0.60, fold_y[k], 0.68, fold_y[k])
+  draw_box(
+    0.77, fold_y[k], 0.17, 0.14,
+    paste0("Held-out\nscore ", k),
+    fill = course_fills["correct"], cex = 0.56, font = 2
+  )
+}
+
+draw_arrow(0.86, 0.76, 0.92, 0.57)
+draw_arrow(0.86, 0.50, 0.92, 0.50)
+draw_arrow(0.86, 0.24, 0.92, 0.43)
+draw_box(
+  0.94, 0.50, 0.10, 0.25,
+  "Average\nall scores",
+  fill = course_fills["target"], cex = 0.55, font = 2
+)
+```
+
+Cross-fitting makes the nuisance prediction for each observation out-of-fold. It helps control the empirical-process or own-observation term that can arise with adaptive learners.
+
+::: {.warning-note}
+Cross-fitting does not make a misspecified nuisance function correct, improve poor overlap, increase a learner's intrinsic convergence rate, or repair violations of causal identification. Hyperparameter tuning and preprocessing must also occur inside each training fold.
+:::
+
+# Practical Workflow
+
+## What to Examine
+
+A careful nuisance-model workflow includes:
+
+1. **Prespecify the target and score.** Decide which causal parameter and orthogonal score are being estimated.
+2. **Use honest prediction.** Tune and preprocess inside training folds; generate out-of-fold nuisance predictions.
+3. **Check propensity behavior.** Examine overlap, extreme fitted propensities, weight tails, and effective sample size.
+4. **Check outcome prediction.** Examine held-out loss and calibration overall and within treatment groups.
+5. **Use multiple reasonable learners.** Compare a transparent parametric baseline with prespecified flexible alternatives.
+6. **Assess target stability.** Compare estimates across learners, fold assignments, and defensible truncation choices.
+7. **Report uncertainty honestly.** Match the variance calculation to cross-fitting, clustering, survey design, and the estimator actually used.
+
+## What Prediction Metrics Cannot Prove
+
+Good held-out prediction is useful but not equivalent to the nuisance conditions needed for a causal target.
+
+- Overall outcome prediction may be dominated by regions with abundant data rather than the overlap-sensitive regions that matter for treatment contrasts.
+- A high propensity-score AUC can indicate strong treatment separation and therefore poor overlap; it is not automatically desirable.
+- Calibration to observed outcomes does not reveal counterfactual calibration.
+- Similar causal estimates across learners are reassuring sensitivity evidence, not proof of identification.
+
+## Software Used in This Lecture
+
+| Task | R package and function |
+|:--|:--|
+| Correct and misspecified parametric regression | `stats::lm()` and `stats::glm()` |
+| Histogram regression | Base R `findInterval()` and `tapply()` |
+| Cross-fitting | Base R sample splitting plus `stats::predict()` |
+| Tables | `knitr::kable()` |
+| Figures | Base R graphics |
+
+No external machine-learning package is required. The purpose is to isolate the statistical ideas rather than compare software ecosystems.
+
+# Key Takeaways
+
+1. A nuisance function supports estimation of the target parameter but is not itself the final estimand.
+2. Total nuisance error contains both finite-sample estimation error and approximation error from the working class.
+3. A correctly specified fixed-dimensional parametric nuisance can achieve a root-$n$ function rate; a misspecified fixed class can converge at a root-$n$ rate to the wrong pseudo-truth.
+4. A generic $s$-smooth, $d$-dimensional nonparametric root-$L_2$ rate is $n^{-s/(2s+d)}$, illustrating the curse of dimensionality.
+5. The exact DR (AIPW) drift is a product of propensity and outcome nuisance errors.
+6. Model double robustness gives consistency if either the propensity nuisance or both outcome nuisances are consistently estimated.
+7. Root-$n$ efficient-influence-function inference requires the stronger product-rate condition $r_{e,n}r_{m,n}=o_p(n^{-1/2})$, plus positivity and empirical-process control.
+8. The symmetric $n^{-1/4}$ rate is a critical benchmark, not a universal optimal nuisance rate.
+9. Cross-fitting controls own-observation dependence; it does not repair misspecification or causal-identification failures.
+
+# Technical References Used
+
+- Kennedy, Edward H. **Semiparametric Doubly Robust Targeted Double Machine Learning: A Review.** Chapter 10, especially pp. 207--236. DOI: 10.1201/9781003216223-10.
+- Ahrens, Achim, Victor Chernozhukov, Christian Hansen, Damian Kozbur, Mark Schaffer, and Thomas Wiemann. **Robust Causal Inference Using Double/Debiased Machine Learning: A Guide for Empirical Research.** 2024 guide and lecture materials.
+- Gao, Chenyin, Xiang Zhang, and Shu Yang. **Doubly Robust Omnibus Sensitivity Analysis of Externally Controlled Trials with Intercurrent Events.** *Biometrics* 81(2), 2025, ujaf047. DOI: 10.1093/biomtc/ujaf047.
+- Mai, Jiajun. **Semiparametric Estimation in Targeted Learning by Numerical Construction of the Efficient Influence Function.** MSc thesis, McGill University, 2019.
+- Vermeulen, Karel. **A Double Robust Extension of the Mann--Whitney Test to Adjust for Confounding in Observational Studies.** Master dissertation, Ghent University, 2016.
+
+These sources play different roles. Kennedy supplies the general pathwise-differentiability, one-step, and cross-fitting theory; Ahrens et al. motivate honest learner comparison and practical DML; Gao, Zhang, and Yang illustrate rate double robustness and its separation from sensitivity analysis; Mai clarifies the requirements for a valid EIF; and Vermeulen distinguishes union-model consistency from intersection-model efficiency. The last paper studies a pairwise Mann--Whitney estimand and is not used as the proof of the risk-difference remainder.
+
+# Reproducibility Notes
+
+The pseudo-truth Monte Carlo study and the learner-rate simulation each use `r rate_simulation_reps` repetitions per sample size, controlled by the environment variable `NUISANCE_RATE_SIM_REPS`. Fixed seeds make the displayed teaching results reproducible.
+
+For a fast smoke test, set `NUISANCE_RATE_SIM_REPS` to a small value such as 5. For smoother Monte Carlo summaries, increase it after checking runtime and Monte Carlo stability. The default value is a teaching default, not a universal research recommendation.
+
+This lecture provides the nuisance-rate and misspecification foundation for the Doubly Robust Estimation lecture. The next application is to carry these conditions into the smoking--CVD example, compare nuisance learners, and examine how the DR correction and its influence-function uncertainty behave in that substantive setting.
